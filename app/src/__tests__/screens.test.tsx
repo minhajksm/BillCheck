@@ -55,8 +55,8 @@ describe('Your cases', () => {
   afterAll(() => i18n.changeLanguage('en'));
 
   it('greets the signed-in person and lists both placeholder cases', async () => {
-    await render('/', 'Namaste, Rohan');
-    expect(screen.getByText('Namaste, Rohan')).toBeVisible();
+    await render('/', 'Welcome, Rohan');
+    expect(screen.getByText('Welcome, Rohan')).toBeVisible();
     expect(screen.getByText("Papa's admission")).toBeVisible();
     expect(screen.getByText('Admitted 9 Oct, day 3')).toBeVisible();
     expect(screen.getByText("Add today's bill")).toBeVisible();

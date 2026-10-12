@@ -263,7 +263,7 @@ ask:"Ask the nurse in charge whether any procedure that day needed extra gloves.
 const ORDER=["med","dup","glv"];
 const BILL=[["Room rent, twin sharing","1 day",6500],["Nursing charges","1 day",2200],["Consultant visit, Dr. A. Mehta","11 Oct, 10:30 am",2500],["Consultant visit, Dr. A. Mehta","11 Oct, 10:30 am",2500,"dup"],["Inj. Meropenem 1g","6 vials",17700,"med"],["Inj. Pantoprazole 40mg","2 vials",120],["IV fluid, Ringer lactate 500ml","4 bottles",520],["CBC and CRP tests","1 set",1450],["Chest X-ray","1 view",950],["Surgical gloves","80 pairs",6800,"glv"],["Syringes and IV cannula","1 set",1250]];
 const MSG={
-en:{o:"Namaste. I'm reviewing the interim bill for patient Ramesh Sharma (IP no. 20841). Could you help me understand these items?",
+en:{o:"Welcome. I'm reviewing the interim bill for patient Ramesh Sharma (IP no. 20841). Could you help me understand these items?",
 med:"Inj. Meropenem 1g is billed at ₹2,950 per vial, but the printed MRP is ₹1,840.",
 dup:"The consultant visit by Dr. A. Mehta on 11 Oct at 10:30 am appears twice.",
 glv:"80 pairs of surgical gloves are billed for one day in the ward.",
@@ -300,7 +300,7 @@ function composeMsg(){const m=MSG[S.lang];const o=openIds();return m.o+"\n\n"+o.
 const SCREENS={
 home(){const o=openIds().length;const chip=!S.scanned?["c-indigo","Add today's bill"]:o?["c-amber",o+" to ask"]:["c-green","Up to date"];
 return `<header class="ah home"><h2><span class="logo" aria-hidden="true"></span>BillCheck</h2><span class="av av1" aria-label="Rohan Sharma">RS</span></header>
-<div class="pad"><p class="hello">Namaste, Rohan</p><p class="muted">Keep every hospital bill in your family checked and explained.</p>
+<div class="pad"><p class="hello">Welcome, Rohan</p><p class="muted">Keep every hospital bill in your family checked and explained.</p>
 <p class="sec-t">Your cases</p>
 <button class="case" data-a="go" data-v="case"><span class="case-l"><b>Papa's admission</b><span class="muted">City Care Hospital, Andheri</span><span class="faint">Admitted 9 Oct, day 3</span></span><span class="chip ${chip[0]}">${chip[1]}</span></button>
 <button class="case" data-a="toast" data-v="This case is closed. Its reports stay saved here."><span class="case-l"><b>Mummy's cataract surgery</b><span class="muted">Lotus Eye Clinic, Thane</span><span class="faint">Closed March 2026</span></span><span class="chip c-green">₹3,200 recovered</span></button>
