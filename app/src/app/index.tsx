@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { useAuth } from '@/auth/auth-context';
 import { AppHeader } from '@/components/app-header';
 import { Avatar } from '@/components/avatar';
 import { Button } from '@/components/button';
@@ -14,15 +16,21 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { caseStatus } from '@/data/case-status';
-import { currentUser, placeholderCases } from '@/data/placeholder';
+import { placeholderCases } from '@/data/placeholder';
 import type { Case } from '@/data/types';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth, formatMonthYear } from '@/i18n/dates';
+import { formatPhone } from '@/lib/phone';
 
 export default function YourCasesScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
   const toast = useToast();
+  const { state, logout } = useAuth();
+  const [accountOpen, setAccountOpen] = useState(false);
+  // The root layout only shows this screen to signed-in people.
+  if (state.status !== 'signedIn') return null;
+  const { user } = state;
 
   const header = (
     <AppHeader
@@ -34,14 +42,32 @@ export default function YourCasesScreen() {
           </Text>
         </View>
       }
-      right={<Avatar name={currentUser.name} />}
+      right={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('auth.account')}
+          accessibilityState={{ expanded: accountOpen }}
+          hitSlop={6}
+          onPress={() => setAccountOpen((open) => !open)}>
+          <Avatar name={user.name} />
+        </Pressable>
+      }
     />
   );
 
   return (
     <Screen header={header}>
+      {accountOpen ? (
+        <Card style={styles.account}>
+          <Text weight="bold">{user.name}</Text>
+          <Text variant="small" color="ink2">
+            {t('auth.signedInAs', { phone: formatPhone(user.phone) })}
+          </Text>
+          <Button variant="secondary" icon="log-out" label={t('auth.logOut')} onPress={logout} />
+        </Card>
+      ) : null}
       <Text variant="hello" weight="bold" style={styles.hello}>
-        {t('home.greeting', { name: currentUser.firstName })}
+        {t('home.greeting', { name: user.name.split(' ')[0] })}
       </Text>
       <Text color="ink2">{t('home.intro')}</Text>
 
@@ -94,6 +120,7 @@ function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
 const styles = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandName: { fontSize: 20, lineHeight: 26 },
+  account: { padding: 16, gap: 8, marginBottom: 8 },
   hello: { marginTop: 6, marginBottom: 2 },
   sectionTitle: { marginTop: 22, marginBottom: 8 },
   case: {

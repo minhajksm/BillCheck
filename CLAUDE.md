@@ -15,8 +15,9 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 
 - App: `cd app && npx expo run:android` (development build; Expo Go doesn't support SDK 57)
 - API: `cd api && uv run uvicorn main:app --reload` (docs at http://localhost:8000/docs)
-- DB: `docker start billcheck-db`
+- DB: `docker start billcheck-db` (first-time setup in `api/README.md`), then `cd api && uv run alembic upgrade head`
 - From the Android emulator, the API is at `http://10.0.2.2:8000`
+- Sign-in is phone number + OTP. In development, codes print in the API's terminal (`OTP_DELIVERY=console`).
 
 ## MVP scope
 

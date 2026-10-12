@@ -38,10 +38,15 @@
       [
         "expo-localization",
         {
-          "supportedLocales": ["en", "hi", "mr"],
+          "supportedLocales": [
+            "en",
+            "hi",
+            "mr"
+          ],
           "allowDynamicLocaleChangesAndroid": true
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
