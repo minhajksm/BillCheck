@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -16,8 +16,9 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { caseStatus } from '@/data/case-status';
-import { placeholderCases } from '@/data/placeholder';
+import { listCases } from '@/data/cases-api';
 import type { Case } from '@/data/types';
+import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth, formatMonthYear } from '@/i18n/dates';
 import { formatPhone } from '@/lib/phone';
@@ -28,6 +29,14 @@ export default function YourCasesScreen() {
   const toast = useToast();
   const { state, logout } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
+  const token = state.status === 'signedIn' ? state.token : null;
+
+  const loadCases = useCallback(async () => (token ? listCases(token) : []), [token]);
+  const cases = useAsync(loadCases);
+  // Coming back from a scan, the case's chip should already be up to date.
+  const { reload } = cases;
+  useFocusEffect(useCallback(() => void reload(), [reload]));
+
   // The root layout only shows this screen to signed-in people.
   if (state.status !== 'signedIn') return null;
   const { user } = state;
@@ -74,7 +83,14 @@ export default function YourCasesScreen() {
       <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
         {t('home.yourCases')}
       </Text>
-      {placeholderCases.map((c) => (
+      {cases.status === 'loading' ? <Text color="ink2">{t('common.loading')}</Text> : null}
+      {cases.status === 'error' ? (
+        <Card style={styles.account}>
+          <Text color="ink2">{t('common.loadFailed')}</Text>
+          <Button variant="secondary" label={t('common.tryAgain')} onPress={cases.reload} />
+        </Card>
+      ) : null}
+      {(cases.status === 'ready' ? cases.value : []).map((c) => (
         <CaseCard
           key={c.id}
           item={c}
@@ -86,7 +102,12 @@ export default function YourCasesScreen() {
         />
       ))}
 
-      <Button variant="secondary" icon="plus" label={t('home.startNewCase')} onPress={() => toast(t('home.newCaseSoon'))} />
+      <Button
+        variant="secondary"
+        icon="plus"
+        label={t('home.startNewCase')}
+        onPress={() => router.push('/cases/new')}
+      />
 
       <View style={[styles.tip, { borderColor: palette.line }]}>
         <Text weight="bold">{t('home.planningTitle')}</Text>

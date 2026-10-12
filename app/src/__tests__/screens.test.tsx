@@ -54,12 +54,13 @@ beforeEach(() => {
 describe('Your cases', () => {
   afterAll(() => i18n.changeLanguage('en'));
 
-  it('greets the signed-in person and lists both placeholder cases', async () => {
+  it('greets the signed-in person and lists their cases', async () => {
     await render('/', 'Welcome, Rohan');
     expect(screen.getByText('Welcome, Rohan')).toBeVisible();
     expect(screen.getByText("Papa's admission")).toBeVisible();
     expect(screen.getByText('Admitted 9 Oct, day 3')).toBeVisible();
-    expect(screen.getByText("Add today's bill")).toBeVisible();
+    // Two open questions on the latest bill, so the chip asks for them.
+    expect(screen.getByText('2 to ask')).toBeVisible();
     expect(screen.getByText('Closed March 2026')).toBeVisible();
     expect(screen.getByText('₹3,200 recovered')).toBeVisible();
   });
@@ -68,10 +69,8 @@ describe('Your cases', () => {
     const router = await render('/', "Papa's admission");
     fireEvent.press(screen.getByText("Papa's admission"));
     expect(router.getPathname()).toBe('/cases/papa-admission');
-    expect(screen.getByText('Running total, day 2')).toBeVisible();
-    expect(screen.getByText('₹99,890')).toBeVisible();
-    expect(screen.getByText('+₹31,400')).toBeVisible();
-    expect(screen.getByText("Today's bill isn't added yet")).toBeVisible();
+    expect(await screen.findByText('Running total, day 3')).toBeVisible();
+    expect(screen.getByText('₹73,890')).toBeVisible();
     expect(screen.getByText('Rohan (you) and Anita follow this case')).toBeVisible();
     expect(screen.getByText('10 Oct, 37 items, ₹31,400')).toBeVisible();
   });
@@ -83,9 +82,9 @@ describe('Your cases', () => {
 
   it.each(SUPPORTED_LANGUAGES)('renders both screens in %s without raw keys', async (lng) => {
     await i18n.changeLanguage(lng);
-    await render('/cases/papa-admission', '₹99,890');
-    expect(screen.queryByText(/^(case|home|common|caseStatus|dates|auth)\./)).toBeNull();
-    expect(screen.getByText('₹99,890')).toBeVisible();
+    await render('/cases/papa-admission', '₹73,890');
+    expect(screen.queryByText(/^(case|home|common|caseStatus|dates|auth|report|ask|flags|scan|newCase|message)\./)).toBeNull();
+    expect(screen.getByText('₹73,890')).toBeVisible();
   });
 
   it('uses Hindi copy when the language is Hindi', async () => {

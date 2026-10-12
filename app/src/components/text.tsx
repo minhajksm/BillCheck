@@ -10,6 +10,8 @@ const variants = StyleSheet.create({
   title: { fontSize: 18, lineHeight: 22 },
   hello: { fontSize: 24, lineHeight: 30, letterSpacing: -0.2 },
   metric: { fontSize: 22, lineHeight: 30, letterSpacing: -0.2 },
+  // The report's headline figure, as in the prototype.
+  big: { fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
 });
 
 export type TextVariant = keyof typeof variants;
