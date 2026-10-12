@@ -1,0 +1,70 @@
+{
+  "_README": [
+    "ILLUSTRATIVE SAMPLE DATA. These are not real NPPA ceiling prices or CGHS",
+    "rates, and must not be used to tell anyone their bill is wrong.",
+    "They exist so the audit logic has something to run against in development",
+    "and tests. Replace this file with the published NPPA and CGHS lists before",
+    "any flag is shown to a real family.",
+    "Amounts are rupees per unit."
+  ],
+  "prices": [
+    {
+      "name": "Meropenem 1g injection",
+      "aliases": ["inj. meropenem 1g", "inj meropenem 1g", "meropenem 1g", "meropenem"],
+      "unit": "vial",
+      "mrp": 1840.0,
+      "nppa_ceiling": 1840.0,
+      "source": "sample"
+    },
+    {
+      "name": "Pantoprazole 40mg injection",
+      "aliases": ["inj. pantoprazole 40mg", "inj pantoprazole 40mg", "pantoprazole 40mg", "pantoprazole"],
+      "unit": "vial",
+      "mrp": 62.0,
+      "nppa_ceiling": 62.0,
+      "source": "sample"
+    },
+    {
+      "name": "Ringer lactate 500ml",
+      "aliases": ["iv fluid, ringer lactate 500ml", "ringer lactate 500ml", "ringer lactate"],
+      "unit": "bottle",
+      "mrp": 142.0,
+      "nppa_ceiling": 135.0,
+      "source": "sample"
+    },
+    {
+      "name": "Paracetamol 650mg tablet",
+      "aliases": ["tab. paracetamol 650mg", "paracetamol 650mg", "paracetamol"],
+      "unit": "tablet",
+      "mrp": 2.5,
+      "nppa_ceiling": 2.2,
+      "source": "sample"
+    }
+  ],
+  "quantity_norms": [
+    {
+      "name": "Surgical gloves",
+      "aliases": ["surgical gloves", "gloves"],
+      "unit": "pair",
+      "usual_max_per_day": 20,
+      "note": "ward_stay",
+      "source": "sample"
+    },
+    {
+      "name": "Syringes",
+      "aliases": ["syringes", "syringe"],
+      "unit": "piece",
+      "usual_max_per_day": 12,
+      "note": "ward_stay",
+      "source": "sample"
+    },
+    {
+      "name": "Consultant visit",
+      "aliases": ["consultant visit", "doctor visit"],
+      "unit": "visit",
+      "usual_max_per_day": 2,
+      "note": "ward_stay",
+      "source": "sample"
+    }
+  ]
+}

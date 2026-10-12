@@ -1,0 +1,189 @@
+"""Checks an itemized bill and raises flags.
+
+Three checks, in the order a family would notice them:
+
+1. **Above MRP** — a medicine billed above the price printed on its pack, or
+   above its NPPA ceiling price where one applies. Red: selling above the
+   printed MRP isn't allowed under India's Legal Metrology rules.
+2. **Duplicate** — the same charge entered twice for the same date and time.
+   Red, though it is usually a data-entry mistake rather than a second visit.
+3. **Unusual quantity** — far more of something than a ward stay usually uses.
+   Amber only. There may be a real reason, such as a procedure or isolation
+   care, so this is a question and never a verdict.
+
+A flag carries facts, never sentences: what was billed, what it was checked
+against, and the difference. The app turns those into copy in the family's own
+language, which is why nothing here is user-facing English.
+"""
+
+from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Decimal
+from typing import Literal
+
+from references import ReferenceData, normalize, parse_quantity
+
+FlagKind = Literal["above_mrp", "duplicate", "quantity"]
+FlagLevel = Literal["red", "amber"]
+
+PAISE = Decimal("0.01")
+
+
+def _money(value: Decimal) -> Decimal:
+    return value.quantize(PAISE, rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class BillRow:
+    """One line of the bill as it was read off the page."""
+
+    position: int
+    name: str
+    detail: str | None = None
+    quantity: Decimal | None = None
+    amount: Decimal = Decimal("0")
+
+    def count(self) -> Decimal | None:
+        """How many units this line covers, from the quantity column if the
+        bill had one, otherwise from the quantity as printed."""
+        return self.quantity if self.quantity is not None else parse_quantity(self.detail)
+
+
+@dataclass(frozen=True)
+class Flag:
+    kind: FlagKind
+    level: FlagLevel
+    row_position: int
+    billed: Decimal
+    reference_amount: Decimal
+    reference_source: str
+    excess: Decimal
+    reference_detail: dict = field(default_factory=dict)
+
+
+def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
+    price = references.price_for(row.name)
+    if price is None or (price.mrp is None and price.nppa_ceiling is None):
+        return None
+
+    count = row.count()
+    if count is None or count <= 0 or row.amount <= 0:
+        return None
+
+    ceiling, source = price.ceiling()
+    unit_price = row.amount / count
+    if unit_price <= ceiling:
+        return None
+
+    allowed = _money(ceiling * count)
+    return Flag(
+        kind="above_mrp",
+        level="red",
+        row_position=row.position,
+        billed=_money(row.amount),
+        reference_amount=allowed,
+        reference_source=source,
+        excess=_money(row.amount - allowed),
+        reference_detail={
+            "reference_name": price.name,
+            "unit": price.unit,
+            "unit_price_billed": str(_money(unit_price)),
+            "unit_price_reference": str(_money(ceiling)),
+            "quantity": str(count),
+            "list": price.source,
+        },
+    )
+
+
+def _duplicates(rows: list[BillRow]) -> list[Flag]:
+    """Flags every repeat after the first identical line.
+
+    Identical means the same item and the same printed detail, so two genuine
+    visits on different days are left alone, while the same visit entered twice
+    for 11 Oct 10:30 am is not.
+    """
+    seen: dict[tuple[str, str], BillRow] = {}
+    flags: list[Flag] = []
+    for row in rows:
+        if not row.detail:
+            continue
+        key = (normalize(row.name), normalize(row.detail))
+        first = seen.get(key)
+        if first is None:
+            seen[key] = row
+            continue
+        flags.append(
+            Flag(
+                kind="duplicate",
+                level="red",
+                row_position=row.position,
+                billed=_money(row.amount),
+                # One of them should be there; the repeat is the excess.
+                reference_amount=_money(first.amount),
+                reference_source="duplicate",
+                excess=_money(row.amount),
+                reference_detail={
+                    "first_row_position": first.position,
+                    "repeated_detail": row.detail,
+                },
+            )
+        )
+    return flags
+
+
+def _unusual_quantity(row: BillRow, references: ReferenceData) -> Flag | None:
+    norm = references.norm_for(row.name)
+    if norm is None:
+        return None
+
+    count = row.count()
+    if count is None or count <= norm.usual_max_per_day or row.amount <= 0:
+        return None
+
+    unit_price = row.amount / count
+    usual_cost = _money(unit_price * norm.usual_max_per_day)
+    return Flag(
+        kind="quantity",
+        level="amber",
+        row_position=row.position,
+        billed=_money(row.amount),
+        reference_amount=usual_cost,
+        reference_source="quantity_norm",
+        excess=_money(row.amount - usual_cost),
+        reference_detail={
+            "reference_name": norm.name,
+            "unit": norm.unit,
+            "quantity": str(count),
+            "usual_max_per_day": str(norm.usual_max_per_day),
+            "list": norm.source,
+        },
+    )
+
+
+def audit_bill(rows: list[BillRow], references: ReferenceData) -> list[Flag]:
+    """Runs every check over one day's bill.
+
+    Red flags come first, then amber, because a family reading this in a
+    hospital corridor should see the clear-cut ones first. Within a level the
+    bill's own order is kept, so a flag is easy to find on the page.
+    """
+    flags: list[Flag] = _duplicates(rows)
+    duplicate_rows = {flag.row_position for flag in flags}
+
+    for row in rows:
+        # A duplicated line is already answered by removing the repeat; checking
+        # its unit price as well would ask the family two questions about one
+        # mistake.
+        if row.position in duplicate_rows:
+            continue
+        if above := _above_mrp(row, references):
+            flags.append(above)
+        elif unusual := _unusual_quantity(row, references):
+            flags.append(unusual)
+
+    order = {"red": 0, "amber": 1}
+    flags.sort(key=lambda flag: (order[flag.level], flag.row_position))
+    return flags
+
+
+def total_excess(flags: list[Flag]) -> Decimal:
+    return _money(sum((flag.excess for flag in flags), Decimal("0")))
