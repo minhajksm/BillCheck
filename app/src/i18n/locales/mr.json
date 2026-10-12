@@ -1,0 +1,71 @@
+{
+  "common": {
+    "appName": "BillSaathi",
+    "back": "मागे",
+    "goHome": "तुमच्या केसेसवर जा",
+    "place": "{{name}}, {{area}}"
+  },
+  "dates": {
+    "dayMonth": "{{day}} {{month}}",
+    "monthYear": "{{month}} {{year}}",
+    "monthsShort": ["जाने", "फेब्रु", "मार्च", "एप्रि", "मे", "जून", "जुलै", "ऑग", "सप्टें", "ऑक्टो", "नोव्हें", "डिसें"],
+    "monthsLong": ["जानेवारी", "फेब्रुवारी", "मार्च", "एप्रिल", "मे", "जून", "जुलै", "ऑगस्ट", "सप्टेंबर", "ऑक्टोबर", "नोव्हेंबर", "डिसेंबर"]
+  },
+  "home": {
+    "greeting": "नमस्कार, {{name}}",
+    "intro": "कुटुंबातील प्रत्येक हॉस्पिटल बिल तपासा आणि समजून घ्या.",
+    "yourCases": "तुमच्या केसेस",
+    "admitted": "{{date}} रोजी दाखल, दिवस {{day}}",
+    "closed": "{{date}} मध्ये बंद",
+    "closedCaseToast": "ही केस बंद झाली आहे. तिचे रिपोर्ट इथे जतन राहतील.",
+    "startNewCase": "नवीन केस सुरू करा",
+    "newCaseSoon": "नवीन केस सुरू करण्याची सुविधा लवकरच येत आहे",
+    "planningTitle": "दाखल होण्याचे नियोजन करत आहात?",
+    "planningBody": "दाखल होण्यापूर्वी खर्चाचा अंदाज घ्या आणि पॅकेज दरांची तुलना करा.",
+    "nextVersion": "पुढील आवृत्तीत"
+  },
+  "caseStatus": {
+    "addTodaysBill": "आजचे बिल जोडा",
+    "toAsk_one": "{{count}} प्रश्न बाकी",
+    "toAsk_other": "{{count}} प्रश्न बाकी",
+    "upToDate": "सर्व अद्ययावत",
+    "recovered": "{{amount}} परत मिळाले",
+    "closed": "बंद"
+  },
+  "case": {
+    "patientLine": "रुग्ण {{name}}, IP क्र. {{ipNumber}}, बेड {{bed}}",
+    "inviteFamily": "कुटुंबाला जोडा",
+    "inviteSoon": "कुटुंबाला जोडण्याची सुविधा लवकरच येत आहे",
+    "followersYouOnly": "या केसवर फक्त तुमचे लक्ष आहे",
+    "followersPair": "{{you}} (तुम्ही) आणि {{other}} यांचे या केसवर लक्ष आहे",
+    "followersMany_one": "{{you}} (तुम्ही) आणि इतर {{count}} जणाचे या केसवर लक्ष आहे",
+    "followersMany_other": "{{you}} (तुम्ही) आणि इतर {{count}} जणांचे या केसवर लक्ष आहे",
+    "runningTotal": "आतापर्यंत एकूण, दिवस {{day}}",
+    "sinceYesterday": "कालपासून",
+    "recoveredSoFar": "आतापर्यंत परत मिळाले",
+    "bannerNotAddedTitle": "आजचे बिल अजून जोडलेले नाही",
+    "bannerNotAddedBody": "बिलिंग डेस्ककडून सारांश नव्हे, तर आयटमनुसार अंतरिम बिल मागा.",
+    "bannerToAskTitle_one": "{{count}} गोष्टीबद्दल विचारणे योग्य ठरेल",
+    "bannerToAskTitle_other": "{{count}} गोष्टींबद्दल विचारणे योग्य ठरेल",
+    "bannerToAskBody": "डॉक्टर राउंडवर असतानाच आज विचारा.",
+    "bannerSettledTitle": "आजचे सर्व प्रश्न सुटले",
+    "bannerSettledBody": "उद्याचे बिल मिळाले की ते जोडा.",
+    "dailyBills": "दररोजची बिले",
+    "billAdmission": "दिवस {{day}}, दाखल",
+    "billInterim": "दिवस {{day}} चे अंतरिम बिल",
+    "billMeta_one": "{{date}}, {{count}} आयटम, {{amount}}",
+    "billMeta_other": "{{date}}, {{count}} आयटम, {{amount}}",
+    "billLooksFine": "ठीक दिसते",
+    "billSettled": "सुटले",
+    "billAllInRange_one": "दिवस {{day}}: {{count}} आयटम सामान्य मर्यादेत आहे",
+    "billAllInRange_other": "दिवस {{day}}: सर्व {{count}} आयटम सामान्य मर्यादेत आहेत",
+    "reportSoon": "बिल रिपोर्ट लवकरच येत आहे",
+    "addTodaysBill": "आजचे बिल जोडा",
+    "askBillingDesk": "बिलिंग डेस्कला विचारा",
+    "addTomorrowsBill": "उद्याचे बिल जोडा",
+    "scanSoon": "बिल स्कॅन करण्याची सुविधा लवकरच येत आहे",
+    "askSoon": "बिलिंग डेस्कसाठी संदेशाची सुविधा लवकरच येत आहे",
+    "tomorrowToast": "उद्याचे बिल इथूनच जोडता येईल",
+    "notFound": "ही केस सापडली नाही."
+  }
+}

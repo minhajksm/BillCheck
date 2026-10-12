@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BillSaathi prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--page:#E9ECF2;--app:#F5F6F9;--card:#FFFFFF;--soft:#EDEFF5;--ink:#1B2140;--ink2:#525877;--ink3:#80859F;--line:#DDE0EA;
+--indigo:#2E3A8C;--on-indigo:#FFFFFF;--indigo-soft:#E5E8F7;--indigo-ink:#2E3A8C;
+--mari:#F2A71B;--hl:rgba(242,167,27,.42);--mari-soft:#FDF0D5;--mari-ink:#7A4D00;
+--red:#B4322A;--red-soft:#FBE7E5;--green:#2F7A4B;--green-soft:#E1F1E6;--frame:#1B2140;--paper:#FFFDF7;--scrim:rgba(14,16,32,.45);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+--page:#0D101B;--app:#141827;--card:#1C2134;--soft:#242A42;--ink:#ECEEF7;--ink2:#B2B7CF;--ink3:#7E84A2;--line:#2D3352;
+--indigo:#9AA6F2;--on-indigo:#11152A;--indigo-soft:#262C55;--indigo-ink:#B9C2F7;
+--mari:#F5B53D;--hl:rgba(245,181,61,.30);--mari-soft:#3A2C0E;--mari-ink:#F7CB72;
+--red:#F08A80;--red-soft:#3D1E1C;--green:#7CCB98;--green-soft:#183021;--frame:#000000;--paper:#1F2436;--scrim:rgba(0,0,0,.6);color-scheme:dark}}
+:root[data-theme="dark"]{
+--page:#0D101B;--app:#141827;--card:#1C2134;--soft:#242A42;--ink:#ECEEF7;--ink2:#B2B7CF;--ink3:#7E84A2;--line:#2D3352;
+--indigo:#9AA6F2;--on-indigo:#11152A;--indigo-soft:#262C55;--indigo-ink:#B9C2F7;
+--mari:#F5B53D;--hl:rgba(245,181,61,.30);--mari-soft:#3A2C0E;--mari-ink:#F7CB72;
+--red:#F08A80;--red-soft:#3D1E1C;--green:#7CCB98;--green-soft:#183021;--frame:#000000;--paper:#1F2436;--scrim:rgba(0,0,0,.6);color-scheme:dark}
+*{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;background:var(--page);color:var(--ink);font-family:"Mukta","Noto Sans Devanagari",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0;text-align:inherit}
+button:focus-visible{outline:2px solid var(--indigo);outline-offset:2px;border-radius:10px}
+p{margin:0}
+.stage{min-height:100%;display:flex;align-items:center;justify-content:center;gap:56px;padding:24px}
+.side{width:290px}
+.mark{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--indigo);position:relative;flex:none}
+.logo::before{content:"";position:absolute;left:8px;right:8px;top:9px;height:2px;background:var(--on-indigo);box-shadow:0 6px 0 var(--on-indigo)}
+.logo::after{content:"";position:absolute;left:6px;right:6px;bottom:7px;height:6px;background:var(--mari);border-radius:2px;opacity:.9}
+.side h1{font-size:28px;line-height:1.1;margin:0;font-weight:700;letter-spacing:-.01em}
+.side .lead{color:var(--ink2);margin:0 0 22px;max-width:34ch}
+.jump{display:flex;flex-direction:column;gap:2px;margin:0 0 18px;padding:0;list-style:none}
+.jump button{width:100%;padding:8px 12px;border-radius:10px;display:flex;gap:10px;align-items:baseline}
+.jump button:hover{background:var(--soft)}
+.jump button.on{background:var(--indigo-soft);color:var(--indigo-ink);font-weight:600}
+.jump .n{color:var(--ink3);font-size:13px;width:14px;font-weight:500}
+.reset{font-size:14px;color:var(--indigo-ink);font-weight:600;padding:6px 12px;border-radius:10px}
+.reset:hover{background:var(--soft)}
+.note{font-size:13px;color:var(--ink3);margin-top:18px;max-width:34ch}
+.phone{position:relative;width:390px;height:min(820px,calc(100vh - 48px));min-height:600px;border:10px solid var(--frame);border-radius:46px;background:var(--app);overflow:hidden;flex:none}
+.app{position:absolute;inset:0;display:flex;flex-direction:column}
+.sbar{display:flex;justify-content:space-between;align-items:center;padding:12px 26px 4px;font-size:13px;font-weight:600;flex:none;background:var(--app)}
+.app.dk .sbar{background:#0E1020;color:#F2F3F8}
+.batt{display:inline-block;width:22px;height:11px;border:1.5px solid currentColor;border-radius:3px;position:relative;margin-left:6px;vertical-align:-1px}
+.batt::after{content:"";position:absolute;top:1.5px;bottom:1.5px;left:1.5px;right:6px;background:currentColor;border-radius:1px}
+.scr{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.ah{position:sticky;top:0;z-index:2;background:var(--app);display:flex;align-items:center;gap:4px;padding:8px 12px 8px 8px;min-height:56px}
+.ah h2{font-size:18px;margin:0;font-weight:700;flex:1;line-height:1.2}
+.ah.home{padding-left:18px}
+.ah.home h2{font-size:20px;display:flex;align-items:center;gap:8px}
+.ah.home .logo{width:26px;height:26px;border-radius:7px}
+.ah.home .logo::before{left:6px;right:6px;top:7px;box-shadow:0 4px 0 var(--on-indigo)}
+.ah.home .logo::after{left:5px;right:5px;bottom:5px;height:4px}
+.ah.dark{background:#0E1020;color:#F2F3F8}
+.ib{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;flex:none}
+.ib:hover{background:var(--soft)}
+.ah.dark .ib:hover{background:#22264A}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.pad{padding:2px 18px 28px}
+.muted{color:var(--ink2)}
+.faint{color:var(--ink3);font-size:13px}
+.hello{font-size:24px;font-weight:700;line-height:1.2;margin:6px 0 2px;letter-spacing:-.01em}
+.sec-t{font-size:14px;font-weight:600;color:var(--ink2);margin:22px 0 8px}
+.chip{display:inline-block;font-size:12.5px;font-weight:600;padding:1px 9px;border-radius:999px;white-space:nowrap;line-height:1.7;flex:none}
+.c-red{background:var(--red-soft);color:var(--red)}
+.c-amber{background:var(--mari-soft);color:var(--mari-ink)}
+.c-green{background:var(--green-soft);color:var(--green)}
+.c-indigo{background:var(--indigo-soft);color:var(--indigo-ink)}
+.c-grey{background:var(--soft);color:var(--ink2)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:10px 16px;border-radius:14px;font-weight:600;width:100%;text-align:center}
+.btn.pri{background:var(--indigo);color:var(--on-indigo)}
+.btn.sec{background:var(--card);border:1px solid var(--line)}
+.btn.sec:hover{border-color:var(--ink3)}
+.btn:active{transform:scale(.985)}
+.cta{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+.case{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.case:hover{border-color:var(--ink3)}
+.case-l{display:flex;flex-direction:column;line-height:1.35}
+.case-l b{font-size:16px;margin-bottom:2px}
+.tip{margin-top:22px;border:1px dashed var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.sub{margin:0 0 12px;line-height:1.4}
+.fam{display:flex;align-items:center;margin-bottom:14px}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;border:2px solid var(--app);flex:none}
+.av1{background:var(--indigo-soft);color:var(--indigo-ink)}
+.av2{background:var(--green-soft);color:var(--green);margin-left:-8px;margin-right:8px}
+.ah .av1{margin-right:6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column}
+.metric .k{font-size:13px;color:var(--ink2)}
+.metric .v{font-size:22px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1.3}
+.recm{margin-top:10px;background:var(--green-soft);border-color:transparent}
+.recm .k,.recm .v{color:var(--green)}
+.banner{border-radius:16px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;margin-top:12px;width:100%;line-height:1.4}
+.banner div{flex:1}
+.banner b{display:block;margin-bottom:1px}
+.banner span{font-size:14px}
+.b-indigo{background:var(--indigo-soft);color:var(--indigo-ink)}
+.b-amber{background:var(--mari-soft);color:var(--mari-ink)}
+.b-green{background:var(--green-soft);color:var(--green)}
+.list{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.li{display:flex;align-items:center;gap:12px;padding:13px 16px;width:100%;border-top:1px solid var(--line)}
+.li:first-child{border-top:0}
+.li:hover{background:var(--soft)}
+.li>svg{color:var(--ink3)}
+.li-m{flex:1;display:flex;flex-direction:column;line-height:1.35}
+.vfwrap{background:#0E1020;color:#F2F3F8;min-height:100%;display:flex;flex-direction:column}
+.vf{position:relative;margin:4px 18px 0;border-radius:18px;background:#1A1E38;height:340px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.vf.flash::after{content:"";position:absolute;inset:0;background:#fff;animation:fl .35s ease-out forwards}
+@keyframes fl{from{opacity:.85}to{opacity:0}}
+.cn{position:absolute;width:28px;height:28px;border-color:var(--mari);border-style:solid;border-width:0}
+.tl{top:16px;left:16px;border-top-width:3px;border-left-width:3px;border-top-left-radius:8px}
+.tr{top:16px;right:16px;border-top-width:3px;border-right-width:3px;border-top-right-radius:8px}
+.bl-c{bottom:16px;left:16px;border-bottom-width:3px;border-left-width:3px;border-bottom-left-radius:8px}
+.br{bottom:16px;right:16px;border-bottom-width:3px;border-right-width:3px;border-bottom-right-radius:8px}
+.doc{background:#F7F5EE;width:60%;aspect-ratio:3/4;transform:rotate(-2.5deg);padding:14px 14px;border-radius:3px}
+.doc-h{height:8px;width:55%;background:#9A968A;border-radius:2px;margin-bottom:12px}
+.dl{display:flex;justify-content:space-between;gap:10px;margin:7px 0}
+.dl i{height:4px;background:#CFCBBE;border-radius:2px;display:block}
+.vf-hint{text-align:center;color:#B8BCD6;font-size:14px;margin:14px 24px 0;min-height:42px}
+.thumbs{display:flex;gap:6px;justify-content:center;min-height:34px;margin-top:6px}
+.th{width:24px;height:32px;background:#F7F5EE;border-radius:3px;opacity:.85}
+.ctl{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 18px 26px;margin-top:auto}
+.ctl-s{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;color:#DDE0F0;padding:6px;border-radius:12px}
+.ctl-s:hover{background:#22264A}
+.ctl-s.hide{visibility:hidden}
+.shutter{width:74px;height:74px;border-radius:50%;border:4px solid #F2F3F8;display:grid;place-items:center}
+.shutter span{width:56px;height:56px;border-radius:50%;background:#F2F3F8;display:block}
+.shutter:active span{transform:scale(.92)}
+.procw{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:70px}
+.proc-doc{width:72px;height:72px;border-radius:20px;background:var(--indigo-soft);color:var(--indigo-ink);display:grid;place-items:center;margin-bottom:18px}
+.proc-doc svg.i{width:34px;height:34px}
+.procw h3{font-size:20px;margin:0 0 4px}
+.steps{list-style:none;padding:0;margin:28px 0 0;text-align:left;display:flex;flex-direction:column;gap:14px;width:100%;max-width:300px}
+.steps li{display:flex;gap:12px;align-items:center;color:var(--ink3)}
+.steps li.act,.steps li.done{color:var(--ink)}
+.dot{width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;flex:none}
+.done .dot{background:var(--green);border-color:var(--green);color:var(--card)}
+.done .dot svg.i{width:14px;height:14px;stroke-width:2.6}
+.act .dot{border-color:var(--indigo);border-top-color:transparent;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sum{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;align-items:flex-start;margin-bottom:14px}
+.sum .k{font-size:14px;color:var(--ink2)}
+.sum .big{font-size:34px;font-weight:700;line-height:1.15;letter-spacing:-.02em;font-variant-numeric:tabular-nums;background:linear-gradient(100deg,transparent 0 1%,var(--hl) 3% 96%,transparent 99%) no-repeat 0 62%/100% 55%;padding:0 4px;margin:2px -4px}
+.sum.ok .big{background:none;color:var(--green)}
+.seg{display:flex;background:var(--soft);border-radius:12px;padding:3px;gap:3px;margin-bottom:14px}
+.seg button{flex:1;padding:7px 8px;border-radius:9px;font-weight:600;font-size:14px;color:var(--ink2);text-align:center}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.flag{display:flex;gap:12px;align-items:flex-start;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:13px 14px;margin-bottom:10px}
+.flag:hover{border-color:var(--ink3)}
+.flag.res{opacity:.72}
+.fl-m{flex:1;display:flex;flex-direction:column;line-height:1.35;gap:1px}
+.fl-m .muted{font-size:14px}
+.mk{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--mari-ink);color:var(--mari-ink);font-size:12px;font-weight:700;display:grid;place-items:center;flex:none;margin-top:1px;line-height:1}
+.mk.red{border-color:var(--red);color:var(--red)}
+.okrow{display:flex;gap:10px;align-items:center;color:var(--green);font-weight:500;padding:6px 4px 0}
+.bill{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px 14px 12px 38px;font-variant-numeric:tabular-nums}
+.bill-h{display:flex;flex-direction:column;line-height:1.35;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2)}
+.bill-h b{font-size:15px;color:var(--ink)}
+.bl{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 4px;border-bottom:1px dashed var(--line);position:relative;width:100%;font-size:14px}
+.bl .nm{display:flex;flex-direction:column;line-height:1.3}
+.bl small{font-size:12px;color:var(--ink3)}
+.bl .amt{white-space:nowrap}
+.bl.f{background:linear-gradient(100deg,transparent 0 .5%,var(--hl) 2% 97%,transparent 99.5%) no-repeat 0 50%/100% 82%;border-radius:2px}
+.bl.f .mk{position:absolute;left:-30px;top:50%;transform:translateY(-50%);margin:0;background:var(--paper)}
+.bl.f.corrected,.bl.f.explained{background-image:none}
+.bl.f.corrected .amt{text-decoration:line-through;color:var(--ink3)}
+.bl.tot{border-bottom:0;font-weight:700;padding-top:10px}
+.fine{margin-top:14px;line-height:1.45}
+.msg{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;white-space:pre-line;margin-bottom:10px;line-height:1.55}
+.esc{list-style:none;padding:0;margin:0;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.esc li{border-top:1px solid var(--line)}
+.esc li:first-child{border-top:0}
+.esc-b{display:flex;gap:12px;align-items:center;width:100%;padding:13px 16px}
+.esc-b span:nth-child(2){flex:1;font-weight:500}
+.esc-b .n{color:var(--ink3);font-weight:600;width:12px}
+.esc-b[aria-expanded="true"] svg{transform:rotate(180deg)}
+.esc p{padding:0 16px 14px 40px;color:var(--ink2);font-size:14px;line-height:1.5}
+.recrow{display:flex;justify-content:space-between;align-items:center;margin:18px 0 10px;padding:12px 16px;border-radius:14px;background:var(--green-soft);color:var(--green)}
+.recrow b{font-size:18px;font-variant-numeric:tabular-nums}
+.ov{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:flex-end;background:var(--scrim)}
+.sheet{background:var(--app);border-radius:22px 22px 0 0;padding:8px 18px 24px;max-height:88%;overflow-y:auto;animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 6px}
+.sh-top{display:flex;justify-content:space-between;align-items:center}
+.sheet h3{font-size:19px;margin:4px 0 12px;line-height:1.25}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.nums div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;line-height:1.3}
+.nums .k{font-size:12px;color:var(--ink2)}
+.nums b{font-variant-numeric:tabular-nums}
+.sh-t{font-weight:600;margin:14px 0 2px}
+.sh-btns{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.toast{position:absolute;left:50%;bottom:28px;transform:translate(-50%,10px);background:var(--ink);color:var(--app);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:500;width:max-content;max-width:calc(100% - 40px);text-align:center;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+@media (max-width:760px){
+.side{display:none}
+.stage{padding:0;display:block;height:100%;min-height:0}
+.phone{width:100%;height:100%;min-height:0;border:0;border-radius:0}
+.sbar{display:none}
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <aside class="side">
+    <div class="mark"><span class="logo" aria-hidden="true"></span><h1>BillSaathi</h1></div>
+    <p class="lead">A clickable prototype of the hospital bill checker. Tap through it the way a family member would on day 3 of an admission.</p>
+    <ol class="jump" id="jump">
+      <li><button data-a="jump" data-v="home"><span class="n">1</span>Your cases</button></li>
+      <li><button data-a="jump" data-v="case"><span class="n">2</span>Case dashboard</button></li>
+      <li><button data-a="jump" data-v="scan"><span class="n">3</span>Scan a bill</button></li>
+      <li><button data-a="jump" data-v="report"><span class="n">4</span>Bill report</button></li>
+      <li><button data-a="jump" data-v="action"><span class="n">5</span>Ask the billing desk</button></li>
+    </ol>
+    <button class="reset" data-a="reset">Reset prototype</button>
+    <p class="note">Sample data only. The hospital, patient, and prices are illustrative, not real reference rates.</p>
+  </aside>
+  <div class="phone">
+    <div class="app" id="app">
+      <div class="sbar"><span>9:41</span><span>5G<span class="batt"></span></span></div>
+      <div class="scr" id="scr"></div>
+      <div id="ovl"></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+</div>
+<script>
+const sv=p=>'<svg class="i" viewBox="0 0 24 24" aria-hidden="true">'+p+'</svg>';
+const I={
+back:sv('<path d="M15 5l-7 7 7 7"/>'),
+cam:sv('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'),
+up:sv('<path d="M12 16V4M7 9l5-5 5 5M5 20h14"/>'),
+check:sv('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+copy:sv('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'),
+share:sv('<path d="M12 4v11M7.5 8.5L12 4l4.5 4.5M5 13v6h14v-6"/>'),
+down:sv('<path d="M6 9l6 6 6-6"/>'),
+right:sv('<path d="M9 6l6 6-6 6"/>'),
+plus:sv('<path d="M12 5v14M5 12h14"/>'),
+file:sv('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
+x:sv('<path d="M6 6l12 12M18 6L6 18"/>'),
+alert:sv('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/>'),
+users:sv('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.2.6 3.5 2.8 3.5 6"/>')
+};
+const ITEMS={
+med:{name:"Inj. Meropenem 1g, 6 vials",tag:"Above MRP",lv:"red",short:"Billed ₹2,950 a vial. Printed MRP is ₹1,840.",billed:17700,ref:11040,refl:"At MRP",excess:6660,
+why:"The bill charges ₹1,110 more per vial than the MRP printed on the pack. Selling medicines above the printed MRP isn't allowed under India's Legal Metrology rules.",
+ask:"Ask the hospital pharmacy to bill at MRP, and to show you the batch details printed on the vials."},
+dup:{name:"Consultant visit, Dr. A. Mehta",tag:"Duplicate",lv:"red",short:"Billed twice for 11 Oct, 10:30 am.",billed:5000,ref:2500,refl:"One visit",excess:2500,
+why:"Two identical entries with the same doctor, date, and time. This is usually a data-entry mistake rather than a second visit.",
+ask:"Ask the billing desk to check the doctor's visit log for 11 Oct and remove the extra entry."},
+glv:{name:"Surgical gloves, 80 pairs",tag:"Worth asking",lv:"amber",short:"Similar one-day ward stays bill 10 to 20 pairs.",billed:6800,ref:1700,refl:"For 20 pairs",excess:5100,
+why:"This is far more than similar one-day ward stays in Mumbai. There may be a real reason, such as a procedure or isolation care, so treat this as a question.",
+ask:"Ask the nurse in charge whether any procedure that day needed extra gloves."}
+};
+const ORDER=["med","dup","glv"];
+const BILL=[["Room rent, twin sharing","1 day",6500],["Nursing charges","1 day",2200],["Consultant visit, Dr. A. Mehta","11 Oct, 10:30 am",2500],["Consultant visit, Dr. A. Mehta","11 Oct, 10:30 am",2500,"dup"],["Inj. Meropenem 1g","6 vials",17700,"med"],["Inj. Pantoprazole 40mg","2 vials",120],["IV fluid, Ringer lactate 500ml","4 bottles",520],["CBC and CRP tests","1 set",1450],["Chest X-ray","1 view",950],["Surgical gloves","80 pairs",6800,"glv"],["Syringes and IV cannula","1 set",1250]];
+const MSG={
+en:{o:"Namaste. I'm reviewing the interim bill for patient Ramesh Sharma (IP no. 20841). Could you help me understand these items?",
+med:"Inj. Meropenem 1g is billed at ₹2,950 per vial, but the printed MRP is ₹1,840.",
+dup:"The consultant visit by Dr. A. Mehta on 11 Oct at 10:30 am appears twice.",
+glv:"80 pairs of surgical gloves are billed for one day in the ward.",
+c:"Please share a corrected bill or an explanation. Thank you."},
+hi:{o:"नमस्ते। मैं मरीज़ रमेश शर्मा (IP नं. 20841) का अंतरिम बिल देख रहा हूँ। क्या आप इन चीज़ों को समझाने में मदद कर सकते हैं?",
+med:"इंजेक्शन मेरोपेनेम 1g का दाम ₹2,950 प्रति वायल लगाया गया है, जबकि छपी हुई MRP ₹1,840 है।",
+dup:"11 अक्टूबर सुबह 10:30 बजे डॉ. ए. मेहता की कंसल्टेंट विज़िट दो बार लगी है।",
+glv:"वार्ड में एक दिन के लिए 80 जोड़ी सर्जिकल ग्लव्स का बिल लगाया गया है।",
+c:"कृपया सुधरा हुआ बिल या इसका स्पष्टीकरण दें। धन्यवाद।"},
+mr:{o:"नमस्कार. मी रुग्ण रमेश शर्मा (IP क्र. 20841) यांचे अंतरिम बिल तपासत आहे. कृपया या गोष्टी समजावून सांगाल का?",
+med:"इंजेक्शन मेरोपेनेम 1g चा दर ₹2,950 प्रति व्हायल लावला आहे, पण छापील MRP ₹1,840 आहे.",
+dup:"11 ऑक्टोबर सकाळी 10:30 वाजता डॉ. ए. मेहता यांची कन्सल्टंट व्हिजिट दोनदा लावली आहे.",
+glv:"वॉर्डमधील एका दिवसासाठी सर्जिकल ग्लोव्ह्जच्या 80 जोड्यांचे बिल लावले आहे.",
+c:"कृपया दुरुस्त केलेले बिल किंवा याचे स्पष्टीकरण द्यावे. धन्यवाद."}
+};
+const ESC=[
+{t:"Hospital grievance officer",d:"Ask the patient relations desk for the grievance officer. Hand over your message, ask for a written reply, and note the date and the name of the person you spoke to."},
+{t:"Insurer or TPA",d:"If insurance is paying, send the flagged items to your insurer or TPA. They review claims too and can question charges. Unresolved insurance complaints can go to IRDAI's Bima Bharosa portal."},
+{t:"Consumer commission",d:"If overcharging isn't fixed, you can file a complaint with the district consumer commission, including online through e-Daakhil. Keep the bills and your messages as evidence."}
+];
+const STEPS=["Reading 11 line items","Matching medicines to MRP and NPPA prices","Comparing charges with Mumbai hospitals"];
+const fmt=n=>"₹"+n.toLocaleString("en-IN");
+const escH=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const reduced=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+let S,procTok=0,tt;
+function init(){S={screen:"home",scanned:false,pages:0,view:"flags",lang:"en",sheet:null,esc:-1,proc:0,st:{med:"open",dup:"open",glv:"open"}}}
+const openIds=()=>ORDER.filter(k=>S.st[k]==="open");
+const overcharge=()=>openIds().reduce((a,k)=>a+ITEMS[k].excess,0);
+const recovered=()=>ORDER.filter(k=>S.st[k]==="corrected").reduce((a,k)=>a+ITEMS[k].excess,0);
+const hdr=(t,back,right)=>`<header class="ah">${back?`<button class="ib" data-a="go" data-v="${back}" aria-label="Back">${I.back}</button>`:""}<h2>${t}</h2>${right||""}</header>`;
+const flagChip=k=>{const st=S.st[k],it=ITEMS[k];return st==="open"?`<span class="chip ${it.lv==="red"?"c-red":"c-amber"}">${it.tag}</span>`:st==="corrected"?`<span class="chip c-green">Corrected</span>`:`<span class="chip c-grey">Explained</span>`};
+function composeMsg(){const m=MSG[S.lang];const o=openIds();return m.o+"\n\n"+o.map((k,i)=>(i+1)+". "+m[k]).join("\n")+"\n\n"+m.c}
+
+const SCREENS={
+home(){const o=openIds().length;const chip=!S.scanned?["c-indigo","Add today's bill"]:o?["c-amber",o+" to ask"]:["c-green","Up to date"];
+return `<header class="ah home"><h2><span class="logo" aria-hidden="true"></span>BillSaathi</h2><span class="av av1" aria-label="Rohan Sharma">RS</span></header>
+<div class="pad"><p class="hello">Namaste, Rohan</p><p class="muted">Keep every hospital bill in your family checked and explained.</p>
+<p class="sec-t">Your cases</p>
+<button class="case" data-a="go" data-v="case"><span class="case-l"><b>Papa's admission</b><span class="muted">City Care Hospital, Andheri</span><span class="faint">Admitted 9 Oct, day 3</span></span><span class="chip ${chip[0]}">${chip[1]}</span></button>
+<button class="case" data-a="toast" data-v="This case is closed. Its reports stay saved here."><span class="case-l"><b>Mummy's cataract surgery</b><span class="muted">Lotus Eye Clinic, Thane</span><span class="faint">Closed March 2026</span></span><span class="chip c-green">₹3,200 recovered</span></button>
+<button class="btn sec" data-a="toast" data-v="New cases open in the full app">${I.plus} Start a new case</button>
+<div class="tip"><b>Planning an admission?</b><p class="muted">Get a cost estimate and compare package rates before you're admitted.</p><span class="chip c-grey">In the next version</span></div></div>`},
+
+case(){const sc=S.scanned,o=openIds(),rec=recovered();const total=sc?142380:99890,delta=sc?42490:31400,day=sc?3:2;let banner;
+if(!sc)banner=`<div class="banner b-indigo">${I.file}<div><b>Today's bill isn't added yet</b><span>Ask the billing desk for the itemized interim bill, not the summary.</span></div></div>`;
+else if(o.length)banner=`<button class="banner b-amber" data-a="go" data-v="report">${I.alert}<div><b>${o.length} item${o.length>1?"s":""} worth asking about</b><span>Ask today, while the doctor is still on rounds.</span></div>${I.right}</button>`;
+else banner=`<div class="banner b-green">${I.check}<div><b>Today's questions are settled</b><span>Add tomorrow's bill when you get it.</span></div></div>`;
+const d3=sc?`<button class="li" data-a="go" data-v="report">${I.file}<span class="li-m"><b>Day 3 interim bill</b><span class="faint">11 Oct, 11 items, ${fmt(42490)}</span></span>${o.length?`<span class="chip c-amber">${o.length} to ask</span>`:`<span class="chip c-green">Settled</span>`}</button>`:"";
+const cta=!sc?`<button class="btn pri" data-a="go" data-v="scan">${I.cam} Add today's bill</button>`:o.length?`<button class="btn pri" data-a="go" data-v="action">Ask the billing desk</button>`:`<button class="btn sec" data-a="toast" data-v="Tomorrow's bill can be added from here">${I.cam} Add tomorrow's bill</button>`;
+return `${hdr("Papa's admission","home",`<button class="ib" data-a="toast" data-v="Invite link copied. Send it to family on WhatsApp." aria-label="Invite family">${I.users}</button>`)}
+<div class="pad"><p class="muted sub">City Care Hospital, Andheri<br><span class="faint">Patient Ramesh Sharma, IP no. 20841, bed 412</span></p>
+<div class="fam"><span class="av av1">RS</span><span class="av av2">AS</span><span class="faint">Rohan (you) and Anita follow this case</span></div>
+<div class="row2"><div class="metric"><span class="k">Running total, day ${day}</span><span class="v">${fmt(total)}</span></div><div class="metric"><span class="k">Since yesterday</span><span class="v">+${fmt(delta)}</span></div></div>
+${rec?`<div class="metric recm"><span class="k">Recovered so far</span><span class="v">${fmt(rec)}</span></div>`:""}
+${banner}
+<p class="sec-t">Daily bills</p>
+<div class="list">${d3}
+<button class="li" data-a="toast" data-v="Day 2: all 37 items are within range">${I.file}<span class="li-m"><b>Day 2 interim bill</b><span class="faint">10 Oct, 37 items, ${fmt(31400)}</span></span><span class="chip c-green">Looks fine</span></button>
+<button class="li" data-a="toast" data-v="Day 1: all 24 items are within range">${I.file}<span class="li-m"><b>Day 1, admission</b><span class="faint">9 Oct, 24 items, ${fmt(68490)}</span></span><span class="chip c-green">Looks fine</span></button></div>
+<div class="cta">${cta}</div></div>`},
+
+scan(){const p=S.pages;const w=[[70,18],[55,20],[62,16],[48,22],[66,18],[40,16],[58,20],[52,18],[64,16],[45,22],[60,18]];
+const lines=w.map(x=>`<div class="dl"><i style="width:${x[0]}%"></i><i style="width:${x[1]}%"></i></div>`).join("");
+let th="";for(let i=0;i<p;i++)th+=`<span class="th"></span>`;
+return `<div class="vfwrap"><header class="ah dark"><button class="ib" data-a="go" data-v="case" aria-label="Close">${I.x}</button><h2>Scan the itemized bill</h2></header>
+<div class="vf" id="vf"><span class="cn tl"></span><span class="cn tr"></span><span class="cn bl-c"></span><span class="cn br"></span><div class="doc"><div class="doc-h"></div>${lines}</div></div>
+<p class="vf-hint">${p?`Page ${p} captured. Add the next page, or check the bill.`:"Fit one page inside the frame. Handwritten bills work too."}</p>
+<div class="thumbs">${th}</div>
+<div class="ctl"><button class="ctl-s" data-a="upload">${I.up}<span>Upload PDF</span></button><button class="shutter" data-a="snap" aria-label="Capture page"><span></span></button><button class="ctl-s${p?"":" hide"}" data-a="done"${p?"":' tabindex="-1" aria-hidden="true"'}>${I.check}<span>Check bill</span></button></div></div>`},
+
+proc(){return `<div class="pad procw"><div class="proc-doc">${I.file}</div><h3>Checking the day 3 bill</h3><p class="muted">This takes a few seconds.</p>
+<ol class="steps">${STEPS.map((s,i)=>`<li class="${i<S.proc?"done":i===S.proc?"act":""}"><span class="dot">${i<S.proc?I.check:""}</span>${s}</li>`).join("")}</ol></div>`},
+
+report(){const o=openIds(),rec=recovered();
+const top=o.length?`<div class="sum"><span class="k">Possible overcharge</span><span class="big">${fmt(overcharge())}</span><span class="muted">${o.length} of 11 items need a look</span></div>`:`<div class="sum ok"><span class="k">All flags settled</span><span class="big">${fmt(rec)}</span><span class="muted">recovered on this bill</span></div>`;
+const seg=`<div class="seg" role="tablist"><button role="tab" aria-selected="${S.view==="flags"}" class="${S.view==="flags"?"on":""}" data-a="view" data-v="flags">Flags</button><button role="tab" aria-selected="${S.view==="bill"}" class="${S.view==="bill"?"on":""}" data-a="view" data-v="bill">Marked bill</button></div>`;
+let body;
+if(S.view==="flags"){body=ORDER.map((k,i)=>{const it=ITEMS[k],st=S.st[k];return `<button class="flag${st!=="open"?" res":""}" data-a="sheet" data-v="${k}"><span class="mk ${it.lv}">${i+1}</span><span class="fl-m"><b>${it.name}</b><span class="muted">${it.short}</span><span class="faint">${fmt(it.excess)} ${st==="corrected"?"recovered":st==="explained"?"explained by hospital":"over reference"}</span></span>${flagChip(k)}</button>`}).join("")+`<div class="okrow">${I.check}<span>8 other items are within range</span></div>`}
+else{body=`<div class="bill"><div class="bill-h"><b>City Care Hospital</b><span>Interim bill, 11 Oct 2026</span><span>IP no. 20841, Ramesh Sharma</span></div>`+BILL.map(r=>{const f=r[3];if(!f)return `<div class="bl"><span class="nm">${r[0]}<small>${r[1]}</small></span><span class="amt">${fmt(r[2])}</span></div>`;
+return `<button class="bl f ${S.st[f]}" data-a="sheet" data-v="${f}" aria-label="Flag ${ORDER.indexOf(f)+1}: ${ITEMS[f].name}"><span class="mk ${ITEMS[f].lv}">${ORDER.indexOf(f)+1}</span><span class="nm">${r[0]}<small>${r[1]}</small></span><span class="amt">${fmt(r[2])}</span></button>`}).join("")+`<div class="bl tot"><span class="nm">Bill total</span><span class="amt">${fmt(42490)}</span></div></div>`}
+return `${hdr("Day 3 bill report","case")}<div class="pad">${top}${seg}${body}
+<p class="faint fine">Checked against printed MRP, NPPA ceiling prices, and what similar Mumbai hospitals charge. Flags are questions, not verdicts.</p>
+<div class="cta">${o.length?`<button class="btn pri" data-a="go" data-v="action">Ask the billing desk</button>`:`<button class="btn sec" data-a="go" data-v="case">Back to case</button>`}</div></div>`},
+
+action(){const o=openIds(),rec=recovered();const L=[["en","English"],["hi","हिंदी"],["mr","मराठी"]];
+const seg=`<div class="seg" role="tablist" aria-label="Message language">${L.map(l=>`<button role="tab" aria-selected="${S.lang===l[0]}" class="${S.lang===l[0]?"on":""}" data-a="lang" data-v="${l[0]}">${l[1]}</button>`).join("")}</div>`;
+const msg=o.length?`<div class="msg" lang="${S.lang}">${escH(composeMsg())}</div><div class="row2"><button class="btn sec" data-a="copy">${I.copy} Copy</button><button class="btn pri" data-a="share">${I.share} Share</button></div>`:`<div class="banner b-green">${I.check}<div><b>Nothing left to ask on this bill</b><span>Every flag is corrected or explained.</span></div></div>`;
+return `${hdr("Ask the billing desk","report")}<div class="pad"><p class="muted" style="margin-bottom:14px">Send this to the billing desk, or show it at the counter. It only includes questions that are still open.</p>
+${seg}${msg}
+<p class="sec-t">If it isn't resolved</p>
+<ol class="esc">${ESC.map((x,i)=>`<li><button class="esc-b" data-a="esc" data-v="${i}" aria-expanded="${S.esc===i}"><span class="n">${i+1}</span><span>${x.t}</span>${I.down}</button>${S.esc===i?`<p>${x.d}</p>`:""}</li>`).join("")}</ol>
+<div class="recrow"><span>Recovered so far</span><b>${fmt(rec)}</b></div>
+<button class="btn sec" data-a="go" data-v="report">Update what happened</button></div>`}
+};
+
+const scr=document.getElementById("scr"),ovl=document.getElementById("ovl"),app=document.getElementById("app"),toastEl=document.getElementById("toast");
+function render(){scr.innerHTML=SCREENS[S.screen]();app.classList.toggle("dk",S.screen==="scan");
+const j=S.screen==="proc"?"scan":S.screen;document.querySelectorAll("#jump button").forEach(b=>b.classList.toggle("on",b.dataset.v===j));renderOv()}
+function renderOv(){if(!S.sheet){ovl.innerHTML="";return}const k=S.sheet,it=ITEMS[k],st=S.st[k];
+ovl.innerHTML=`<div class="ov" data-a="closebg"><div class="sheet" role="dialog" aria-modal="true" aria-label="${it.name}"><div class="grab"></div>
+<div class="sh-top">${flagChip(k)}<button class="ib" data-a="close" aria-label="Close" id="shx">${I.x}</button></div>
+<h3>${it.name}</h3>
+<div class="nums"><div><span class="k">Billed</span><b>${fmt(it.billed)}</b></div><div><span class="k">${it.refl}</span><b>${fmt(it.ref)}</b></div><div><span class="k">Difference</span><b>${fmt(it.excess)}</b></div></div>
+<p class="sh-t">Why it's flagged</p><p class="muted">${it.why}</p>
+<p class="sh-t">What to ask</p><p class="muted">${it.ask}</p>
+<p class="sh-t">What happened?</p>
+${st==="open"?`<div class="sh-btns"><button class="btn pri" data-a="mark" data-v="${k}|corrected">Hospital corrected it</button><button class="btn sec" data-a="mark" data-v="${k}|explained">Hospital explained it</button></div>`:`<p class="muted">${st==="corrected"?"Marked as corrected. This amount counts as recovered.":"Marked as explained. It no longer counts as an overcharge."}</p><div class="sh-btns"><button class="btn sec" data-a="mark" data-v="${k}|open">Reopen this question</button></div>`}
+</div></div>`;const x=document.getElementById("shx");if(x)x.focus({preventScroll:true})}
+function go(s){if(S.screen==="proc"&&s!=="proc")procTok++;S.screen=s;S.sheet=null;render();scr.scrollTop=0;if(s==="proc")runProc()}
+function runProc(){const tok=++procTok;S.proc=0;render();const d=reduced?350:950;
+const step=()=>{if(tok!==procTok)return;S.proc++;render();if(S.proc<STEPS.length)setTimeout(step,d);else setTimeout(()=>{if(tok!==procTok)return;S.scanned=true;S.view="flags";go("report")},d*.7)};setTimeout(step,d)}
+function toast(m){toastEl.textContent=m;toastEl.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>toastEl.classList.remove("show"),2400)}
+function flash(){if(reduced)return;const v=document.getElementById("vf");if(!v)return;v.classList.remove("flash");void v.offsetWidth;v.classList.add("flash")}
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch(e){try{const ta=document.createElement("textarea");ta.value=t;ta.style.position="absolute";ta.style.left="-9999px";document.body.appendChild(ta);ta.select();const ok=document.execCommand("copy");ta.remove();return ok}catch(e2){return false}}}
+async function copyMsg(){const ok=await copyText(composeMsg());toast(ok?"Message copied":"Copy isn't available here. Select the text to copy it.")}
+async function shareMsg(){const t=composeMsg();if(navigator.share){try{await navigator.share({text:t});return}catch(e){if(e&&e.name==="AbortError")return}}const ok=await copyText(t);toast(ok?"Message copied. Paste it into WhatsApp.":"Sharing isn't available here. Select the text to copy it.")}
+document.addEventListener("click",e=>{const el=e.target.closest("[data-a]");if(!el)return;const a=el.dataset.a,v=el.dataset.v;
+switch(a){
+case"go":go(v);break;
+case"jump":if((v==="report"||v==="action")&&!S.scanned)S.scanned=true;if(v==="scan")S.pages=0;go(v);break;
+case"toast":toast(v);break;
+case"snap":if(S.pages<6)S.pages++;render();flash();break;
+case"upload":S.pages=Math.max(S.pages,3);render();toast("3 pages added from the PDF");break;
+case"done":go("proc");break;
+case"view":S.view=v;render();break;
+case"sheet":S.sheet=v;renderOv();break;
+case"close":S.sheet=null;renderOv();break;
+case"closebg":if(e.target===el){S.sheet=null;renderOv()}break;
+case"mark":{const[k,st]=v.split("|");S.st[k]=st;S.sheet=null;render();toast(st==="corrected"?"Marked as corrected. "+fmt(ITEMS[k].excess)+" added to recovered.":st==="explained"?"Marked as explained":"Question reopened");break}
+case"lang":S.lang=v;render();break;
+case"esc":S.esc=S.esc===+v?-1:+v;render();break;
+case"copy":copyMsg();break;
+case"share":shareMsg();break;
+case"reset":procTok++;init();go("home");toast("Prototype reset");break;
+}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheet){S.sheet=null;renderOv()}});
+init();render();
+</script>
+</body>
+</html>

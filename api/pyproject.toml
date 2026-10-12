@@ -1,0 +1,31 @@
+[project]
+name = "billsaathi-api"
+version = "0.1.0"
+description = "BillSaathi backend: bill upload, OCR, and audit."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.143.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's File()/Depends() defaults are the intended pattern.
+extend-immutable-calls = ["fastapi.File", "fastapi.Depends"]

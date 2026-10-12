@@ -1,0 +1,21 @@
+# Secrets. API keys live only in api/.env.
+.env
+.env.*
+!.env.example
+
+# Real bills and patient data never leave the machine.
+data/private/
+
+# Node
+node_modules/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# OS and editors
+.DS_Store
+*.swp

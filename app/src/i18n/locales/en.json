@@ -1,0 +1,71 @@
+{
+  "common": {
+    "appName": "BillSaathi",
+    "back": "Back",
+    "goHome": "Go to your cases",
+    "place": "{{name}}, {{area}}"
+  },
+  "dates": {
+    "dayMonth": "{{day}} {{month}}",
+    "monthYear": "{{month}} {{year}}",
+    "monthsShort": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "monthsLong": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+  },
+  "home": {
+    "greeting": "Namaste, {{name}}",
+    "intro": "Keep every hospital bill in your family checked and explained.",
+    "yourCases": "Your cases",
+    "admitted": "Admitted {{date}}, day {{day}}",
+    "closed": "Closed {{date}}",
+    "closedCaseToast": "This case is closed. Its reports stay saved here.",
+    "startNewCase": "Start a new case",
+    "newCaseSoon": "Starting a new case is coming soon",
+    "planningTitle": "Planning an admission?",
+    "planningBody": "Get a cost estimate and compare package rates before you're admitted.",
+    "nextVersion": "In the next version"
+  },
+  "caseStatus": {
+    "addTodaysBill": "Add today's bill",
+    "toAsk_one": "{{count}} to ask",
+    "toAsk_other": "{{count}} to ask",
+    "upToDate": "Up to date",
+    "recovered": "{{amount}} recovered",
+    "closed": "Closed"
+  },
+  "case": {
+    "patientLine": "Patient {{name}}, IP no. {{ipNumber}}, bed {{bed}}",
+    "inviteFamily": "Invite family",
+    "inviteSoon": "Inviting family is coming soon",
+    "followersYouOnly": "You follow this case",
+    "followersPair": "{{you}} (you) and {{other}} follow this case",
+    "followersMany_one": "{{you}} (you) and {{count}} other follow this case",
+    "followersMany_other": "{{you}} (you) and {{count}} others follow this case",
+    "runningTotal": "Running total, day {{day}}",
+    "sinceYesterday": "Since yesterday",
+    "recoveredSoFar": "Recovered so far",
+    "bannerNotAddedTitle": "Today's bill isn't added yet",
+    "bannerNotAddedBody": "Ask the billing desk for the itemized interim bill, not the summary.",
+    "bannerToAskTitle_one": "{{count}} item worth asking about",
+    "bannerToAskTitle_other": "{{count}} items worth asking about",
+    "bannerToAskBody": "Ask today, while the doctor is still on rounds.",
+    "bannerSettledTitle": "Today's questions are settled",
+    "bannerSettledBody": "Add tomorrow's bill when you get it.",
+    "dailyBills": "Daily bills",
+    "billAdmission": "Day {{day}}, admission",
+    "billInterim": "Day {{day}} interim bill",
+    "billMeta_one": "{{date}}, {{count}} item, {{amount}}",
+    "billMeta_other": "{{date}}, {{count}} items, {{amount}}",
+    "billLooksFine": "Looks fine",
+    "billSettled": "Settled",
+    "billAllInRange_one": "Day {{day}}: the {{count}} item is within range",
+    "billAllInRange_other": "Day {{day}}: all {{count}} items are within range",
+    "reportSoon": "Bill reports are coming soon",
+    "addTodaysBill": "Add today's bill",
+    "askBillingDesk": "Ask the billing desk",
+    "addTomorrowsBill": "Add tomorrow's bill",
+    "scanSoon": "Bill scanning is coming soon",
+    "askSoon": "Messages to the billing desk are coming soon",
+    "tomorrowToast": "Tomorrow's bill can be added from here",
+    "notFound": "We couldn't find this case."
+  }
+}
