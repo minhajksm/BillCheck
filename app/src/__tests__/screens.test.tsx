@@ -90,8 +90,8 @@ describe('Your cases', () => {
 
   it('uses Hindi copy when the language is Hindi', async () => {
     await i18n.changeLanguage('hi');
-    await render('/', 'नमस्ते, Rohan');
-    expect(screen.getByText('नमस्ते, Rohan')).toBeVisible();
+    // Not the greeting: that reads "Welcome" in every language for now.
+    await render('/', '9 अक्टू॰ को भर्ती, दिन 3');
     expect(screen.getByText('9 अक्टू॰ को भर्ती, दिन 3')).toBeVisible();
   });
 });

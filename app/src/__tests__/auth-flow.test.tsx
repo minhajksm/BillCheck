@@ -45,7 +45,7 @@ beforeEach(async () => {
 
 afterAll(() => i18n.changeLanguage('en'));
 
-async function start(initialUrl = '/', ready: RegExp = /Create account|Welcome/) {
+async function start(initialUrl = '/', ready: RegExp = /Create account|Welcome, /) {
   const router = renderRouter(routes, { initialUrl });
   await screen.findByText(ready);
   return router;
