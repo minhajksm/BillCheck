@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "BillSaathi",
+    "appName": "BillCheck",
     "back": "Back",
     "goHome": "Go to your cases",
     "place": "{{name}}, {{area}}"

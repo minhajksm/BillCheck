@@ -1,4 +1,4 @@
-# BillSaathi
+# BillCheck
 
 A mobile app that helps Indian families check hospital bills during and after an admission. Users photograph itemized bills, the app flags likely overcharges (above MRP, duplicates, unusual quantities), and helps them ask the hospital polite, specific questions.
 
@@ -15,7 +15,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 
 - App: `cd app && npx expo run:android` (development build; Expo Go doesn't support SDK 57)
 - API: `cd api && uv run uvicorn main:app --reload` (docs at http://localhost:8000/docs)
-- DB: `docker start billsaathi-db`
+- DB: `docker start billcheck-db`
 - From the Android emulator, the API is at `http://10.0.2.2:8000`
 
 ## MVP scope

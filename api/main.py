@@ -4,7 +4,7 @@ import bills
 from models import HealthResponse
 
 app = FastAPI(
-    title="BillSaathi API",
+    title="BillCheck API",
     description="Checks itemized hospital bills and flags charges worth asking about.",
     version="0.1.0",
 )

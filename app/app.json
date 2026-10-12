@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "BillSaathi",
-    "slug": "billsaathi",
+    "name": "BillCheck",
+    "slug": "billcheck",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "billsaathi",
+    "scheme": "billcheck",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.billsaathi.app"
+      "bundleIdentifier": "com.billcheck.app"
     },
     "android": {
-      "package": "com.billsaathi.app",
+      "package": "com.billcheck.app",
       "adaptiveIcon": {
         "backgroundColor": "#2E3A8C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

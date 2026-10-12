@@ -1,7 +1,7 @@
 [project]
-name = "billsaathi-api"
+name = "billcheck-api"
 version = "0.1.0"
-description = "BillSaathi backend: bill upload, OCR, and audit."
+description = "BillCheck backend: bill upload, OCR, and audit."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

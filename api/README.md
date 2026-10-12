@@ -1,4 +1,4 @@
-# BillSaathi API
+# BillCheck API
 
 FastAPI backend, managed with [uv](https://docs.astral.sh/uv/).
 
