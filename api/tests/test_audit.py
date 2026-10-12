@@ -261,3 +261,16 @@ def test_no_reference_data_means_no_flags():
     empty = ReferenceData(prices=(), quantity_norms=())
     flags = audit_bill(prototype_bill(), empty)
     assert [flag.kind for flag in flags] == ["duplicate"], "duplicates need no price list"
+
+
+@pytest.mark.parametrize(
+    ("quantity", "expected"),
+    # Only quantities above the norm of 20 raise a flag at all.
+    [("80", "80"), ("80.0", "80"), ("80.00", "80"), ("22.5", "22.5")],
+)
+def test_quantities_print_as_whole_things(quantity: str, expected: str):
+    """A count read off a photo arrives as a float. "80.0 pairs" reads like a
+    glitch to someone standing at a billing desk."""
+    flags = audit_bill([row(1, "Surgical gloves", "unused", "6800", quantity=quantity)], REFERENCES)
+    assert flags[0].reference_detail["quantity"] == expected
+    assert flags[0].reference_detail["usual_max_per_day"] == "20"

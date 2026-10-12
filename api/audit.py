@@ -32,6 +32,13 @@ def _money(value: Decimal) -> Decimal:
     return value.quantize(PAISE, rounding=ROUND_HALF_UP)
 
 
+def _count(value: Decimal) -> str:
+    """A count for the app to print: "80", not "80.0". Bills count whole
+    things, and a quantity read off a photo arrives as a float."""
+    whole = value.to_integral_value()
+    return str(whole if value == whole else value.normalize())
+
+
 @dataclass(frozen=True)
 class BillRow:
     """One line of the bill as it was read off the page."""
@@ -88,7 +95,7 @@ def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
             "unit": price.unit,
             "unit_price_billed": str(_money(unit_price)),
             "unit_price_reference": str(_money(ceiling)),
-            "quantity": str(count),
+            "quantity": _count(count),
             "list": price.source,
         },
     )
@@ -152,8 +159,8 @@ def _unusual_quantity(row: BillRow, references: ReferenceData) -> Flag | None:
         reference_detail={
             "reference_name": norm.name,
             "unit": norm.unit,
-            "quantity": str(count),
-            "usual_max_per_day": str(norm.usual_max_per_day),
+            "quantity": _count(count),
+            "usual_max_per_day": _count(norm.usual_max_per_day),
             "list": norm.source,
         },
     )
