@@ -16,6 +16,8 @@ export function authErrorMessage(t: TFunction, error: unknown): string {
       return t('auth.errors.otp_invalid');
     case 'otp_locked':
       return t('auth.errors.otp_locked');
+    case 'sms_failed':
+      return t('auth.errors.sms_failed');
     case 'signup_token_invalid':
       return t('auth.errors.signup_token_invalid');
     case 'account_exists':

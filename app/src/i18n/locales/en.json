@@ -105,6 +105,7 @@
       "otp_locked": "Too many wrong tries. Ask for a new code.",
       "signup_token_invalid": "That took too long. Start again with your number.",
       "account_exists": "This number already has an account. Log in instead.",
+      "sms_failed": "Couldn't send the code just now. Try again in a moment.",
       "network": "Can't reach BillCheck. Check your internet and try again.",
       "unknown": "Something went wrong. Try again."
     }

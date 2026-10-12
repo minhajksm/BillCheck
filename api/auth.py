@@ -11,6 +11,7 @@ The app sends the session token as `Authorization: Bearer <token>`.
 
 import hashlib
 import hmac
+import logging
 import secrets
 from datetime import timedelta
 from typing import Annotated
@@ -33,9 +34,12 @@ from models import (
     SignupRequired,
     UserOut,
 )
+from phone import mask_phone
 from settings import get_settings
-from sms import SmsSender, get_sms_sender
+from sms import SmsDeliveryError, SmsSender, get_sms_sender
 from tables import AuthSession, OtpChallenge, User
+
+logger = logging.getLogger("billcheck.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,10 +63,11 @@ ERRORS = {
     "signup_token_invalid": "Sign-up took too long. Start again with your phone number.",
     "account_exists": "This number already has an account. Log in instead.",
     "not_authenticated": "Log in to continue.",
+    "sms_failed": "Couldn't send the code just now. Try again in a moment.",
 }
 
 ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
-    code: {"model": ApiError} for code in (400, 401, 409, 429)
+    code: {"model": ApiError} for code in (400, 401, 409, 429, 502)
 }
 
 
@@ -119,16 +124,25 @@ def request_otp(
         raise api_error(status.HTTP_429_TOO_MANY_REQUESTS, "otp_rate_limited", {"Retry-After": "3600"})
 
     code = f"{secrets.randbelow(10**6):06d}"
-    db.add(
-        OtpChallenge(
-            phone=body.phone,
-            code_hash=_hash_code(body.phone, code),
-            created_at=now,
-            expires_at=now + OTP_TTL,
-        )
+    challenge = OtpChallenge(
+        phone=body.phone,
+        code_hash=_hash_code(body.phone, code),
+        created_at=now,
+        expires_at=now + OTP_TTL,
     )
+    db.add(challenge)
     db.commit()
-    sms.send_otp(body.phone, code)
+
+    try:
+        sms.send_otp(body.phone, code)
+    except SmsDeliveryError:
+        # Drop the challenge, so the resend cooldown and the hourly cap don't
+        # hold the user back for a failure that was ours.
+        logger.exception("Couldn't send an OTP to %s", mask_phone(body.phone))
+        db.delete(challenge)
+        db.commit()
+        raise api_error(status.HTTP_502_BAD_GATEWAY, "sms_failed") from None
+
     return OtpRequestResponse(
         expires_in_seconds=int(OTP_TTL.total_seconds()),
         resend_after_seconds=int(RESEND_COOLDOWN.total_seconds()),

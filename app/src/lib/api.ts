@@ -16,6 +16,7 @@ export type ApiErrorCode =
   | 'otp_expired'
   | 'otp_invalid'
   | 'otp_locked'
+  | 'sms_failed'
   | 'signup_token_invalid'
   | 'account_exists'
   | 'not_authenticated'
