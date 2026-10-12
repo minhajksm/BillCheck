@@ -1,7 +1,10 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+import auth
 import bills
 from models import HealthResponse
+from settings import get_settings
 
 app = FastAPI(
     title="BillCheck API",
@@ -9,6 +12,15 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# The Android app doesn't need CORS. This is for the Expo web dev server.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+app.include_router(auth.router)
 app.include_router(bills.router)
 
 

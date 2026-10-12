@@ -1,0 +1,4 @@
+Database migrations (Alembic).
+
+- Apply: `uv run alembic upgrade head`
+- New migration after changing tables.py: `uv run alembic revision --autogenerate -m "what changed"`

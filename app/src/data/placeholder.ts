@@ -6,8 +6,6 @@ import type { Case } from './types';
  * Replace with API data once cases are served by api/.
  */
 
-export const currentUser = { id: 'u-rohan', name: 'Rohan Sharma', firstName: 'Rohan' };
-
 export const placeholderCases: Case[] = [
   {
     id: 'papa-admission',

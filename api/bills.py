@@ -1,10 +1,12 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from auth import current_user
 from models import BillUploadResponse
 
-router = APIRouter(prefix="/bills", tags=["bills"])
+# Bills are health data: only signed-in users can upload them.
+router = APIRouter(prefix="/bills", tags=["bills"], dependencies=[Depends(current_user)])
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
