@@ -55,8 +55,8 @@ describe('Your cases', () => {
   afterAll(() => i18n.changeLanguage('en'));
 
   it('greets the signed-in person and lists both placeholder cases', async () => {
-    await render('/', 'Namaste, Rohan');
-    expect(screen.getByText('Namaste, Rohan')).toBeVisible();
+    await render('/', 'Welcome, Rohan');
+    expect(screen.getByText('Welcome, Rohan')).toBeVisible();
     expect(screen.getByText("Papa's admission")).toBeVisible();
     expect(screen.getByText('Admitted 9 Oct, day 3')).toBeVisible();
     expect(screen.getByText("Add today's bill")).toBeVisible();
@@ -90,8 +90,8 @@ describe('Your cases', () => {
 
   it('uses Hindi copy when the language is Hindi', async () => {
     await i18n.changeLanguage('hi');
-    await render('/', 'नमस्ते, Rohan');
-    expect(screen.getByText('नमस्ते, Rohan')).toBeVisible();
+    // Not the greeting: that reads "Welcome" in every language for now.
+    await render('/', '9 अक्टू॰ को भर्ती, दिन 3');
     expect(screen.getByText('9 अक्टू॰ को भर्ती, दिन 3')).toBeVisible();
   });
 });

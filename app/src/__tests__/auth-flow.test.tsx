@@ -45,7 +45,7 @@ beforeEach(async () => {
 
 afterAll(() => i18n.changeLanguage('en'));
 
-async function start(initialUrl = '/', ready: RegExp = /Create account|Namaste/) {
+async function start(initialUrl = '/', ready: RegExp = /Create account|Welcome, /) {
   const router = renderRouter(routes, { initialUrl });
   await screen.findByText(ready);
   return router;
@@ -80,7 +80,7 @@ describe('sign up', () => {
     fireEvent.press(screen.getByRole('checkbox'));
     await act(async () => fireEvent.press(create));
 
-    expect(await screen.findByText('Namaste, Anita')).toBeVisible();
+    expect(await screen.findByText('Welcome, Anita')).toBeVisible();
     expect(router.getPathname()).toBe('/');
     expect(await tokenStore.get()).toMatch(/^token-/);
   });
@@ -124,7 +124,7 @@ describe('log in', () => {
     expect(await screen.findByText('Welcome back')).toBeVisible();
     await enterPhone('9876543210');
     await enterCode(server.lastCode);
-    expect(await screen.findByText('Namaste, Rohan')).toBeVisible();
+    expect(await screen.findByText('Welcome, Rohan')).toBeVisible();
   });
 
   it('explains when a new number used "Log in"', async () => {
@@ -141,7 +141,7 @@ describe('log in', () => {
     server.sessions.set('saved-token', '+919876543210');
     resetTokenStore('saved-token');
     await start();
-    expect(screen.getByText('Namaste, Rohan')).toBeVisible();
+    expect(screen.getByText('Welcome, Rohan')).toBeVisible();
   });
 
   it('drops a token the server no longer accepts', async () => {

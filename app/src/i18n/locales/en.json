@@ -12,7 +12,7 @@
     "monthsLong": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
   },
   "home": {
-    "greeting": "Namaste, {{name}}",
+    "greeting": "Welcome, {{name}}",
     "intro": "Keep every hospital bill in your family checked and explained.",
     "yourCases": "Your cases",
     "admitted": "Admitted {{date}}, day {{day}}",
