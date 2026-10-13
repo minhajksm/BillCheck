@@ -195,11 +195,30 @@ function scan(item: Case) {
 
 function MainAction({ status, item }: { status: CaseStatus; item: Case }) {
   const { t } = useTranslation();
+
+  // A closed admission takes no more bills.
+  if (status.kind === 'closed') return null;
+
   switch (status.kind) {
     case 'needsTodaysBill':
       return <Button icon="camera" label={t('case.addTodaysBill')} onPress={() => scan(item)} />;
     case 'toAsk':
-      return <Button label={t('case.askBillingDesk')} onPress={() => openLatestReport(item)} />;
+      // Asking about yesterday and adding today's bill are both live during a
+      // stay, and a family does them in either order. This used to be the ask
+      // button alone, so the way to add a bill disappeared the moment one had
+      // an open question — which is the usual state — and the only way on was
+      // to start another case for the same admission.
+      return (
+        <>
+          <Button label={t('case.askBillingDesk')} onPress={() => openLatestReport(item)} />
+          <Button
+            variant="secondary"
+            icon="camera"
+            label={t('case.addAnotherBill')}
+            onPress={() => scan(item)}
+          />
+        </>
+      );
     case 'upToDate':
       return (
         <Button
@@ -209,8 +228,6 @@ function MainAction({ status, item }: { status: CaseStatus; item: Case }) {
           onPress={() => scan(item)}
         />
       );
-    case 'closed':
-      return null;
   }
 }
 
