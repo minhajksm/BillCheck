@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     # bill and needs no key; "claude" reads the real pages.
     ocr_provider: Literal["stub", "claude"] = "stub"
     anthropic_api_key: str = ""
-    ocr_model: str = "claude-opus-5-5"
+    ocr_model: str = "claude-sonnet-5-5"
+    # How hard the reader thinks. Higher costs more per bill and reads more
+    # carefully; "medium" is the starting point for this kind of extraction.
+    ocr_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     # The price lists bills are checked against. The file shipped in
     # data/samples is illustrative; point this at the real NPPA and CGHS
     # lists before any flag is shown to a real family.

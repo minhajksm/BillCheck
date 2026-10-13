@@ -44,7 +44,25 @@ export type LineItem = {
   amount: number;
 };
 
-export type FlagKind = 'above_mrp' | 'duplicate' | 'quantity';
+/** Checked against a published price list, so the reference can be shown. */
+export type CitedFlagKind = 'above_mrp' | 'duplicate' | 'quantity';
+
+/**
+ * Noticed by the reader while reading the bill. Some were re-checked against
+ * the rows; none has a published reference behind it, so none is ever red.
+ */
+export type ReaderFlagKind =
+  | 'total_mismatch'
+  | 'duplicate_line'
+  | 'date_outside_stay'
+  | 'unit_price_high'
+  | 'quantity_high'
+  | 'non_medical_item'
+  | 'package_overlap'
+  | 'service_charge_on_room'
+  | 'same_test_two_names';
+
+export type FlagKind = CitedFlagKind | ReaderFlagKind;
 export type FlagLevel = 'red' | 'amber';
 export type FlagStatus = 'open' | 'corrected' | 'explained';
 

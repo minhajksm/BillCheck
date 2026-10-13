@@ -183,8 +183,9 @@ class Flag(Base):
     bill_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bills.id", ondelete="CASCADE"), index=True)
     line_item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("line_items.id", ondelete="CASCADE"))
     position: Mapped[int] = mapped_column(Integer)
-    # "above_mrp", "duplicate" or "quantity".
-    kind: Mapped[str] = mapped_column(String(20))
+    # What was noticed: "above_mrp", "duplicate" and "quantity" come from the
+    # price lists; the rest from the reader (see ocr.ObservationKind).
+    kind: Mapped[str] = mapped_column(String(30))
     # "red" for a clear issue, "amber" for one worth asking about.
     level: Mapped[str] = mapped_column(String(10))
     # "open", "corrected" or "explained".

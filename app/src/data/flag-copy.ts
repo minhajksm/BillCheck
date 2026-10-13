@@ -36,9 +36,13 @@ export type FlagCopy = {
   referenceLabel: string;
 };
 
+/** A flag the reader noticed rather than one a price list decided. */
+export const isReaderFlag = (flag: Flag): boolean => flag.referenceSource === 'reader';
+
 export function flagTag(t: TFunction, flag: Flag): string {
   if (flag.status === 'corrected') return t('flags.tagCorrected');
   if (flag.status === 'explained') return t('flags.tagExplained');
+  if (isReaderFlag(flag)) return t('flags.tagNoticed');
   switch (flag.kind) {
     case 'above_mrp':
       return t('flags.tagAboveMrp');
@@ -46,11 +50,15 @@ export function flagTag(t: TFunction, flag: Flag): string {
       return t('flags.tagDuplicate');
     case 'quantity':
       return t('flags.tagQuantity');
+    default:
+      // Reader kinds are handled above; this keeps the switch total.
+      return t('flags.tagNoticed');
   }
 }
 
 export function flagCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
   const tag = flagTag(t, flag);
+  if (isReaderFlag(flag)) return readerCopy(t, flag, tag, item);
 
   switch (flag.kind) {
     case 'above_mrp': {
@@ -90,11 +98,119 @@ export function flagCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
         referenceLabel: t('flags.referenceForUsual', { usual, unit }),
       };
     }
+    default:
+      // Reader kinds return above.
+      return readerCopy(t, flag, tag, item);
+  }
+}
+
+/**
+ * Copy for something the reader noticed.
+ *
+ * These have no published reference behind them, so every one of them says so,
+ * and none claims an amount it can't defend. The wording stays a question even
+ * where the rows confirmed the claim, because the figures it rests on were
+ * read off a photograph.
+ */
+function readerCopy(t: TFunction, flag: Flag, tag: string, item?: LineItem): FlagCopy {
+  const referenceLabel = t('flags.noticedBy');
+
+  switch (flag.kind) {
+    case 'total_mismatch':
+      return {
+        tag,
+        short: t('flags.shortTotalMismatch', {
+          summed: formatINR(num(flag, 'summed')),
+          stated: formatINR(num(flag, 'stated')),
+        }),
+        why: t('flags.whyTotalMismatch', { difference: formatINR(num(flag, 'difference')) }),
+        ask: t('flags.askTotalMismatch'),
+        referenceLabel,
+      };
+    case 'duplicate_line': {
+      const detail = str(flag, 'repeated_detail') || item?.detail || '';
+      return {
+        tag,
+        short: t('flags.shortDuplicateLine', { detail }),
+        why: t('flags.whyDuplicateLine'),
+        ask: t('flags.askDuplicateLine'),
+        referenceLabel,
+      };
+    }
+    case 'date_outside_stay':
+      return {
+        tag,
+        short: t('flags.shortDateOutsideStay', { rowDate: str(flag, 'row_date') }),
+        why: t('flags.whyDateOutsideStay', { admittedOn: str(flag, 'admitted_on') }),
+        ask: t('flags.askDateOutsideStay'),
+        referenceLabel,
+      };
+    case 'unit_price_high': {
+      // The reader's own estimate, shown as an expectation and never as a
+      // reference. Without one, the line says only that it looks high.
+      const expected = str(flag, 'expected');
+      const unitPrice = str(flag, 'unit_price');
+      return {
+        tag,
+        short:
+          expected && unitPrice
+            ? t('flags.shortUnitPriceHighExpected', {
+                unitPrice: formatINR(Number(unitPrice)),
+                expected: formatINR(Number(expected)),
+              })
+            : t('flags.shortUnitPriceHigh'),
+        why: t('flags.whyUnitPriceHigh'),
+        ask: t('flags.askUnitPriceHigh'),
+        referenceLabel,
+      };
+    }
+    case 'quantity_high':
+      return {
+        tag,
+        short: t('flags.shortQuantityHigh'),
+        why: t('flags.whyQuantityHigh'),
+        ask: t('flags.askQuantityHigh'),
+        referenceLabel,
+      };
+    case 'package_overlap':
+      return {
+        tag,
+        short: t('flags.shortPackageOverlap'),
+        why: t('flags.whyPackageOverlap'),
+        ask: t('flags.askPackageOverlap'),
+        referenceLabel,
+      };
+    case 'service_charge_on_room':
+      return {
+        tag,
+        short: t('flags.shortServiceCharge'),
+        why: t('flags.whyServiceCharge'),
+        ask: t('flags.askServiceCharge'),
+        referenceLabel,
+      };
+    case 'same_test_two_names':
+      return {
+        tag,
+        short: t('flags.shortSameTestTwoNames'),
+        why: t('flags.whySameTestTwoNames'),
+        ask: t('flags.askSameTestTwoNames'),
+        referenceLabel,
+      };
+    default:
+      return {
+        tag,
+        short: t('flags.shortNonMedicalItem'),
+        why: t('flags.whyNonMedicalItem'),
+        ask: t('flags.askNonMedicalItem'),
+        referenceLabel,
+      };
   }
 }
 
 /** The line under a flag in the list: what the difference means right now. */
-export function flagAmountLine(t: TFunction, flag: Flag): string {
+export function flagAmountLine(t: TFunction, flag: Flag): string | null {
+  // A judgment of degree has no defensible figure, so it shows none.
+  if (flag.excess === 0) return null;
   const amount = formatINR(flag.excess);
   if (flag.status === 'corrected') return t('flags.recovered', { amount });
   if (flag.status === 'explained') return t('flags.explainedByHospital', { amount });

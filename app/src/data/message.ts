@@ -11,7 +11,7 @@
 
 import type { TFunction } from 'i18next';
 
-import { unitWord } from './flag-copy';
+import { isReaderFlag, unitWord } from './flag-copy';
 import type { Bill, Case, Flag, LineItem } from './types';
 import { formatINR } from '@/lib/format';
 
@@ -24,6 +24,7 @@ export function openFlags(bill: Bill): Flag[] {
 
 function line(t: TFunction, flag: Flag, item: LineItem | undefined): string {
   const name = item?.name ?? '';
+  if (isReaderFlag(flag)) return readerLine(t, flag, name, item);
   switch (flag.kind) {
     case 'above_mrp':
       return t(flag.referenceSource === 'nppa' ? 'message.lineAboveMrpNppa' : 'message.lineAboveMrp', {
@@ -43,6 +44,35 @@ function line(t: TFunction, flag: Flag, item: LineItem | undefined): string {
         quantity: str(flag, 'quantity'),
         unit: unitWord(t, str(flag, 'unit')),
       });
+    default:
+      return readerLine(t, flag, name, item);
+  }
+}
+
+/**
+ * A line for something the reader noticed. These ask what the charge is,
+ * without claiming a reference the hospital could be shown.
+ */
+function readerLine(t: TFunction, flag: Flag, name: string, item: LineItem | undefined): string {
+  switch (flag.kind) {
+    case 'total_mismatch':
+      return t('message.lineTotalMismatch', {
+        summed: formatINR(Number(str(flag, 'summed'))),
+        stated: formatINR(Number(str(flag, 'stated'))),
+      });
+    case 'duplicate_line':
+      return t('message.lineDuplicateLine', {
+        name,
+        detail: str(flag, 'repeated_detail') || item?.detail || '',
+      });
+    case 'non_medical_item':
+      return t('message.lineNonMedicalItem', { name });
+    case 'package_overlap':
+      return t('message.linePackageOverlap', { name });
+    case 'date_outside_stay':
+      return t('message.lineDateOutsideStay', { name, rowDate: str(flag, 'row_date') });
+    default:
+      return t('message.lineNoticed', { name });
   }
 }
 

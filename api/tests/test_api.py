@@ -75,9 +75,15 @@ def test_upload_requires_sign_in(client: TestClient, case_id: str):
 
 
 def test_upload_trusts_file_bytes_over_header(client: TestClient, auth_headers: dict[str, str], case_id: str):
-    """A PDF announced as a JPEG is still a PDF."""
-    response = upload(client, auth_headers, case_id, b"%PDF-1.7\n" + b"\x00" * 64)
+    """A spreadsheet announced as a JPEG is still a spreadsheet."""
+    response = upload(client, auth_headers, case_id, b"PK\x03\x04" + b"\x00" * 64)
     assert response.status_code == 415
+
+
+def test_upload_accepts_a_pdf(client: TestClient, auth_headers: dict[str, str], case_id: str):
+    """Families are often handed the bill as a PDF rather than on paper."""
+    response = upload(client, auth_headers, case_id, b"%PDF-1.7\n" + b"\x00" * 64, "application/pdf")
+    assert response.status_code == 201, response.text
 
 
 def test_upload_rejects_an_empty_page(client: TestClient, auth_headers: dict[str, str], case_id: str):

@@ -1,3 +1,4 @@
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -81,6 +82,26 @@ export default function ScanScreen() {
     if (!result.canceled) await addAssets(result.assets);
   };
 
+  /**
+   * A bill handed over as a PDF. It goes up as it is: the reader takes a PDF
+   * directly, and re-rendering it to images would only lose sharpness.
+   */
+  const choosePdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      multiple: false,
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled) return;
+    const file = result.assets[0];
+    setPages((current) =>
+      [...current, { uri: file.uri, name: file.name || 'bill.pdf', type: 'application/pdf' }].slice(
+        0,
+        MAX_PAGES,
+      ),
+    );
+  };
+
   const checkBill = async () => {
     if (pages.length === 0) {
       toast(t('scan.needPage'));
@@ -128,6 +149,7 @@ export default function ScanScreen() {
       <View style={styles.controls}>
         <Button icon="camera" label={t('scan.takePhoto')} onPress={takePhoto} />
         <Button variant="secondary" icon="upload" label={t('scan.choosePages')} onPress={choosePages} />
+        <Button variant="secondary" icon="file-text" label={t('scan.choosePdf')} onPress={choosePdf} />
         {pages.length > 0 || preparing ? (
           <Button
             variant="secondary"

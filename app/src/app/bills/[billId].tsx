@@ -220,6 +220,7 @@ function FlagList({
       {bill.flags.map((flag) => {
         const item = flag.lineItemId ? items.get(flag.lineItemId) : undefined;
         const copy = flagCopy(t, flag, item);
+        const amountLine = flagAmountLine(t, flag);
         return (
           <Pressable
             key={flag.id}
@@ -236,7 +237,7 @@ function FlagList({
               <Text color="ink2" variant="small">
                 {copy.short}
               </Text>
-              <Text variant="faint">{flagAmountLine(t, flag)}</Text>
+              {amountLine ? <Text variant="faint">{amountLine}</Text> : null}
             </View>
             <Chip tone={chipTone(flag)} label={flagTag(t, flag)} />
           </Pressable>

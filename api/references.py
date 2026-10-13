@@ -14,6 +14,7 @@ so every flag can show the family what it was checked against.
 import json
 import re
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -127,6 +128,65 @@ def is_timed(detail: str | None) -> bool:
     if _TIME.search(detail) or _DATE.search(detail):
         return True
     return any(word in _MONTHS for word in normalize(detail).split())
+
+
+_MONTH_NUMBER = {
+    name: number
+    for number, names in enumerate(
+        [
+            ("jan", "january"),
+            ("feb", "february"),
+            ("mar", "march"),
+            ("apr", "april"),
+            ("may",),
+            ("jun", "june"),
+            ("jul", "july"),
+            ("aug", "august"),
+            ("sep", "sept", "september"),
+            ("oct", "october"),
+            ("nov", "november"),
+            ("dec", "december"),
+        ],
+        start=1,
+    )
+    for name in names
+}
+_DAY_MONTH = re.compile(r"\b(\d{1,2})\s*([a-z]{3,9})\b", re.IGNORECASE)
+_NUMERIC_DATE = re.compile(r"\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b")
+
+
+def parse_bill_date(detail: str | None, year: int | None = None) -> date | None:
+    """Reads the date a row is dated, where it has one: "11 Oct, 10:30 am" or
+    "11/10/2026". Bills often print no year, so the caller's `year` fills in.
+
+    Returns None for anything that isn't a date, which is most details.
+    """
+    if not detail:
+        return None
+
+    numeric = _NUMERIC_DATE.search(detail)
+    if numeric:
+        day, month, maybe_year = numeric.groups()
+        on_year = int(maybe_year) if maybe_year else (year or date.today().year)
+        if on_year < 100:
+            on_year += 2000
+        return _safe_date(on_year, int(month), int(day))
+
+    worded = _DAY_MONTH.search(detail)
+    if worded:
+        day, month_name = worded.groups()
+        month = _MONTH_NUMBER.get(month_name.lower())
+        if month is not None:
+            return _safe_date(year or date.today().year, month, int(day))
+    return None
+
+
+def _safe_date(year: int, month: int, day: int) -> date | None:
+    """A misread "31 Feb" is not a date; it is a misread."""
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
 
 
 def parse_quantity(detail: str | None) -> Decimal | None:

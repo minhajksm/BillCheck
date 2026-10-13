@@ -38,6 +38,8 @@ Out of scope for now: medical necessity review, pre-admission estimates, insuran
 - All user-facing strings go through i18n (`en`, `hi`, `mr`). No hardcoded copy in components.
 - Currency is INR, formatted with Indian digit grouping (₹1,42,380).
 - Treat health data as sensitive under India's DPDP framework: explicit consent, minimal retention.
+- When a bug or issue is found that is outside what was asked for, report it and stop. Do not fix it without being asked. Say what it is, where it is, and what it would take to fix.
+- Never change the approach mid-task without confirmation first.
 
 ## Conventions
 
