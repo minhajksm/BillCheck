@@ -42,6 +42,23 @@ _FORM_WORDS = {
     "oral_solid": {"tab", "tabs", "tablet", "tablets", "cap", "caps", "capsule", "capsules"},
     "oral_liquid": {"syp", "syrup", "susp", "suspension"},
 }
+# The ways a bill writes a unit, folded to the spelling the price list uses.
+_UNIT_SPELLINGS = {
+    "vial": "vial vials",
+    "ampoule": "amp amps ampoule ampoules ampule ampules",
+    "tablet": "tab tabs tablet tablets",
+    "capsule": "cap caps capsule capsules",
+    "bottle": "bottle bottles btl btls",
+    "strip": "strip strips",
+    "pack": "pack packs packet packets box boxes",
+    "pair": "pair pairs",
+    "piece": "piece pieces pc pcs no nos",
+    "visit": "visit visits",
+}
+_UNITS = {spelling: unit for unit, spellings in _UNIT_SPELLINGS.items() for spelling in spellings.split()}
+# Sold in strips, so a bare count is as likely strips as single tablets. A
+# price per tablet is only checked when the bill says it counted tablets.
+PACKED_UNITS = frozenset({"tablet", "capsule"})
 # How the price list names forms, mapped to the same groups.
 _FORM_GROUPS = {
     "injection": "injectable",
@@ -104,15 +121,25 @@ def parse_quantity(detail: str | None) -> Decimal | None:
     both in the same column, and "11 Oct, 10:30 am" read as eleven of
     something turns one consultant visit into a quantity to question.
     """
+    return parse_count(detail)[0]
+
+
+def parse_count(detail: str | None) -> tuple[Decimal | None, str | None]:
+    """The count and what it counts: "2 strips" -> (2, "strip").
+
+    The unit is folded to one spelling ("tabs" and "tablets" are both
+    "tablet"); a word we don't know is kept as written, so it never matches a
+    price list unit by accident. No unit printed gives (count, None).
+    """
     if not detail or _DATE_LIKE.match(detail):
-        return None
+        return None, None
     match = _COUNT.match(detail)
     if match is None:
-        return None
-    unit = (match.group(2) or "").lower()
-    if unit in _MONTHS:
-        return None
-    return Decimal(match.group(1))
+        return None, None
+    word = (match.group(2) or "").lower()
+    if word in _MONTHS:
+        return None, None
+    return Decimal(match.group(1)), (_UNITS.get(word, word) if word else None)
 
 
 @dataclass(frozen=True)

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from audit import BillRow, audit_bill, total_excess
-from references import ReferenceData, load_reference_data, normalize, parse_quantity
+from references import ReferenceData, load_reference_data, normalize, parse_count, parse_quantity
 
 REFERENCES = load_reference_data(Path(__file__).resolve().parents[2] / "data/samples/reference-prices.json")
 
@@ -127,6 +127,56 @@ def test_a_price_entry_without_strength_and_form_is_refused(tmp_path: Path):
 def test_no_red_flag_for_another_strength_or_form(name: str, detail: str, amount: str):
     """Both were raised as "above MRP" against the wrong product before."""
     assert audit_bill([row(1, name, detail, amount)], REFERENCES) == []
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected"),
+    [
+        ("2 strips", (Decimal("2"), "strip")),
+        ("10 Tabs", (Decimal("10"), "tablet")),
+        ("6 vials", (Decimal("6"), "vial")),
+        ("1 box", (Decimal("1"), "pack")),
+        ("4", (Decimal("4"), None)),
+        ("3 widgets", (Decimal("3"), "widgets")),
+        ("11 Oct, 10:30 am", (None, None)),
+    ],
+)
+def test_parse_count_reads_the_unit(detail: str, expected: tuple):
+    assert parse_count(detail) == expected
+
+
+@pytest.mark.parametrize(
+    ("name", "detail", "amount"),
+    [
+        # Two strips of 15 tablets at about ₹2 each, not two ₹30 tablets.
+        ("Tab. Paracetamol 650mg", "2 strips", "60"),
+        # A box of vials is not one vial.
+        ("Inj. Meropenem 1g", "1 box", "9200"),
+        # Tablets are sold in strips, so a bare count can't be read as tablets.
+        ("Tab. Paracetamol 650mg", "2", "60"),
+        # A unit we don't recognise never matches.
+        ("Inj. Meropenem 1g", "6 units", "17700"),
+    ],
+)
+def test_no_red_flag_when_the_unit_differs_or_is_unclear(name: str, detail: str, amount: str):
+    assert audit_bill([row(1, name, detail, amount)], REFERENCES) == []
+
+
+def test_still_flags_when_the_unit_is_stated():
+    """30 tablets at ₹5 is ₹2.80 a tablet over the ₹2.20 ceiling."""
+    (flag,) = audit_bill([row(1, "Tab. Paracetamol 650mg", "30 tabs", "150")], REFERENCES)
+    assert flag.kind == "above_mrp"
+    assert flag.reference_amount == Decimal("66.00")
+
+
+def test_a_bare_vial_count_is_still_checked():
+    """Vials are counted one by one, so a count with no unit is taken as vials."""
+    (flag,) = audit_bill([row(1, "Inj. Meropenem 1g", "6", "17700")], REFERENCES)
+    assert flag.excess == Decimal("6660.00")
+
+
+def test_quantity_norm_ignores_another_unit():
+    assert audit_bill([row(1, "Surgical gloves", "2 boxes", "1800")], REFERENCES) == []
 
 
 def test_unknown_items_have_no_reference():
