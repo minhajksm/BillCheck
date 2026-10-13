@@ -37,3 +37,21 @@ def test_production_refuses_dev_defaults():
         Settings(environment="production")
     with pytest.raises(ValidationError, match="OTP_DELIVERY"):
         Settings(environment="production", secret_key="x" * 40)
+
+
+def test_production_refuses_the_stub_ocr():
+    """The stub returns a sample bill. Shipping it would show a real family
+    charges that aren't on their bill."""
+    with pytest.raises(ValidationError, match="OCR_PROVIDER"):
+        Settings(
+            environment="production",
+            secret_key="x" * 40,
+            otp_delivery="msg91",
+            msg91_auth_key="key",
+            msg91_template_id="t",
+        )
+
+
+def test_claude_ocr_needs_a_key():
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY"):
+        Settings(ocr_provider="claude", anthropic_api_key="")

@@ -1,7 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { billStatus, caseStatus, runningTotal } from '../case-status';
-import { placeholderCases } from '../placeholder';
 import type { Case, DailyBill } from '../types';
 
 const bill = (overrides: Partial<DailyBill>): DailyBill => ({
@@ -15,7 +14,29 @@ const bill = (overrides: Partial<DailyBill>): DailyBill => ({
   ...overrides,
 });
 
-const papa = placeholderCases[0];
+/** The prototype's case on day 3, with days 1 and 2 already added. */
+const papa: Case = {
+  id: 'papa-admission',
+  title: "Papa's admission",
+  hospital: { name: 'City Care Hospital', area: 'Andheri' },
+  patient: { name: 'Ramesh Sharma', ipNumber: '20841', bed: '412' },
+  admittedOn: '2026-10-09',
+  dayOfStay: 3,
+  members: [{ id: 'u1', name: 'Rohan Sharma', isYou: true }],
+  bills: [
+    bill({ id: 'b-day1', date: '2026-10-09', day: 1, itemCount: 24, total: 68490 }),
+    bill({ id: 'b-day2', date: '2026-10-10', day: 2, itemCount: 37, total: 31400 }),
+  ],
+  recoveredAmount: 0,
+};
+
+const closed: Case = {
+  ...papa,
+  id: 'mummy-cataract',
+  closedOn: '2026-03-13',
+  recoveredAmount: 3200,
+};
+
 const withBills = (bills: DailyBill[], extra: Partial<Case> = {}): Case => ({ ...papa, bills, ...extra });
 
 describe('caseStatus', () => {
@@ -34,7 +55,7 @@ describe('caseStatus', () => {
   });
 
   it('reports closed cases with their recovered amount', () => {
-    expect(caseStatus(placeholderCases[1])).toEqual({ kind: 'closed', recoveredAmount: 3200 });
+    expect(caseStatus(closed)).toEqual({ kind: 'closed', recoveredAmount: 3200 });
   });
 });
 

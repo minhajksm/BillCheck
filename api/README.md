@@ -93,7 +93,44 @@ Tests use an in-memory SQLite database, so they don't need Postgres running.
   - `GET /auth/me` returns the signed-in user. `POST /auth/logout` revokes the session.
   - Send the token as `Authorization: Bearer <token>`. Sessions last 30 days.
   - Errors look like `{"detail": {"code": "otp_invalid", "message": "..."}}`. The app turns `code` into translated copy. `sms_failed` (502) means the SMS provider refused or couldn't be reached.
-- `POST /bills` (signed in) takes one bill photo as multipart form field `file` (JPEG, PNG, WebP, or HEIC, up to 15 MB). It's a stub for now: it checks the file and returns an id with an empty `line_items` list. The image is not stored.
+- **Cases** (`cases.py`), all signed in. A case is one admission, shared with family.
+  - `POST /cases` opens one. Whoever opens it is its first member.
+  - `GET /cases` lists the ones you follow; `GET /cases/{id}` reads one. A case you don't follow answers 404, not 403, so an id can't be used to confirm that someone is in hospital.
+  - `POST /cases/{id}/join` joins from an invite link. The link carries the case id, which is what sharing it means.
+  - `POST /cases/{id}/close` marks the stay over. Reports stay readable.
+- **Bills and flags** (`bills.py`), all signed in.
+  - `POST /cases/{id}/bills` takes the photographed pages as multipart `pages` (JPEG, PNG, WebP or HEIC, up to 15 MB each, 12 pages). It reads them into line items, runs the audit, and returns the bill with its flags. **The photos are never stored** — read in memory, then dropped.
+  - `GET /bills/{id}` reads a bill back with its line items and flags.
+  - `PATCH /flags/{id}` with `{"status": "corrected" | "explained" | "open"}` records what the hospital said. A corrected flag's difference counts as recovered.
+
+### What the audit checks
+
+`audit.py` runs three checks against the price lists in `data/`:
+
+| Check | Level | Raised when |
+| --- | --- | --- |
+| Above MRP | red | A medicine is billed above its printed MRP, or above its NPPA ceiling price where one applies. |
+| Duplicate | red | The same charge appears twice with the same printed detail. |
+| Unusual quantity | amber | Far more of something than a ward stay usually uses. |
+
+A flag stores facts, never sentences: what was billed, what it was checked
+against, and the difference. The app turns those into copy in the family's own
+language, which is why nothing user-facing is stored here.
+
+**The lists in `data/samples/` are illustrative, not the real NPPA and CGHS
+rates.** Replace them before any flag is shown to a real family.
+
+### Reading the bill
+
+`OCR_PROVIDER` picks how a photo becomes line items, the same shape as SMS:
+
+| Value | What happens |
+| --- | --- |
+| `stub` (default) | Returns one fixed sample bill. No key needed, so the whole loop runs in development and tests without a real bill leaving the machine. |
+| `claude` | Reads the real pages with Claude's vision input and structured outputs. Needs `ANTHROPIC_API_KEY`. |
+
+Settings refuse `stub` in production. A HEIC photo is accepted on upload but
+the Claude provider can't read it yet — it needs converting first.
 
 OTP codes and session tokens are stored only as hashes.
 

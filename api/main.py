@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 import auth
 import bills
+import cases
 from models import HealthResponse
 from settings import get_settings
 
@@ -16,11 +17,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)
+app.include_router(cases.router)
 app.include_router(bills.router)
 
 

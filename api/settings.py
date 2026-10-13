@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # Where MSG91 lives. Override it only to point at scripts/fake_msg91.py,
     # which exercises this path in development without sending an SMS.
     msg91_url: str = "https://control.msg91.com/api/v5/flow/"
+    # How a bill photo becomes line items. "stub" returns one fixed sample
+    # bill and needs no key; "claude" reads the real pages.
+    ocr_provider: Literal["stub", "claude"] = "stub"
+    anthropic_api_key: str = ""
+    ocr_model: str = "claude-opus-5-5"
+    # The price lists bills are checked against. The file shipped in
+    # data/samples is illustrative; point this at the real NPPA and CGHS
+    # lists before any flag is shown to a real family.
+    reference_data_path: str = "../data/samples/reference-prices.json"
     # Origins allowed to call the API from a browser (Expo web dev server).
     cors_origins: list[str] = ["http://localhost:8081"]
 
@@ -41,6 +50,14 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "OTP_DELIVERY=console would log codes instead of sending them in production."
                 )
+            if self.ocr_provider == "stub":
+                raise ValueError("OCR_PROVIDER=stub returns a sample bill instead of reading the real one.")
+        return self
+
+    @model_validator(mode="after")
+    def check_ocr_provider(self) -> Self:
+        if self.ocr_provider == "claude" and not self.anthropic_api_key:
+            raise ValueError("OCR_PROVIDER=claude needs ANTHROPIC_API_KEY.")
         return self
 
     @model_validator(mode="after")

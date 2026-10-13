@@ -131,6 +131,9 @@ def test_msg91_satisfies_the_production_check():
         otp_delivery="msg91",
         msg91_auth_key="key",
         msg91_template_id="template-123",
+        # Production also refuses the stub OCR, which returns a sample bill.
+        ocr_provider="claude",
+        anthropic_api_key="key",
     )
     assert settings.otp_delivery == "msg91"
 

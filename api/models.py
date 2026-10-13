@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, StringConstraints
@@ -91,3 +91,93 @@ class Signup(BaseModel):
     consent: Literal[True] = Field(
         description="The user agreed to the consent text shown in the app (DPDP). Must be true."
     )
+
+
+# --- cases ------------------------------------------------------------------
+
+
+class CaseCreate(BaseModel):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    hospital_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    hospital_area: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    patient_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    ip_number: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
+    bed: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
+    admitted_on: date
+
+
+class MemberOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    is_you: bool
+
+
+class DailyBillOut(BaseModel):
+    id: uuid.UUID
+    date: date
+    day: int
+    item_count: int
+    total: float
+    flag_count: int
+    open_flag_count: int
+
+
+class CaseOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    hospital_name: str
+    hospital_area: str
+    patient_name: str
+    ip_number: str
+    bed: str | None
+    admitted_on: date
+    closed_on: date | None
+    # Counting the admission day as day 1.
+    day_of_stay: int
+    members: list[MemberOut]
+    # Oldest first.
+    bills: list[DailyBillOut]
+    recovered_amount: float
+
+
+# --- bills ------------------------------------------------------------------
+
+
+class LineItemOut(BaseModel):
+    id: uuid.UUID
+    position: int
+    name: str
+    detail: str | None
+    quantity: float | None
+    amount: float
+
+
+class FlagOut(BaseModel):
+    """Facts only. The app turns these into copy in the family's language."""
+
+    id: uuid.UUID
+    position: int
+    line_item_id: uuid.UUID | None
+    kind: Literal["above_mrp", "duplicate", "quantity"]
+    level: Literal["red", "amber"]
+    status: Literal["open", "corrected", "explained"]
+    billed: float
+    reference_amount: float
+    reference_source: str
+    reference_detail: dict
+    excess: float
+
+
+class BillOut(BaseModel):
+    id: uuid.UUID
+    case_id: uuid.UUID
+    date: date
+    day: int
+    page_count: int
+    total: float
+    line_items: list[LineItemOut]
+    flags: list[FlagOut]
+
+
+class FlagUpdate(BaseModel):
+    status: Literal["open", "corrected", "explained"]

@@ -1,4 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -12,19 +13,39 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
+import { useAuth } from '@/auth/auth-context';
 import { billStatus, caseStatus, latestBill, runningTotal, type CaseStatus } from '@/data/case-status';
-import { findCase } from '@/data/placeholder';
+import { readCase } from '@/data/cases-api';
 import type { Case, DailyBill } from '@/data/types';
+import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth } from '@/i18n/dates';
 import { formatINR } from '@/lib/format';
 
 export default function CaseDashboardScreen() {
   const { caseId } = useLocalSearchParams<{ caseId: string }>();
-  const item = findCase(caseId);
   const { t } = useTranslation();
+  const { state } = useAuth();
+  const token = state.status === 'signedIn' ? state.token : null;
 
-  if (!item) {
+  const load = useCallback(async () => {
+    if (!token) throw new Error('signed out');
+    return readCase(token, caseId);
+  }, [token, caseId]);
+  const loaded = useAsync(load);
+
+  // A bill added or a question answered should show the moment we come back.
+  const { reload } = loaded;
+  useFocusEffect(useCallback(() => void reload(), [reload]));
+
+  if (loaded.status === 'loading') {
+    return (
+      <Screen header={<AppHeader title="" showBack />}>
+        <Text color="ink2">{t('common.loading')}</Text>
+      </Screen>
+    );
+  }
+  if (loaded.status === 'error') {
     return (
       <Screen header={<AppHeader title="" showBack />}>
         <Text style={styles.notFound}>{t('case.notFound')}</Text>
@@ -32,7 +53,7 @@ export default function CaseDashboardScreen() {
       </Screen>
     );
   }
-  return <CaseDashboard item={item} />;
+  return <CaseDashboard item={loaded.value} />;
 }
 
 function CaseDashboard({ item }: { item: Case }) {
@@ -76,7 +97,7 @@ function CaseDashboard({ item }: { item: Case }) {
         </View>
       ) : null}
 
-      <StatusBanner status={status} onAsk={() => toast(t('case.reportSoon'))} />
+      <StatusBanner status={status} onAsk={() => openLatestReport(item)} />
 
       <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
         {t('case.dailyBills')}
@@ -85,10 +106,15 @@ function CaseDashboard({ item }: { item: Case }) {
         {bills.map((bill, i) => (
           <BillRow key={bill.id} bill={bill} first={i === 0} />
         ))}
+        {bills.length === 0 ? (
+          <View style={styles.emptyBills}>
+            <Text color="ink2">{t('case.noBillsYet')}</Text>
+          </View>
+        ) : null}
       </Card>
 
       <View style={styles.cta}>
-        <MainAction status={status} />
+        <MainAction status={status} item={item} />
       </View>
     </Screen>
   );
@@ -156,21 +182,31 @@ function StatusBanner({ status, onAsk }: { status: CaseStatus; onAsk: () => void
   }
 }
 
-function MainAction({ status }: { status: CaseStatus }) {
+/** Opens the newest bill that still has open questions, else the newest. */
+function openLatestReport(item: Case) {
+  const withOpen = [...item.bills].reverse().find((bill) => bill.openFlagCount > 0);
+  const bill = withOpen ?? latestBill(item);
+  if (bill) router.push({ pathname: '/bills/[billId]', params: { billId: bill.id } });
+}
+
+function scan(item: Case) {
+  router.push({ pathname: '/cases/[caseId]/scan', params: { caseId: item.id } });
+}
+
+function MainAction({ status, item }: { status: CaseStatus; item: Case }) {
   const { t } = useTranslation();
-  const toast = useToast();
   switch (status.kind) {
     case 'needsTodaysBill':
-      return <Button icon="camera" label={t('case.addTodaysBill')} onPress={() => toast(t('case.scanSoon'))} />;
+      return <Button icon="camera" label={t('case.addTodaysBill')} onPress={() => scan(item)} />;
     case 'toAsk':
-      return <Button label={t('case.askBillingDesk')} onPress={() => toast(t('case.askSoon'))} />;
+      return <Button label={t('case.askBillingDesk')} onPress={() => openLatestReport(item)} />;
     case 'upToDate':
       return (
         <Button
           variant="secondary"
           icon="camera"
           label={t('case.addTomorrowsBill')}
-          onPress={() => toast(t('case.tomorrowToast'))}
+          onPress={() => scan(item)}
         />
       );
     case 'closed':
@@ -181,7 +217,6 @@ function MainAction({ status }: { status: CaseStatus }) {
 function BillRow({ bill, first }: { bill: DailyBill; first: boolean }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const toast = useToast();
   const status = billStatus(bill);
 
   const title = bill.day === 1 ? t('case.billAdmission', { day: bill.day }) : t('case.billInterim', { day: bill.day });
@@ -190,10 +225,7 @@ function BillRow({ bill, first }: { bill: DailyBill; first: boolean }) {
     count: bill.itemCount,
     amount: formatINR(bill.total),
   });
-  const onPress = () =>
-    status === 'looksFine'
-      ? toast(t('case.billAllInRange', { day: bill.day, count: bill.itemCount }))
-      : toast(t('case.reportSoon'));
+  const onPress = () => router.push({ pathname: '/bills/[billId]', params: { billId: bill.id } });
 
   return (
     <Pressable
@@ -232,5 +264,6 @@ const styles = StyleSheet.create({
   list: { overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 13 },
   rowText: { flex: 1 },
+  emptyBills: { padding: 16 },
   cta: { marginTop: 18, gap: 10 },
 });

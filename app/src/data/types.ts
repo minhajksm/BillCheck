@@ -33,3 +33,48 @@ export type Case = {
   bills: DailyBill[];
   recoveredAmount: number;
 };
+
+/** One row of the itemized bill, as printed. */
+export type LineItem = {
+  id: string;
+  position: number;
+  name: string;
+  detail?: string;
+  quantity?: number;
+  amount: number;
+};
+
+export type FlagKind = 'above_mrp' | 'duplicate' | 'quantity';
+export type FlagLevel = 'red' | 'amber';
+export type FlagStatus = 'open' | 'corrected' | 'explained';
+
+/**
+ * A charge worth asking about. The API sends facts only; the copy a family
+ * reads is composed here, in their own language.
+ */
+export type Flag = {
+  id: string;
+  position: number;
+  lineItemId?: string;
+  kind: FlagKind;
+  level: FlagLevel;
+  status: FlagStatus;
+  billed: number;
+  referenceAmount: number;
+  referenceSource: string;
+  /** The reference's own numbers: unit price, usual quantity, and so on. */
+  referenceDetail: Record<string, string | number>;
+  excess: number;
+};
+
+/** One day's bill with everything on it. */
+export type Bill = {
+  id: string;
+  caseId: string;
+  date: string;
+  day: number;
+  pageCount: number;
+  total: number;
+  lineItems: LineItem[];
+  flags: Flag[];
+};
