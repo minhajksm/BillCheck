@@ -5,11 +5,12 @@ items and flags out — without a key or a real bill.
 """
 
 import io
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
+from db import india_today
 from tests.conftest import FakeSms, sign_up
 
 # A one-pixel JPEG: enough for the upload to sniff a real image type.
@@ -28,7 +29,7 @@ def new_case(client: TestClient, headers: dict, **overrides) -> dict:
         "patient_name": "Ramesh Sharma",
         "ip_number": "20841",
         "bed": "412",
-        "admitted_on": str(date.today() - timedelta(days=2)),
+        "admitted_on": str(india_today() - timedelta(days=2)),
     } | overrides
     response = client.post("/cases", json=body, headers=headers)
     assert response.status_code == 201, response.text
@@ -208,7 +209,7 @@ def test_closing_a_case_stops_the_day_count(client: TestClient, auth_headers: di
     case = new_case(client, auth_headers)
     closed = client.post(f"/cases/{case['id']}/close", headers=auth_headers).json()
 
-    assert closed["closed_on"] == str(date.today())
+    assert closed["closed_on"] == str(india_today())
     assert closed["day_of_stay"] == 3
 
 
@@ -309,7 +310,7 @@ def test_cannot_upload_to_someone_elses_case(client: TestClient, auth_headers: d
 
 
 def test_bill_day_counts_from_admission(client: TestClient, auth_headers: dict):
-    case = new_case(client, auth_headers, admitted_on=str(date.today() - timedelta(days=2)))
+    case = new_case(client, auth_headers, admitted_on=str(india_today() - timedelta(days=2)))
     bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
     assert bill["day"] == 3
 
@@ -385,3 +386,28 @@ def test_an_invalid_status_is_rejected(client: TestClient, auth_headers: dict, b
     flag = bill_with_flags["bill"]["flags"][0]
     response = client.patch(f"/flags/{flag['id']}", json={"status": "sorted"}, headers=auth_headers)
     assert response.status_code == 422
+
+
+# --- India time ----------------------------------------------------------------
+
+
+def test_india_today_is_ahead_of_utc_after_6_30_pm(monkeypatch: pytest.MonkeyPatch):
+    """20:00 UTC on 11 Oct is 01:30 on 12 Oct in India."""
+    import db
+
+    monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 10, 11, 20, 0, tzinfo=UTC))
+    assert db.india_today() == date(2026, 10, 12)
+    monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 10, 11, 18, 0, tzinfo=UTC))
+    assert db.india_today() == date(2026, 10, 11)
+
+
+def test_a_bill_after_midnight_in_india_lands_on_the_new_day(
+    client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Photographed at 01:30 on 12 Oct in Mumbai, which is still 11 Oct in UTC."""
+    import db
+
+    case = new_case(client, auth_headers, admitted_on="2026-10-10")
+    monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 10, 11, 20, 0, tzinfo=UTC))
+    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
+    assert (bill["date"], bill["day"]) == ("2026-10-12", 3)

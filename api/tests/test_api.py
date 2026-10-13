@@ -5,12 +5,13 @@ It reads the file's own bytes rather than the client's Content-Type header,
 which anything can set.
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 import bills
+from db import india_today
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -28,7 +29,7 @@ def case_id(client: TestClient, auth_headers: dict[str, str]) -> str:
             "hospital_area": "Andheri",
             "patient_name": "Ramesh Sharma",
             "ip_number": "20841",
-            "admitted_on": str(date.today() - timedelta(days=2)),
+            "admitted_on": str(india_today() - timedelta(days=2)),
         },
         headers=auth_headers,
     )

@@ -17,7 +17,7 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from auth import CurrentUser, Db
-from db import utcnow
+from db import india_today, utcnow
 from models import CaseCreate, CaseOut, DailyBillOut, InviteCreated, InviteOut, JoinCase, MemberOut
 from tables import Bill, Case, CaseInvite, CaseMember, Flag, LineItem, User
 
@@ -122,7 +122,7 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
         bed=case.bed,
         admitted_on=case.admitted_on,
         closed_on=case.closed_on,
-        day_of_stay=day_of_stay(case.admitted_on, case.closed_on, utcnow().date()),
+        day_of_stay=day_of_stay(case.admitted_on, case.closed_on, india_today()),
         members=[
             MemberOut(id=member.user_id, name=member.user.name, is_you=member.user_id == user.id)
             for member in case.members
@@ -285,7 +285,7 @@ def close_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> CaseOut:
     """Marks the stay as over. Reports stay readable afterwards."""
     case = load_case(db, case_id, user)
     if case.closed_on is None:
-        case.closed_on = utcnow().date()
+        case.closed_on = india_today()
         db.commit()
         db.refresh(case)
     return case_out(db, case, user)

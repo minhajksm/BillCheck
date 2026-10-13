@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, selectinload
 import audit
 from auth import CurrentUser, Db
 from cases import load_case
-from db import utcnow
+from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
 from ocr import BillImage, ExtractedBill, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data
@@ -229,7 +229,7 @@ async def upload_bill(
     finally:
         del images
 
-    on = bill_date or utcnow().date()
+    on = bill_date or india_today()
     rows = [
         audit.BillRow(
             position=position,

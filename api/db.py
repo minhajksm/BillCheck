@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta, timezone
 from functools import lru_cache
 
 from sqlalchemy import DateTime, Engine, create_engine
@@ -51,3 +51,15 @@ def get_db() -> Iterator[Session]:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+# India Standard Time. India has no daylight saving, so a fixed offset is
+# exact, and unlike a zoneinfo name it needs no tz database (Windows has none).
+INDIA = timezone(timedelta(hours=5, minutes=30), "IST")
+
+
+def india_today() -> date:
+    """Today's date where the families are. A bill photographed at 1:30 am on
+    12 October in Mumbai is 11 October in UTC, which would put it on the wrong
+    day of the stay."""
+    return utcnow().astimezone(INDIA).date()
