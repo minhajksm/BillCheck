@@ -13,6 +13,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { Gutter, Radius } from '@/constants/theme';
 import { uploadBill, type ScannedPage } from '@/data/cases-api';
+import { preparePage } from '@/data/prepare-page';
 import { usePalette } from '@/hooks/use-palette';
 
 const MAX_PAGES = 12;
@@ -33,17 +34,30 @@ export default function ScanScreen() {
   const { state } = useAuth();
   const [pages, setPages] = useState<ScannedPage[]>([]);
   const [checking, setChecking] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   if (state.status !== 'signedIn') return null;
   const token = state.token;
 
-  const addAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
-    const added = assets.map((asset, index) => ({
-      uri: asset.uri,
-      name: asset.fileName ?? `page-${pages.length + index + 1}.jpg`,
-      type: asset.mimeType ?? 'image/jpeg',
-    }));
-    setPages((current) => [...current, ...added].slice(0, MAX_PAGES));
+  const addAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    setPreparing(true);
+    try {
+      // Scaled down to what the reader uses, so a many-page bill uploads fast
+      // and stays under the request limit.
+      const added = await Promise.all(
+        assets.map((asset, index) => {
+          const pageNumber = pages.length + index + 1;
+          return preparePage(asset, pageNumber, {
+            uri: asset.uri,
+            name: asset.fileName ?? `page-${pageNumber}.jpg`,
+            type: asset.mimeType ?? 'image/jpeg',
+          });
+        }),
+      );
+      setPages((current) => [...current, ...added].slice(0, MAX_PAGES));
+    } finally {
+      setPreparing(false);
+    }
   };
 
   const takePhoto = async () => {
@@ -52,17 +66,18 @@ export default function ScanScreen() {
       toast(t('scan.cameraDenied'));
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (!result.canceled) addAssets(result.assets);
+    // Full quality here: the page is compressed once, when it is scaled down.
+    const result = await ImagePicker.launchCameraAsync({ quality: 1 });
+    if (!result.canceled) await addAssets(result.assets);
   };
 
   const choosePages = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.7,
+      quality: 1,
       allowsMultipleSelection: true,
       selectionLimit: MAX_PAGES - pages.length,
     });
-    if (!result.canceled) addAssets(result.assets);
+    if (!result.canceled) await addAssets(result.assets);
   };
 
   const checkBill = async () => {
@@ -111,8 +126,14 @@ export default function ScanScreen() {
       <View style={styles.controls}>
         <Button icon="camera" label={t('scan.takePhoto')} onPress={takePhoto} />
         <Button variant="secondary" icon="upload" label={t('scan.choosePages')} onPress={choosePages} />
-        {pages.length > 0 ? (
-          <Button variant="secondary" icon="check" label={t('scan.checkBill')} onPress={checkBill} />
+        {pages.length > 0 || preparing ? (
+          <Button
+            variant="secondary"
+            icon="check"
+            label={t('scan.checkBill')}
+            onPress={checkBill}
+            loading={preparing}
+          />
         ) : null}
       </View>
     </SafeAreaView>
