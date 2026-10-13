@@ -253,8 +253,17 @@ def review(
         checked = Observation(
             kind="date_outside_stay",
             row_positions=[position],
+            unit_price="",
+            expected="",
+            quantity="",
+            usual="",
+            stated="",
+            summed="",
             confidence="high",
             note="Checked against the stay; the reader did not raise it.",
+            why_en="",
+            why_hi="",
+            why_mr="",
         )
         logger.info("Row %d is dated %s, outside the stay", position, on.isoformat())
         flags.append(_to_flag(checked, [position], "amber", date_detail(on, admitted_on, closed_on), bill))
