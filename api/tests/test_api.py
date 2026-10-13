@@ -138,3 +138,27 @@ def test_the_browser_may_use_every_method_the_api_answers(client: TestClient, me
 
     assert response.status_code == 200, f"the browser cannot send a {method}: {response.text}"
     assert method in response.headers.get("access-control-allow-methods", "")
+
+
+def test_a_bill_that_cannot_be_read_says_why_in_the_log(
+    client: TestClient, auth_headers: dict[str, str], case_id: str, monkeypatch: pytest.MonkeyPatch, caplog
+):
+    """The family is told one thing, because there is nothing else they can do
+    about it. Whoever runs this needs the reason: a refusal, a truncated answer
+    and a dead key all answer 422 unreadable_bill, and without this line they
+    are indistinguishable from outside.
+    """
+    import ocr
+
+    def explode(_pages):
+        raise ocr.OcrError("No itemized rows were found on these pages.")
+
+    monkeypatch.setattr(ocr.StubOcr, "read_bill", staticmethod(explode))
+
+    with caplog.at_level("WARNING", logger="billcheck.bills"):
+        response = upload(client, auth_headers, case_id, JPEG)
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "unreadable_bill"
+    assert "No itemized rows were found" in caplog.text
+    assert case_id in caplog.text
