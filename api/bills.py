@@ -6,6 +6,7 @@ never stored in the database — so the only health data kept is the structured
 bill the family can see and question.
 """
 
+import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
@@ -32,6 +33,8 @@ router = APIRouter(tags=["bills"])
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_PAGES = 12
 CHUNK_BYTES = 1024 * 1024
+
+logger = logging.getLogger("billcheck.bills")
 
 HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1", b"msf1"}
 
@@ -252,6 +255,12 @@ async def upload_bill(
         # request (sign-ins, other families' cases) until it finished.
         extracted = await run_in_threadpool(ocr.read_bill, images)
     except OcrError as exc:
+        # The family is told one thing -- try again in better light -- because
+        # there is nothing useful they can do with the rest. Whoever is running
+        # this needs the rest: a refusal, a truncated answer and a dead API key
+        # all look identical from outside, and the chained exception never
+        # prints because the HTTPException is handled.
+        logger.warning("Couldn't read a bill for case %s: %s", case_id, exc)
         # Nothing is kept from a bill we couldn't read.
         raise bill_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "unreadable_bill") from exc
     finally:
