@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -218,7 +219,10 @@ async def upload_bill(
     images = [await read_page(page, index) for index, page in enumerate(pages, start=1)]
 
     try:
-        extracted = ocr.read_bill(images)
+        # Reading a bill can take most of a minute, and the reader is a plain
+        # blocking call. Run on the event loop, it would stall every other
+        # request (sign-ins, other families' cases) until it finished.
+        extracted = await run_in_threadpool(ocr.read_bill, images)
     except OcrError as exc:
         # Nothing is kept from a bill we couldn't read.
         raise bill_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "unreadable_bill") from exc
