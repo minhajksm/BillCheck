@@ -19,8 +19,28 @@ from review import review
 ADMITTED = date(2026, 10, 9)
 
 
+# The schema requires every field, so these helpers fill in the blanks a test
+# doesn't care about. Keeping that here rather than in the model is the point:
+# the reader has to send them, and nothing downstream may quietly default them.
 def row(name: str, detail: str | None, amount: float) -> ExtractedRow:
-    return ExtractedRow(name=name, detail=detail, quantity=None, amount=amount)
+    return ExtractedRow(name=name, detail=detail or "", quantity=None, amount=amount)
+
+
+def observation(kind: str, rows: list[int], **given) -> Observation:
+    blank = {
+        "unit_price": "",
+        "expected": "",
+        "quantity": "",
+        "usual": "",
+        "stated": "",
+        "summed": "",
+        "confidence": "medium",
+        "note": "",
+        "why_en": "",
+        "why_hi": "",
+        "why_mr": "",
+    }
+    return Observation(kind=kind, row_positions=rows, **{**blank, **given})
 
 
 ROWS = [
@@ -41,7 +61,7 @@ def bill(observations: list[Observation], stated_total: float | None = 11950.0) 
 
 
 def observe(kind: str, rows: list[int], **kwargs) -> Observation:
-    return Observation(kind=kind, row_positions=rows, **kwargs)
+    return observation(kind, rows, **kwargs)
 
 
 # --- claims the rows can check ----------------------------------------------
@@ -220,7 +240,7 @@ def test_a_reader_that_says_nothing_leaves_the_cited_flags_alone():
 
 
 def dated(detail: str | None, name: str = "Pathology Services") -> ExtractedRow:
-    return ExtractedRow(name=name, detail=detail, quantity=None, amount=430.0)
+    return ExtractedRow(name=name, detail=detail or "", quantity=None, amount=430.0)
 
 
 def dated_bill(details: list[str | None], bill_date: str | None = "2026-10-11") -> ExtractedBill:

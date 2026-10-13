@@ -55,14 +55,20 @@ hospital, which is worse than a missing row.
 
 - `name` is the charge as written, e.g. "Inj. Meropenem 1g".
 - `detail` is the quantity or date column as written, e.g. "6 vials" or
-  "11 Oct, 10:30 am". Leave it null when the bill has no such column.
+  "11 Oct, 10:30 am". Use an empty string when the bill has no such column.
 - `quantity` is the number of units only when the bill states one. Never guess
-  it from the name, and leave it null for a date.
+  it from the name, and use null for a date.
 - `amount` is the row's rupee amount, digits only.
 - Keep the printed order, and include every row, including repeated ones: a
   charge entered twice must appear twice.
 - Leave out totals, subtotals, taxes and balance-due lines from `rows`. Put the
-  printed grand total in `stated_total` instead.
+  printed grand total in `stated_total` instead, or null if the bill prints none.
+- `bill_date` is the date on the bill as YYYY-MM-DD, or an empty string if the
+  page doesn't show one.
+
+Every field is required. Where something doesn't apply, send an empty string
+rather than leaving the field out -- only `quantity` and `stated_total` take
+null, because a missing count is not the same as a count of zero.
 
 ## Then, say what you noticed
 
@@ -78,10 +84,11 @@ Rules that matter more than finding things:
 - Report what the bill shows, not what you assume. If you are unsure, use a
   lower `confidence` or leave it out. A charge that was correct, questioned at
   a counter, costs a family more than a charge you missed.
-- Fill in only the figures that apply, as strings of digits: for a price,
-  `unit_price` and the `expected` you would have guessed; for a quantity or a
-  count of hours or visits, `quantity` and the `usual` you would expect; for a
-  total or an advance, `stated` and `summed`. Leave the rest null.
+- Give the figures that apply, as strings of digits: for a price, `unit_price`
+  and the `expected` you would have guessed; for a quantity or a count of hours
+  or visits, `quantity` and the `usual` you would expect; for a total or an
+  advance, `stated` and `summed`. The rest are empty strings -- send every
+  field, every time.
 - Most kinds name the rows they are about. `rounded_amounts` and
   `advance_not_deducted` are about the bill as a whole, so they may leave
   `row_positions` empty, as `total_mismatch` does.
@@ -108,8 +115,8 @@ Say what this bill shows and why it is worth asking about. Nothing else.
 - Never claim it was checked against an MRP, an NPPA ceiling, a CGHS rate or
   any price list. Nothing here was. Where the amount only looks high to you,
   say that it looks high and leave it there.
-- If you cannot say why in those terms, leave all three empty. The app has its
-  own wording and will use it.
+- If you cannot say why in those terms, send all three as empty strings. The
+  app has its own wording and will use it.
 
 Good: "The bill charges ₹2,200 for nursing as its own line, on top of ₹6,500
 room rent. Room rates usually include nursing."
@@ -129,15 +136,21 @@ class BillPage:
 
 
 class ExtractedRow(BaseModel):
-    """One row as printed on the bill."""
+    """One row as printed on the bill.
+
+    Every field is required. An optional field costs far more than it looks:
+    the schema compiles to a grammar that must accept any subset of them in
+    any order, for every row of every bill, and the API rejects the request
+    outright once that grows too large. So "not applicable" is an empty
+    string, not an absent field.
+    """
 
     name: str = Field(description="The charge exactly as written on the bill.")
-    detail: str | None = Field(
-        default=None, description='The quantity or date column as written, e.g. "6 vials".'
+    detail: str = Field(
+        description='The quantity or date column as written, e.g. "6 vials". '
+        "Empty string when the bill has no such column."
     )
-    quantity: float | None = Field(
-        default=None, description="Units, only where the bill states a count. Null for a date."
-    )
+    quantity: float | None = Field(description="Units, only where the bill states a count. Null for a date.")
     amount: float = Field(description="The row's amount in rupees.")
 
 
@@ -147,29 +160,27 @@ class Observation(BaseModel):
     The figures are separate fields rather than a free-form mapping: a
     `dict[str, str]` becomes a schema that allows no keys at all, so under
     structured outputs the reader could never fill one in.
+
+    All of them are required, and "not applicable" is an empty string. With
+    twelve optional fields on an array element the API rejected the whole
+    request -- "Schema is too complex" -- because the grammar has to accept
+    every subset of them in every order. `numbers()` and `explanations()`
+    drop the blanks, so nothing downstream can tell the difference.
     """
 
     kind: ObservationKind
-    row_positions: list[int] = Field(
-        default_factory=list, description="1-based positions in `rows` this is about."
-    )
-    unit_price: str | None = Field(
-        default=None, description="For a price: what one unit was billed at, digits only."
-    )
-    expected: str | None = Field(
-        default=None, description="For a price: what you would have expected one unit to cost."
-    )
-    quantity: str | None = Field(default=None, description="For a quantity: how many were billed.")
-    usual: str | None = Field(
-        default=None, description="For a quantity: how many a stay like this usually uses."
-    )
-    stated: str | None = Field(default=None, description="For a total: the total printed on the bill.")
-    summed: str | None = Field(default=None, description="For a total: what the rows add up to.")
-    confidence: Literal["high", "medium", "low"] = "medium"
-    note: str = Field(default="", description="One line of reasoning, for our logs only.")
-    why_en: str = Field(default="", description="Why this is worth asking, for the family, in English.")
-    why_hi: str = Field(default="", description="The same sentence in Hindi.")
-    why_mr: str = Field(default="", description="The same sentence in Marathi.")
+    row_positions: list[int] = Field(description="1-based positions in `rows` this is about.")
+    unit_price: str = Field(description="For a price: what one unit was billed at, digits only.")
+    expected: str = Field(description="For a price: what you would have expected one unit to cost.")
+    quantity: str = Field(description="For a quantity: how many were billed.")
+    usual: str = Field(description="For a quantity: how many a stay like this usually uses.")
+    stated: str = Field(description="For a total: the total printed on the bill.")
+    summed: str = Field(description="For a total: what the rows add up to.")
+    confidence: Literal["high", "medium", "low"]
+    note: str = Field(description="One line of reasoning, for our logs only.")
+    why_en: str = Field(description="Why this is worth asking, for the family, in English.")
+    why_hi: str = Field(description="The same sentence in Hindi.")
+    why_mr: str = Field(description="The same sentence in Marathi.")
 
     def explanations(self) -> dict[str, str]:
         """The sentence a family reads, per language.
@@ -196,14 +207,14 @@ class Observation(BaseModel):
 
 
 class ExtractedBill(BaseModel):
-    bill_date: str | None = Field(
-        default=None, description="The bill date as printed, in YYYY-MM-DD form if it can be read."
+    bill_date: str = Field(
+        description="The bill date as printed, in YYYY-MM-DD form. Empty string if it can't be read."
     )
     stated_total: float | None = Field(
-        default=None, description="The grand total printed on the bill, if there is one."
+        description="The grand total printed on the bill. Null if the bill prints none."
     )
-    rows: list[ExtractedRow] = Field(default_factory=list)
-    observations: list[Observation] = Field(default_factory=list)
+    rows: list[ExtractedRow]
+    observations: list[Observation]
 
 
 class OcrError(Exception):
@@ -242,6 +253,10 @@ STUB_OBSERVATIONS = [
         row_positions=[1],
         unit_price="6500",
         expected="4000",
+        quantity="",
+        usual="",
+        stated="",
+        summed="",
         confidence="medium",
         note="Stub observation: fixed, not read off the page.",
         why_en=(
@@ -276,7 +291,7 @@ class StubOcr:
             for name, detail, quantity, amount in STUB_ROWS
         ]
         return ExtractedBill(
-            bill_date=None,
+            bill_date="",
             stated_total=float(sum(row.amount for row in rows)),
             rows=rows,
             observations=[obs.model_copy(deep=True) for obs in STUB_OBSERVATIONS],
