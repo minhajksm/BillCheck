@@ -68,6 +68,67 @@ def test_prefers_the_most_specific_alias():
     assert price is not None and price.name == "Meropenem 1g injection"
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Another strength of the same drug: a 2g vial isn't "above" a 1g price.
+        "Inj. Meropenem 2g",
+        "Inj. Meropenem 500mg",
+        # Another form: an infusion isn't a tablet, whatever the drug.
+        "Inj. Paracetamol 1g IV infusion",
+        "Inj. Paracetamol 650mg",
+        # No strength printed: we can't tell which product it is.
+        "Inj. Meropenem",
+        # A combination isn't the single drug.
+        "Inj. Meropenem 1g + Sulbactam 0.5g",
+    ],
+)
+def test_a_price_only_checks_its_exact_product(line: str):
+    assert REFERENCES.price_for(line) is None
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("Inj. Meropenem 1g", "Meropenem 1g injection"),
+        ("MEROPENEM 1 G INJ", "Meropenem 1g injection"),
+        ("Meropenem 1000mg vial", "Meropenem 1g injection"),
+        ("Tab Paracetamol 650 mg", "Paracetamol 650mg tablet"),
+        ("Paracetamol 650mg", "Paracetamol 650mg tablet"),
+    ],
+)
+def test_the_same_product_matches_however_it_is_written(line: str, expected: str):
+    price = REFERENCES.price_for(line)
+    assert price is not None and price.name == expected
+
+
+def test_aliases_match_whole_words_only():
+    assert REFERENCES.norm_for("Glovesbox holder") is None
+    assert REFERENCES.norm_for("Surgical gloves") is not None
+
+
+def test_a_price_entry_without_strength_and_form_is_refused(tmp_path: Path):
+    """Without them an entry would check every strength of the drug."""
+    path = tmp_path / "prices.json"
+    path.write_text(
+        '{"prices": [{"name": "Meropenem", "aliases": ["meropenem"], "unit": "vial", "mrp": 1840}]}'
+    )
+    with pytest.raises(ValueError, match="strength"):
+        load_reference_data(path)
+
+
+@pytest.mark.parametrize(
+    ("name", "detail", "amount"),
+    [
+        ("Inj. Meropenem 2g", "2 vials", "6400"),
+        ("Inj. Paracetamol 1g IV infusion", "1 bottle", "180"),
+    ],
+)
+def test_no_red_flag_for_another_strength_or_form(name: str, detail: str, amount: str):
+    """Both were raised as "above MRP" against the wrong product before."""
+    assert audit_bill([row(1, name, detail, amount)], REFERENCES) == []
+
+
 def test_unknown_items_have_no_reference():
     assert REFERENCES.price_for("Room rent, twin sharing") is None
     assert REFERENCES.norm_for("Room rent, twin sharing") is None
