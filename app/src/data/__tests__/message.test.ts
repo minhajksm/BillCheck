@@ -70,3 +70,57 @@ describe('the message to the billing desk', () => {
     expect(i18n.language).toBe('en');
   });
 });
+
+describe('questions the reader noticed', () => {
+  const readerFlag = (kind: string, extra: Record<string, string> = {}) => ({
+    id: `f-${kind}`,
+    position: 9,
+    line_item_id: 'li-1',
+    kind,
+    level: 'amber',
+    status: 'open',
+    billed: 6500,
+    reference_amount: 0,
+    reference_source: 'reader',
+    reference_detail: { confidence: 'medium', ...extra },
+    excess: 0,
+  });
+
+  const withReader = (kind: string, extra: Record<string, string> = {}): Bill => {
+    const raw = structuredClone(SAMPLE_BILL) as never as { flags: unknown[] };
+    raw.flags = [readerFlag(kind, extra)];
+    return toBill(raw as never);
+  };
+
+  it('asks about an item the reader noticed', () => {
+    const message = composeMessage(i18n.getFixedT('en'), item, withReader('non_medical_item')) ?? '';
+    expect(message).toContain("Room rent, twin sharing doesn't look like part of the treatment");
+  });
+
+  it('never claims a reference it does not have', () => {
+    const message = composeMessage(i18n.getFixedT('en'), item, withReader('unit_price_high')) ?? '';
+
+    expect(message).toContain('Could you explain what the charge for');
+    for (const word of ['MRP', 'NPPA', 'ceiling', 'listed']) {
+      expect(message).not.toContain(word);
+    }
+  });
+
+  it('puts the arithmetic in the message when the rows were checked', () => {
+    const message =
+      composeMessage(
+        i18n.getFixedT('en'),
+        item,
+        withReader('total_mismatch', { summed: '38290', stated: '42490' }),
+      ) ?? '';
+
+    expect(message).toContain('add up to ₹38,290');
+    expect(message).toContain('total shows ₹42,490');
+  });
+
+  it.each(['hi', 'mr'])('asks in %s too', (language) => {
+    const message = composeMessage(i18n.getFixedT(language), item, withReader('non_medical_item')) ?? '';
+    expect(message).not.toMatch(/doesn't look like part of the treatment/);
+    expect(message.length).toBeGreaterThan(40);
+  });
+});

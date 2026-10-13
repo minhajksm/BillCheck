@@ -21,8 +21,9 @@ from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
-from ocr import BillImage, ExtractedBill, OcrError, OcrProvider, get_ocr_provider, to_decimal
+from ocr import BillPage, ExtractedBill, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data
+from review import review
 from settings import get_settings
 from tables import Bill, Case, CaseMember, Flag, LineItem, UploadAttempt
 
@@ -71,7 +72,7 @@ def bill_error(status_code: int, code: str) -> HTTPException:
 
 
 def sniff_image_type(head: bytes) -> str | None:
-    """Detects the image type from its first bytes, since the client's
+    """Detects the file type from its first bytes, since the client's
     Content-Type header can't be trusted."""
     if head.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
@@ -81,10 +82,12 @@ def sniff_image_type(head: bytes) -> str | None:
         return "image/webp"
     if head[4:8] == b"ftyp" and head[8:12] in HEIF_BRANDS:
         return "image/heic"
+    if head.startswith(b"%PDF-"):
+        return "application/pdf"
     return None
 
 
-async def read_page(file: UploadFile, index: int) -> BillImage:
+async def read_page(file: UploadFile, index: int) -> BillPage:
     chunks: list[bytes] = []
     size = 0
     while chunk := await file.read(CHUNK_BYTES):
@@ -112,10 +115,10 @@ async def read_page(file: UploadFile, index: int) -> BillImage:
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail={
                 "code": "unsupported_page",
-                "message": "Upload a JPEG, PNG, WebP, or HEIC photo of the bill.",
+                "message": "Upload a photo of the bill (JPEG, PNG, WebP or HEIC) or a PDF.",
             },
         )
-    return BillImage(data=data, content_type=content_type)
+    return BillPage(data=data, content_type=content_type)
 
 
 def store_bill(
@@ -265,7 +268,10 @@ async def upload_bill(
         )
         for position, row in enumerate(extracted.rows, start=1)
     ]
-    flags = audit.audit_bill(rows, references)
+    reference_flags = audit.audit_bill(rows, references)
+    # What the reader noticed, kept only where the rows bear it out or where
+    # nothing can check it. A reference flag always wins over the same claim.
+    flags = review(extracted, reference_flags, case.admitted_on, case.closed_on)
 
     bill = Bill(
         case_id=case.id,

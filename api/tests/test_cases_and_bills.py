@@ -233,8 +233,14 @@ def test_uploading_a_bill_returns_line_items_and_flags(client: TestClient, auth_
     assert [(f["kind"], f["level"]) for f in bill["flags"]] == [
         ("duplicate", "red"),
         ("above_mrp", "red"),
+        # Amber in the bill's own order, so the reader's note on row 1 comes
+        # before the quantity flag on row 10.
+        ("unit_price_high", "amber"),
         ("quantity", "amber"),
     ]
+    reader = next(f for f in bill["flags"] if f["reference_source"] == "reader")
+    # A judgment of degree claims no amount, so it adds nothing to the total.
+    assert reader["excess"] == 0
     assert all(f["status"] == "open" for f in bill["flags"])
 
 
@@ -261,8 +267,8 @@ def test_a_bill_lands_on_its_case(client: TestClient, auth_headers: dict):
     refreshed = client.get(f"/cases/{case['id']}", headers=auth_headers).json()
     (summary,) = refreshed["bills"]
     assert summary["item_count"] == 11
-    assert summary["flag_count"] == 3
-    assert summary["open_flag_count"] == 3
+    assert summary["flag_count"] == 4
+    assert summary["open_flag_count"] == 4
     assert summary["total"] == 42490
 
 
@@ -336,7 +342,7 @@ def test_marking_a_flag_corrected_counts_as_recovered(
 
     case = client.get(f"/cases/{bill_with_flags['case_id']}", headers=auth_headers).json()
     assert case["recovered_amount"] == 6660
-    assert case["bills"][0]["open_flag_count"] == 2
+    assert case["bills"][0]["open_flag_count"] == 3
 
 
 def test_an_explained_flag_is_settled_but_not_recovered(
@@ -348,7 +354,7 @@ def test_an_explained_flag_is_settled_but_not_recovered(
 
     case = client.get(f"/cases/{bill_with_flags['case_id']}", headers=auth_headers).json()
     assert case["recovered_amount"] == 0
-    assert case["bills"][0]["open_flag_count"] == 2
+    assert case["bills"][0]["open_flag_count"] == 3
 
 
 def test_a_question_can_be_reopened(client: TestClient, auth_headers: dict, bill_with_flags: dict):
@@ -462,9 +468,10 @@ def test_a_rejected_file_does_not_count(
 
     monkeypatch.setattr(get_settings(), "bill_uploads_per_day", 1)
     case = new_case(client, auth_headers)
-    not_an_image = ("pages", ("page.pdf", io.BytesIO(b"%PDF-1.7" + b"\x00" * 64), "image/jpeg"))
+    # A zip, not a bill: refused before it reaches the reader. A PDF would be
+    # accepted now, so it can no longer stand in for a rejected file here.
+    not_a_bill = ("pages", ("notes.zip", io.BytesIO(b"PK\x03\x04" + b"\x00" * 64), "image/jpeg"))
     assert (
-        client.post(f"/cases/{case['id']}/bills", files=[not_an_image], headers=auth_headers).status_code
-        == 415
+        client.post(f"/cases/{case['id']}/bills", files=[not_a_bill], headers=auth_headers).status_code == 415
     )
     assert client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).status_code == 201

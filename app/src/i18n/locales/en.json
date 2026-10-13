@@ -136,7 +136,8 @@
     "errorUnsupported": "One of the pages isn't a photo BillCheck can read. Use JPEG or PNG photos.",
     "errorTooMany": "A bill can have up to {{max}} pages. Remove some and check them as a second bill.",
     "errorLimit": "You've checked a lot of bills today. Try again tomorrow.",
-    "errorUnknown": "Something went wrong. Your pages are still here. Try again."
+    "errorUnknown": "Something went wrong. Your pages are still here. Try again.",
+    "choosePdf": "Upload PDF"
   },
   "flags": {
     "tagAboveMrp": "Above MRP",
@@ -170,7 +171,37 @@
     "unitPair": "pairs",
     "unitPiece": "pieces",
     "unitVisit": "visits",
-    "unitDefault": "units"
+    "unitDefault": "units",
+    "tagNoticed": "Worth asking",
+    "noticedBy": "Noticed while reading the bill, not checked against a price list.",
+    "shortTotalMismatch": "The lines add up to {{summed}}, but the bill says {{stated}}.",
+    "whyTotalMismatch": "The difference is {{difference}}. A figure read from a photo can be misread, so check these against the paper bill before asking.",
+    "askTotalMismatch": "Ask the billing desk to go through the total with you line by line.",
+    "shortDuplicateLine": "The same charge appears twice for {{detail}}.",
+    "whyDuplicateLine": "Two rows with the same item, the same detail and the same amount. This is usually an entry mistake rather than a second charge.",
+    "askDuplicateLine": "Ask the billing desk to check whether this was entered twice.",
+    "shortDateOutsideStay": "Dated {{rowDate}}, outside this admission.",
+    "whyDateOutsideStay": "The patient was admitted on {{admittedOn}}. A charge dated outside the stay may belong to another visit.",
+    "askDateOutsideStay": "Ask the billing desk which admission this charge belongs to.",
+    "shortUnitPriceHigh": "This looks higher than such an item usually costs.",
+    "shortUnitPriceHighExpected": "Billed {{unitPrice}}. Such an item usually costs nearer {{expected}}.",
+    "whyUnitPriceHigh": "This wasn't matched to a published price list, so there is no official figure behind it. Treat it as something to ask about, not as proof.",
+    "askUnitPriceHigh": "Ask the billing desk what this rate covers, and to show you the price it was billed at.",
+    "shortQuantityHigh": "This looks like more than a stay like this usually uses.",
+    "whyQuantityHigh": "There may be a real reason, such as a procedure or isolation care. This wasn't checked against a published norm.",
+    "askQuantityHigh": "Ask the nurse in charge what this quantity was used for.",
+    "shortNonMedicalItem": "This doesn't look like part of the treatment.",
+    "whyNonMedicalItem": "Items that aren't treatment are often not covered by insurance, and are sometimes added to a bill by mistake.",
+    "askNonMedicalItem": "Ask the billing desk whether this item should be on the bill.",
+    "shortPackageOverlap": "A package on this bill may already cover this.",
+    "whyPackageOverlap": "When a package price covers an item, billing it separately charges for it twice. The package terms settle this.",
+    "askPackageOverlap": "Ask for the package inclusions list, and whether this item is on it.",
+    "shortServiceCharge": "A service charge on top of the room rent.",
+    "whyServiceCharge": "Room rent is usually expected to cover the service that goes with the room.",
+    "askServiceCharge": "Ask the billing desk what this charge is for, and show it beside the room rent.",
+    "shortSameTestTwoNames": "This may be the same test billed under two names.",
+    "whySameTestTwoNames": "Tests often have a short name and a full name. Both on one bill can mean it was entered twice.",
+    "askSameTestTwoNames": "Ask the billing desk whether these are two tests or one."
   },
   "report": {
     "title": "Day {{day}} bill report",
@@ -229,7 +260,13 @@
     "lineAboveMrpNppa": "{{name}} is billed at {{billed}} per {{unit}}, but the NPPA ceiling price is {{reference}}.",
     "lineDuplicate": "{{name}} on {{detail}} appears twice.",
     "lineQuantity": "{{quantity}} {{unit}} of {{name}} are billed for one day.",
-    "closing": "Please share a corrected bill or an explanation. Thank you."
+    "closing": "Please share a corrected bill or an explanation. Thank you.",
+    "lineNoticed": "Could you explain what the charge for {{name}} covers?",
+    "lineTotalMismatch": "The line items add up to {{summed}}, but the total shows {{stated}}. Could we go through it?",
+    "lineDuplicateLine": "{{name}} appears twice for {{detail}}. Is that two charges or one?",
+    "lineNonMedicalItem": "{{name}} doesn't look like part of the treatment. Should it be on the bill?",
+    "linePackageOverlap": "Is {{name}} already covered by the package on this bill?",
+    "lineDateOutsideStay": "{{name}} is dated {{rowDate}}, outside this admission. Which stay does it belong to?"
   },
   "newCase": {
     "title": "Start a case",
