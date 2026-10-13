@@ -30,7 +30,8 @@ from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
-from audit import Flag
+from audit import Flag, FlagLevel
+from flag_kinds import BILL_LEVEL, CHECKABLE, COVERED_BY_REFERENCES, WHOLE_LINE
 from ocr import ExtractedBill, Observation
 from references import parse_bill_date
 
@@ -39,23 +40,6 @@ logger = logging.getLogger("billcheck.review")
 # Rupees of slack before the rows and the printed total are called different.
 # Bills round, and a figure read off a photograph can be a paisa out.
 TOTAL_TOLERANCE = Decimal("1")
-
-# What a confirmed observation is worth. Everything else is a question.
-CHECKABLE = frozenset({"total_mismatch", "duplicate_line", "date_outside_stay"})
-
-# Kinds that are about the bill as a whole, so citing no row is not a reader
-# that lost its numbering. Everything else must name a row to be shown.
-BILL_LEVEL = frozenset({"total_mismatch", "rounded_amounts", "advance_not_deducted"})
-
-# Kinds the reference lists already decide. If the reader says the same thing,
-# the cited flag wins and the reader's is dropped, so the family is asked once.
-COVERED_BY_REFERENCES = {
-    "unit_price_high": "above_mrp",
-    "capped_item_above_ceiling": "above_mrp",
-    "quantity_high": "quantity",
-    "duplicate_line": "duplicate",
-    "same_drug_twice_sources": "duplicate",
-}
 
 
 def _amount(value: Decimal) -> str:
@@ -165,29 +149,10 @@ def _rows_outside_stay(
     return outside
 
 
-# Kinds where the whole line is what is being questioned, so the line's own
-# amount is what a correction would give back. For the rest — "this looks dear",
-# "this looks like a lot" — there is no defensible figure, and taking one from
-# the reader's own estimate would dress a guess up as an amount.
-WHOLE_LINE = frozenset(
-    {
-        "duplicate_line",
-        "same_drug_twice_sources",
-        "same_test_two_names",
-        "non_medical_item",
-        "service_charge_on_room",
-        "nursing_billed_with_room",
-        "package_overlap",
-        "tax_on_exempt_item",
-        "date_outside_stay",
-    }
-)
-
-
 def _to_flag(
     observation: Observation,
     positions: list[int],
-    level: str,
+    level: FlagLevel,
     numbers: dict[str, str],
     bill: ExtractedBill,
 ) -> Flag:
@@ -204,7 +169,7 @@ def _to_flag(
 
     return Flag(
         kind=observation.kind,
-        level=level,  # type: ignore[arg-type]
+        level=level,
         row_position=positions[0] if positions else 0,
         billed=billed,
         reference_amount=billed - excess,

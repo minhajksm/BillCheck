@@ -12,6 +12,7 @@ from decimal import Decimal
 import pytest
 
 from audit import Flag
+from flag_kinds import CitedFlagKind
 from ocr import ExtractedBill, ExtractedRow, Observation
 from review import review
 
@@ -153,9 +154,9 @@ def test_keeps_what_the_reader_was_sure_of(confidence: str):
 # --- not stepping on the cited flags ----------------------------------------
 
 
-def reference_flag(kind: str, position: int) -> Flag:
+def reference_flag(kind: CitedFlagKind, position: int) -> Flag:
     return Flag(
-        kind=kind,  # type: ignore[arg-type]
+        kind=kind,
         level="red",
         row_position=position,
         billed=Decimal("17700"),
