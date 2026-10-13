@@ -102,10 +102,10 @@ Rules that matter more than finding things:
 - Report what the bill shows, not what you assume. If you are unsure, use a
   lower `confidence` or leave it out. A charge that was correct, questioned at
   a counter, costs a family more than a charge you missed.
-- `numbers` holds the figures the family needs, as strings: for a price, the
-  `unit_price` you read and the `expected` you would have guessed; for a
-  quantity, the `quantity` and a `usual` figure; for a total, `stated` and
-  `summed`. Leave out what doesn't apply.
+- Fill in only the figures that apply, as strings of digits: for a price,
+  `unit_price` and the `expected` you would have guessed; for a quantity,
+  `quantity` and `usual`; for a total, `stated` and `summed`. Leave the rest
+  null.
 - `note` is your reasoning in one line, for our logs. It is never shown to
   anyone, so write it for an engineer, not for the family.
 - Never write an accusation, in any field. These are questions.
@@ -132,21 +132,43 @@ class ExtractedRow(BaseModel):
 
 
 class Observation(BaseModel):
-    """Something the reader noticed. A claim to check, not a flag."""
+    """Something the reader noticed. A claim to check, not a flag.
+
+    The figures are separate fields rather than a free-form mapping: a
+    `dict[str, str]` becomes a schema that allows no keys at all, so under
+    structured outputs the reader could never fill one in.
+    """
 
     kind: ObservationKind
     row_positions: list[int] = Field(
         default_factory=list, description="1-based positions in `rows` this is about."
     )
-    numbers: dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "Figures for the family, as strings: unit_price, expected, quantity,"
-            " usual, stated, summed. Leave out what doesn't apply."
-        ),
+    unit_price: str | None = Field(
+        default=None, description="For a price: what one unit was billed at, digits only."
     )
+    expected: str | None = Field(
+        default=None, description="For a price: what you would have expected one unit to cost."
+    )
+    quantity: str | None = Field(default=None, description="For a quantity: how many were billed.")
+    usual: str | None = Field(
+        default=None, description="For a quantity: how many a stay like this usually uses."
+    )
+    stated: str | None = Field(default=None, description="For a total: the total printed on the bill.")
+    summed: str | None = Field(default=None, description="For a total: what the rows add up to.")
     confidence: Literal["high", "medium", "low"] = "medium"
     note: str = Field(default="", description="One line of reasoning, for our logs only.")
+
+    def numbers(self) -> dict[str, str]:
+        """The figures that were given, for the app to put in its copy."""
+        given = {
+            "unit_price": self.unit_price,
+            "expected": self.expected,
+            "quantity": self.quantity,
+            "usual": self.usual,
+            "stated": self.stated,
+            "summed": self.summed,
+        }
+        return {key: value for key, value in given.items() if value}
 
 
 class ExtractedBill(BaseModel):
@@ -194,7 +216,8 @@ STUB_OBSERVATIONS = [
     Observation(
         kind="unit_price_high",
         row_positions=[1],
-        numbers={"unit_price": "6500", "expected": "4000"},
+        unit_price="6500",
+        expected="4000",
         confidence="medium",
         note="Stub observation: fixed, not read off the page.",
     )

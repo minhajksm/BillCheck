@@ -158,7 +158,7 @@ def _to_flag(
         reference_source="reader",
         excess=excess,
         reference_detail={
-            **observation.numbers,
+            **observation.numbers(),
             **numbers,
             "confidence": observation.confidence,
             "rows": ",".join(str(p) for p in positions),

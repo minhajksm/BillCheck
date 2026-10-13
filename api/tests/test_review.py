@@ -125,7 +125,7 @@ def test_a_judgment_of_degree_claims_no_amount():
     """ "This looks dear" has no defensible figure behind it. Putting one on
     screen would dress the reader's guess up as an amount."""
     flags = review(
-        bill([observe("unit_price_high", [1], numbers={"unit_price": "6500", "expected": "3000"})]),
+        bill([observe("unit_price_high", [1], unit_price="6500", expected="3000")]),
         [],
         ADMITTED,
     )
