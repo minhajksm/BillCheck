@@ -7,6 +7,7 @@ Three checks, in the order a family would notice them:
    printed MRP isn't allowed under India's Legal Metrology rules.
 2. **Duplicate** — the same charge entered twice for the same date and time.
    Red, though it is usually a data-entry mistake rather than a second visit.
+   Identical lines with no date or time are left alone: two doses look alike.
 3. **Unusual quantity** — far more of something than a ward stay usually uses.
    Amber only. There may be a real reason, such as a procedure or isolation
    care, so this is a question and never a verdict.
@@ -20,7 +21,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from references import ReferenceData, normalize, parse_quantity
+from references import PACKED_UNITS, ReferenceData, is_timed, normalize, parse_count, parse_quantity
 
 FlagKind = Literal["above_mrp", "duplicate", "quantity"]
 FlagLevel = Literal["red", "amber"]
@@ -54,6 +55,24 @@ class BillRow:
         bill had one, otherwise from the quantity as printed."""
         return self.quantity if self.quantity is not None else parse_quantity(self.detail)
 
+    def unit(self) -> str | None:
+        """The unit printed with the quantity, if any: "2 strips" -> "strip"."""
+        return parse_count(self.detail)[1]
+
+
+def _same_unit(row: BillRow, unit: str) -> bool:
+    """Whether the line counts the same thing as the reference.
+
+    "2 strips" of a tablet priced per tablet is 30 tablets, not 2, so a
+    printed unit must match. With no unit printed, a vial or bottle count is
+    taken as it stands, but tablets and capsules are sold in strips, so a bare
+    count of them is left unchecked rather than read as single tablets.
+    """
+    printed = row.unit()
+    if printed is not None:
+        return printed == unit
+    return unit not in PACKED_UNITS
+
 
 @dataclass(frozen=True)
 class Flag:
@@ -73,7 +92,7 @@ def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
         return None
 
     count = row.count()
-    if count is None or count <= 0 or row.amount <= 0:
+    if count is None or count <= 0 or row.amount <= 0 or not _same_unit(row, price.unit):
         return None
 
     ceiling, source = price.ceiling()
@@ -104,14 +123,15 @@ def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
 def _duplicates(rows: list[BillRow]) -> list[Flag]:
     """Flags every repeat after the first identical line.
 
-    Identical means the same item and the same printed detail, so two genuine
-    visits on different days are left alone, while the same visit entered twice
-    for 11 Oct 10:30 am is not.
+    Identical means the same item and the same printed date or time, so two
+    genuine visits on different days are left alone, while the same visit
+    entered twice for 11 Oct 10:30 am is not. A repeat without a date or time
+    ("1 vial" twice) is usually two doses, so it is never called a duplicate.
     """
     seen: dict[tuple[str, str], BillRow] = {}
     flags: list[Flag] = []
     for row in rows:
-        if not row.detail:
+        if not is_timed(row.detail):
             continue
         key = (normalize(row.name), normalize(row.detail))
         first = seen.get(key)
@@ -144,6 +164,11 @@ def _unusual_quantity(row: BillRow, references: ReferenceData) -> Flag | None:
 
     count = row.count()
     if count is None or count <= norm.usual_max_per_day or row.amount <= 0:
+        return None
+    # "2 boxes" of gloves says nothing about pairs. Amber is only a question,
+    # so a bare count is still compared; a different unit is not.
+    printed = row.unit()
+    if printed is not None and printed != norm.unit:
         return None
 
     unit_price = row.amount / count

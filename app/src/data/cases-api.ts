@@ -5,7 +5,7 @@
  * and nowhere else, so screens only ever see the types in `types.ts`.
  */
 
-import { apiFetch, API_URL, ApiError } from '@/lib/api';
+import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
 import type { Bill, Case, DailyBill, Flag, LineItem, Member } from './types';
 
 type ApiMember = { id: string; name: string; is_you: boolean };
@@ -165,8 +165,18 @@ export async function createCase(token: string, body: NewCase): Promise<Case> {
   return toCase(created);
 }
 
-export async function joinCase(token: string, caseId: string): Promise<Case> {
-  return toCase(await apiFetch<ApiCase>(`/cases/${caseId}/join`, { method: 'POST', token }));
+/** A new invite code to share with family. Shown once; valid for 7 days. */
+export async function createInvite(token: string, caseId: string): Promise<{ code: string; expiresAt: string }> {
+  const invite = await apiFetch<{ id: string; code: string; expires_at: string }>(`/cases/${caseId}/invites`, {
+    method: 'POST',
+    token,
+  });
+  return { code: invite.code, expiresAt: invite.expires_at };
+}
+
+/** Joins with a code from a family member. The code goes in the body, never the URL. */
+export async function joinCase(token: string, code: string): Promise<Case> {
+  return toCase(await apiFetch<ApiCase>('/cases/join', { method: 'POST', token, body: { code } }));
 }
 
 export async function readBill(token: string, billId: string): Promise<Bill> {
@@ -220,7 +230,7 @@ export async function uploadBill(
   if (!response.ok) {
     const detail = (data as { detail?: { code?: unknown } } | null)?.detail;
     const code = typeof detail?.code === 'string' ? detail.code : 'unknown';
-    throw new ApiError(code as never, response.status);
+    throw new ApiError(code as ApiErrorCode, response.status);
   }
   return toBill(data as ApiBill);
 }

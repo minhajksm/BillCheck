@@ -21,6 +21,13 @@ export type ApiErrorCode =
   | 'account_exists'
   | 'not_authenticated'
   | 'invalid_request'
+  | 'page_too_large'
+  | 'empty_page'
+  | 'unsupported_page'
+  | 'no_pages'
+  | 'too_many_pages'
+  | 'unreadable_bill'
+  | 'upload_limit'
   | 'network'
   | 'unknown';
 

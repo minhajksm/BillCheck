@@ -10,7 +10,14 @@ from pathlib import Path
 import pytest
 
 from audit import BillRow, audit_bill, total_excess
-from references import ReferenceData, load_reference_data, normalize, parse_quantity
+from references import (
+    ReferenceData,
+    is_timed,
+    load_reference_data,
+    normalize,
+    parse_count,
+    parse_quantity,
+)
 
 REFERENCES = load_reference_data(Path(__file__).resolve().parents[2] / "data/samples/reference-prices.json")
 
@@ -66,6 +73,117 @@ def test_prefers_the_most_specific_alias():
     more specific one exists."""
     price = REFERENCES.price_for("Inj. Meropenem 1g")
     assert price is not None and price.name == "Meropenem 1g injection"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Another strength of the same drug: a 2g vial isn't "above" a 1g price.
+        "Inj. Meropenem 2g",
+        "Inj. Meropenem 500mg",
+        # Another form: an infusion isn't a tablet, whatever the drug.
+        "Inj. Paracetamol 1g IV infusion",
+        "Inj. Paracetamol 650mg",
+        # No strength printed: we can't tell which product it is.
+        "Inj. Meropenem",
+        # A combination isn't the single drug.
+        "Inj. Meropenem 1g + Sulbactam 0.5g",
+    ],
+)
+def test_a_price_only_checks_its_exact_product(line: str):
+    assert REFERENCES.price_for(line) is None
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("Inj. Meropenem 1g", "Meropenem 1g injection"),
+        ("MEROPENEM 1 G INJ", "Meropenem 1g injection"),
+        ("Meropenem 1000mg vial", "Meropenem 1g injection"),
+        ("Tab Paracetamol 650 mg", "Paracetamol 650mg tablet"),
+        ("Paracetamol 650mg", "Paracetamol 650mg tablet"),
+    ],
+)
+def test_the_same_product_matches_however_it_is_written(line: str, expected: str):
+    price = REFERENCES.price_for(line)
+    assert price is not None and price.name == expected
+
+
+def test_aliases_match_whole_words_only():
+    assert REFERENCES.norm_for("Glovesbox holder") is None
+    assert REFERENCES.norm_for("Surgical gloves") is not None
+
+
+def test_a_price_entry_without_strength_and_form_is_refused(tmp_path: Path):
+    """Without them an entry would check every strength of the drug."""
+    path = tmp_path / "prices.json"
+    path.write_text(
+        '{"prices": [{"name": "Meropenem", "aliases": ["meropenem"], "unit": "vial", "mrp": 1840}]}'
+    )
+    with pytest.raises(ValueError, match="strength"):
+        load_reference_data(path)
+
+
+@pytest.mark.parametrize(
+    ("name", "detail", "amount"),
+    [
+        ("Inj. Meropenem 2g", "2 vials", "6400"),
+        ("Inj. Paracetamol 1g IV infusion", "1 bottle", "180"),
+    ],
+)
+def test_no_red_flag_for_another_strength_or_form(name: str, detail: str, amount: str):
+    """Both were raised as "above MRP" against the wrong product before."""
+    assert audit_bill([row(1, name, detail, amount)], REFERENCES) == []
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected"),
+    [
+        ("2 strips", (Decimal("2"), "strip")),
+        ("10 Tabs", (Decimal("10"), "tablet")),
+        ("6 vials", (Decimal("6"), "vial")),
+        ("1 box", (Decimal("1"), "pack")),
+        ("4", (Decimal("4"), None)),
+        ("3 widgets", (Decimal("3"), "widgets")),
+        ("11 Oct, 10:30 am", (None, None)),
+    ],
+)
+def test_parse_count_reads_the_unit(detail: str, expected: tuple):
+    assert parse_count(detail) == expected
+
+
+@pytest.mark.parametrize(
+    ("name", "detail", "amount"),
+    [
+        # Two strips of 15 tablets at about ₹2 each, not two ₹30 tablets.
+        ("Tab. Paracetamol 650mg", "2 strips", "60"),
+        # A box of vials is not one vial.
+        ("Inj. Meropenem 1g", "1 box", "9200"),
+        # Tablets are sold in strips, so a bare count can't be read as tablets.
+        ("Tab. Paracetamol 650mg", "2", "60"),
+        # A unit we don't recognise never matches.
+        ("Inj. Meropenem 1g", "6 units", "17700"),
+    ],
+)
+def test_no_red_flag_when_the_unit_differs_or_is_unclear(name: str, detail: str, amount: str):
+    assert audit_bill([row(1, name, detail, amount)], REFERENCES) == []
+
+
+def test_still_flags_when_the_unit_is_stated():
+    """30 tablets at ₹5 is ₹2.80 a tablet over the ₹2.20 ceiling."""
+    (flag,) = audit_bill([row(1, "Tab. Paracetamol 650mg", "30 tabs", "150")], REFERENCES)
+    assert flag.kind == "above_mrp"
+    assert flag.reference_amount == Decimal("66.00")
+
+
+def test_a_bare_vial_count_is_still_checked():
+    """Vials are counted one by one, so a count with no unit is taken as vials."""
+    (flag,) = audit_bill([row(1, "Inj. Meropenem 1g", "6", "17700")], REFERENCES)
+    assert flag.excess == Decimal("6660.00")
+
+
+def test_quantity_norm_ignores_another_unit():
+    assert audit_bill([row(1, "Surgical gloves", "2 boxes", "1800")], REFERENCES) == []
 
 
 def test_unknown_items_have_no_reference():
@@ -169,8 +287,8 @@ def test_a_duplicate_is_asked_about_once():
     price too would ask the family two questions about one mistake."""
     flags = audit_bill(
         [
-            row(1, "Inj. Meropenem 1g", "6 vials", "17700"),
-            row(2, "Inj. Meropenem 1g", "6 vials", "17700"),
+            row(1, "Inj. Meropenem 1g", "11 Oct, 08:00", "17700", quantity="6"),
+            row(2, "Inj. Meropenem 1g", "11 Oct, 08:00", "17700", quantity="6"),
         ],
         REFERENCES,
     )
@@ -181,6 +299,41 @@ def test_a_duplicate_is_asked_about_once():
         ("duplicate", 2),
     ]
     assert [flag.kind for flag in flags if flag.row_position == 2] == ["duplicate"]
+
+
+@pytest.mark.parametrize(
+    "detail",
+    ["1 vial", "2 tabs", "1 day", None],
+)
+def test_identical_lines_without_a_date_or_time_are_not_duplicates(detail: str | None):
+    """A morning and an evening dose print exactly alike. Calling the second a
+    duplicate would accuse the hospital of charging twice for one dose."""
+    flags = audit_bill(
+        [
+            row(1, "Inj. Pantoprazole 40mg", detail, "55"),
+            row(2, "Inj. Pantoprazole 40mg", detail, "55"),
+        ],
+        REFERENCES,
+    )
+    assert [flag.kind for flag in flags if flag.kind == "duplicate"] == []
+
+
+@pytest.mark.parametrize(
+    ("detail", "timed"),
+    [
+        ("11 Oct, 10:30 am", True),
+        ("11/10/2026", True),
+        ("10:30", True),
+        ("9 PM", True),
+        ("12 October", True),
+        ("1 vial", False),
+        ("2 tabs", False),
+        ("1 day", False),
+        (None, False),
+    ],
+)
+def test_is_timed(detail: str | None, timed: bool):
+    assert is_timed(detail) is timed
 
 
 # --- quantity norms ----------------------------------------------------------

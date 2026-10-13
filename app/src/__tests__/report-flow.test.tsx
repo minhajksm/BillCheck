@@ -50,7 +50,7 @@ describe('the bill report', () => {
 
     expect(await screen.findByText('Inj. Meropenem 1g')).toBeVisible();
     // The reference is on screen, not just the verdict.
-    expect(screen.getByText('Billed ₹2,950 a vial. Printed MRP is ₹1,840.')).toBeVisible();
+    expect(screen.getByText('Billed ₹2,950 a vial. The listed MRP is ₹1,840.')).toBeVisible();
     expect(screen.getByText('Above MRP')).toBeVisible();
 
     expect(screen.getByText('Surgical gloves')).toBeVisible();
@@ -81,7 +81,7 @@ describe('the bill report', () => {
     expect(await screen.findByText("Why it's flagged")).toBeVisible();
     expect(screen.getByText(/Legal Metrology/)).toBeVisible();
     expect(screen.getByText('What to ask')).toBeVisible();
-    expect(screen.getByText(/Ask the hospital pharmacy to bill at MRP/)).toBeVisible();
+    expect(screen.getByText(/Ask the hospital pharmacy to show you the MRP and batch details printed on the pack/)).toBeVisible();
     // Billed, reference and difference, side by side.
     expect(screen.getByText('₹17,700')).toBeVisible();
     expect(screen.getByText('₹11,040')).toBeVisible();
