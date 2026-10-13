@@ -43,12 +43,18 @@ TOTAL_TOLERANCE = Decimal("1")
 # What a confirmed observation is worth. Everything else is a question.
 CHECKABLE = frozenset({"total_mismatch", "duplicate_line", "date_outside_stay"})
 
+# Kinds that are about the bill as a whole, so citing no row is not a reader
+# that lost its numbering. Everything else must name a row to be shown.
+BILL_LEVEL = frozenset({"total_mismatch", "rounded_amounts", "advance_not_deducted"})
+
 # Kinds the reference lists already decide. If the reader says the same thing,
 # the cited flag wins and the reader's is dropped, so the family is asked once.
 COVERED_BY_REFERENCES = {
     "unit_price_high": "above_mrp",
+    "capped_item_above_ceiling": "above_mrp",
     "quantity_high": "quantity",
     "duplicate_line": "duplicate",
+    "same_drug_twice_sources": "duplicate",
 }
 
 
@@ -166,10 +172,13 @@ def _rows_outside_stay(
 WHOLE_LINE = frozenset(
     {
         "duplicate_line",
+        "same_drug_twice_sources",
         "same_test_two_names",
         "non_medical_item",
         "service_charge_on_room",
+        "nursing_billed_with_room",
         "package_overlap",
+        "tax_on_exempt_item",
         "date_outside_stay",
     }
 )
@@ -227,7 +236,7 @@ def review(
 
     for observation in bill.observations:
         positions = _rows_of(observation, row_count)
-        if not positions and observation.kind != "total_mismatch":
+        if not positions and observation.kind not in BILL_LEVEL:
             logger.info("Dropped %s: points at rows that aren't there", observation.kind)
             continue
 

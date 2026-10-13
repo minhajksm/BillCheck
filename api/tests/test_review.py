@@ -288,3 +288,50 @@ def test_scans_rows_the_reader_said_nothing_about():
 def test_an_open_stay_has_no_upper_bound():
     """Mid-admission, there is no discharge date yet, so nothing is "after"."""
     assert review(dated_bill(["20 Oct, 9:00 am"]), [], ADMITTED) == []
+
+
+# --- the wider set of kinds --------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["rounded_amounts", "advance_not_deducted"])
+def test_a_bill_level_claim_may_name_no_rows(kind: str):
+    """These are about the bill, not a row, so citing none is not a reader that
+    lost its numbering."""
+    flags = review(bill([observe(kind, [])]), [], ADMITTED)
+    assert [flag.kind for flag in flags] == [kind]
+    assert flags[0].excess == Decimal("0"), "no figure we could defend"
+
+
+@pytest.mark.parametrize("kind", ["tax_on_exempt_item", "icu_rate_on_ward_day"])
+def test_a_row_level_claim_still_has_to_name_a_row(kind: str):
+    assert review(bill([observe(kind, [])]), [], ADMITTED) == []
+
+
+def test_the_whole_line_comes_off_a_tax_on_an_exempt_item():
+    flags = review(bill([observe("tax_on_exempt_item", [4])]), [], ADMITTED)
+    assert flags[0].excess == Decimal("450"), "if the tax shouldn't be there, it all comes off"
+
+
+def test_a_drug_billed_twice_from_two_places_is_worth_the_repeat():
+    flags = review(bill([observe("same_drug_twice_sources", [2, 3])]), [], ADMITTED)
+    assert flags[0].excess == Decimal("2500")
+
+
+@pytest.mark.parametrize(
+    "kind", ["room_rate_vs_ward", "branded_drug_margin", "capped_item_above_ceiling", "visits_in_one_day"]
+)
+def test_the_new_judgments_of_degree_claim_no_amount(kind: str):
+    """ "This looks dear" has no defensible figure behind it, whichever way the
+    reader phrases it."""
+    flags = review(bill([observe(kind, [1])]), [], ADMITTED)
+    assert flags[0].excess == Decimal("0")
+    assert flags[0].level == "amber"
+
+
+def test_a_cited_price_flag_wins_over_the_reader_s_ceiling_claim():
+    """Asked once. The price list can show the family the ceiling; the reader
+    can only remember it."""
+    flags = review(
+        bill([observe("capped_item_above_ceiling", [1])]), [reference_flag("above_mrp", 1)], ADMITTED
+    )
+    assert [flag.reference_source for flag in flags] == ["mrp"]

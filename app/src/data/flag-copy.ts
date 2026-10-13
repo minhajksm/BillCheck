@@ -196,12 +196,23 @@ function readerCopy(t: TFunction, flag: Flag, tag: string, item?: LineItem): Fla
         ask: t('flags.askSameTestTwoNames'),
         referenceLabel,
       };
-    default:
+    case 'non_medical_item':
       return {
         tag,
         short: t('flags.shortNonMedicalItem'),
         why: t('flags.whyNonMedicalItem'),
         ask: t('flags.askNonMedicalItem'),
+        referenceLabel,
+      };
+    // A kind with no wording of its own yet. It must not borrow another
+    // kind's: telling a family a tax line "isn't part of the treatment" is
+    // simply false. This says only what we actually know — that we noticed it.
+    default:
+      return {
+        tag,
+        short: t('flags.shortNoticed'),
+        why: t('flags.whyNoticed'),
+        ask: t('flags.askNoticed'),
         referenceLabel,
       };
   }

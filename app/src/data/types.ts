@@ -52,15 +52,29 @@ export type CitedFlagKind = 'above_mrp' | 'duplicate' | 'quantity';
  * the rows; none has a published reference behind it, so none is ever red.
  */
 export type ReaderFlagKind =
+  // Contradictions on the page. Some are re-checked against the rows.
   | 'total_mismatch'
   | 'duplicate_line'
+  | 'equipment_hours_exceed_stay'
   | 'date_outside_stay'
+  | 'implant_without_identity'
+  | 'rounded_amounts'
+  | 'advance_not_deducted'
+  // What an experienced eye notices. Nothing can confirm these.
   | 'unit_price_high'
-  | 'quantity_high'
+  | 'branded_drug_margin'
+  | 'capped_item_above_ceiling'
   | 'non_medical_item'
   | 'package_overlap'
+  | 'nursing_billed_with_room'
   | 'service_charge_on_room'
-  | 'same_test_two_names';
+  | 'quantity_high'
+  | 'visits_in_one_day'
+  | 'same_test_two_names'
+  | 'same_drug_twice_sources'
+  | 'room_rate_vs_ward'
+  | 'icu_rate_on_ward_day'
+  | 'tax_on_exempt_item';
 
 export type FlagKind = CitedFlagKind | ReaderFlagKind;
 export type FlagLevel = 'red' | 'amber';
