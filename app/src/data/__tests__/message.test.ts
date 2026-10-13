@@ -19,7 +19,7 @@ describe('the message to the billing desk', () => {
 
     expect(message).toContain('Ramesh Sharma');
     expect(message).toContain('IP no. 20841');
-    expect(message).toContain('1. Inj. Meropenem 1g is billed at ₹2,950 per vial, but the printed MRP is ₹1,840.');
+    expect(message).toContain('1. Inj. Meropenem 1g is billed at ₹2,950 per vial. The listed MRP for it is ₹1,840. Could you show me the MRP printed on the pack?');
     expect(message).toContain('2. 80 pairs of Surgical gloves are billed for one day.');
     expect(message).toContain('Please share a corrected bill or an explanation.');
   });
