@@ -10,7 +10,14 @@ from pathlib import Path
 import pytest
 
 from audit import BillRow, audit_bill, total_excess
-from references import ReferenceData, load_reference_data, normalize, parse_count, parse_quantity
+from references import (
+    ReferenceData,
+    is_timed,
+    load_reference_data,
+    normalize,
+    parse_count,
+    parse_quantity,
+)
 
 REFERENCES = load_reference_data(Path(__file__).resolve().parents[2] / "data/samples/reference-prices.json")
 
@@ -280,8 +287,8 @@ def test_a_duplicate_is_asked_about_once():
     price too would ask the family two questions about one mistake."""
     flags = audit_bill(
         [
-            row(1, "Inj. Meropenem 1g", "6 vials", "17700"),
-            row(2, "Inj. Meropenem 1g", "6 vials", "17700"),
+            row(1, "Inj. Meropenem 1g", "11 Oct, 08:00", "17700", quantity="6"),
+            row(2, "Inj. Meropenem 1g", "11 Oct, 08:00", "17700", quantity="6"),
         ],
         REFERENCES,
     )
@@ -292,6 +299,41 @@ def test_a_duplicate_is_asked_about_once():
         ("duplicate", 2),
     ]
     assert [flag.kind for flag in flags if flag.row_position == 2] == ["duplicate"]
+
+
+@pytest.mark.parametrize(
+    "detail",
+    ["1 vial", "2 tabs", "1 day", None],
+)
+def test_identical_lines_without_a_date_or_time_are_not_duplicates(detail: str | None):
+    """A morning and an evening dose print exactly alike. Calling the second a
+    duplicate would accuse the hospital of charging twice for one dose."""
+    flags = audit_bill(
+        [
+            row(1, "Inj. Pantoprazole 40mg", detail, "55"),
+            row(2, "Inj. Pantoprazole 40mg", detail, "55"),
+        ],
+        REFERENCES,
+    )
+    assert [flag.kind for flag in flags if flag.kind == "duplicate"] == []
+
+
+@pytest.mark.parametrize(
+    ("detail", "timed"),
+    [
+        ("11 Oct, 10:30 am", True),
+        ("11/10/2026", True),
+        ("10:30", True),
+        ("9 PM", True),
+        ("12 October", True),
+        ("1 vial", False),
+        ("2 tabs", False),
+        ("1 day", False),
+        (None, False),
+    ],
+)
+def test_is_timed(detail: str | None, timed: bool):
+    assert is_timed(detail) is timed
 
 
 # --- quantity norms ----------------------------------------------------------

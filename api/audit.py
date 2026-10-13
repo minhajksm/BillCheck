@@ -7,6 +7,7 @@ Three checks, in the order a family would notice them:
    printed MRP isn't allowed under India's Legal Metrology rules.
 2. **Duplicate** — the same charge entered twice for the same date and time.
    Red, though it is usually a data-entry mistake rather than a second visit.
+   Identical lines with no date or time are left alone: two doses look alike.
 3. **Unusual quantity** — far more of something than a ward stay usually uses.
    Amber only. There may be a real reason, such as a procedure or isolation
    care, so this is a question and never a verdict.
@@ -20,7 +21,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from references import PACKED_UNITS, ReferenceData, normalize, parse_count, parse_quantity
+from references import PACKED_UNITS, ReferenceData, is_timed, normalize, parse_count, parse_quantity
 
 FlagKind = Literal["above_mrp", "duplicate", "quantity"]
 FlagLevel = Literal["red", "amber"]
@@ -122,14 +123,15 @@ def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
 def _duplicates(rows: list[BillRow]) -> list[Flag]:
     """Flags every repeat after the first identical line.
 
-    Identical means the same item and the same printed detail, so two genuine
-    visits on different days are left alone, while the same visit entered twice
-    for 11 Oct 10:30 am is not.
+    Identical means the same item and the same printed date or time, so two
+    genuine visits on different days are left alone, while the same visit
+    entered twice for 11 Oct 10:30 am is not. A repeat without a date or time
+    ("1 vial" twice) is usually two doses, so it is never called a duplicate.
     """
     seen: dict[tuple[str, str], BillRow] = {}
     flags: list[Flag] = []
     for row in rows:
-        if not row.detail:
+        if not is_timed(row.detail):
             continue
         key = (normalize(row.name), normalize(row.detail))
         first = seen.get(key)

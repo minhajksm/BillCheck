@@ -114,6 +114,21 @@ def form_group(item_name: str) -> str | None:
     return groups.pop() if len(groups) == 1 else None
 
 
+_TIME = re.compile(r"\b\d{1,2}[:.]\d{2}\b|\b(?:am|pm)\b", re.IGNORECASE)
+_DATE = re.compile(r"\b\d{1,2}\s*[/-]\s*\d{1,2}(?:\s*[/-]\s*\d{2,4})?\b")
+
+
+def is_timed(detail: str | None) -> bool:
+    """Whether a detail pins a charge to a moment: "11 Oct, 10:30 am",
+    "11/10", "10:30". Only then is a repeated line the same charge twice;
+    "1 vial" twice is usually a morning and an evening dose."""
+    if not detail:
+        return False
+    if _TIME.search(detail) or _DATE.search(detail):
+        return True
+    return any(word in _MONTHS for word in normalize(detail).split())
+
+
 def parse_quantity(detail: str | None) -> Decimal | None:
     """Reads the count off the quantity as printed: "6 vials" -> 6.
 
