@@ -19,6 +19,10 @@ Three outcomes for an observation:
 Note the asymmetry. Checking can only *reject* a judgment call, never confirm
 one, so no observation that rests on the reader's knowledge is ever red. Red
 means we can show the family where the number came from.
+
+One check does not wait to be proposed. A row dated outside the admission is
+decidable from the rows and the case record alone, and the reader is never told
+when the admission was, so `_rows_outside_stay` scans for it directly.
 """
 
 import logging
@@ -96,6 +100,30 @@ def _confirm_duplicate(bill: ExtractedBill, positions: list[int]) -> tuple[bool,
     return True, {"repeated_detail": first.detail or "", "first_row_position": str(positions[0])}
 
 
+def _date_detail(on: date, admitted_on: date, closed_on: date | None) -> dict[str, str]:
+    """What the app shows a family: the row's date, and the stay it is outside."""
+    return {
+        "row_date": on.isoformat(),
+        "admitted_on": admitted_on.isoformat(),
+        **({"closed_on": closed_on.isoformat()} if closed_on else {}),
+    }
+
+
+def _bill_year(bill: ExtractedBill, admitted_on: date) -> int:
+    """The year to read a row's date in, where the row prints none.
+
+    Bills routinely print "11 Oct" and leave the year off. Falling back to the
+    current year would misdate every row of an older bill by years and flag the
+    whole thing, so the bill's own date is preferred, then the admission's.
+    """
+    if bill.bill_date:
+        try:
+            return date.fromisoformat(bill.bill_date).year
+        except ValueError:
+            pass
+    return admitted_on.year
+
+
 def _confirm_date(
     bill: ExtractedBill, positions: list[int], admitted_on: date, closed_on: date | None
 ) -> tuple[bool, dict[str, str]]:
@@ -103,16 +131,32 @@ def _confirm_date(
     if not positions:
         return False, {}
     row = bill.rows[positions[0] - 1]
-    on = parse_bill_date(row.detail)
+    on = parse_bill_date(row.detail, _bill_year(bill, admitted_on))
     if on is None:
         return False, {}
     if admitted_on <= on <= (closed_on or date.max):
         return False, {}
-    return True, {
-        "row_date": on.isoformat(),
-        "admitted_on": admitted_on.isoformat(),
-        **({"closed_on": closed_on.isoformat()} if closed_on else {}),
-    }
+    return True, _date_detail(on, admitted_on, closed_on)
+
+
+def _rows_outside_stay(
+    bill: ExtractedBill, admitted_on: date, closed_on: date | None
+) -> list[tuple[int, date]]:
+    """Every row whose own date falls outside the stay.
+
+    This is the one check that runs over all the rows rather than waiting for
+    the reader to raise it. The reader is never told when the admission was, so
+    it cannot judge this; and both dates are already in hand, so comparing them
+    is not something to ask a model to do.
+    """
+    until = closed_on or date.max
+    year = _bill_year(bill, admitted_on)
+    outside = []
+    for position, row in enumerate(bill.rows, start=1):
+        on = parse_bill_date(row.detail, year)
+        if on is not None and not admitted_on <= on <= until:
+            outside.append((position, on))
+    return outside
 
 
 # Kinds where the whole line is what is being questioned, so the line's own
@@ -223,6 +267,22 @@ def review(
             logger.info("Dropped %s: the reader wasn't sure", observation.kind)
             continue
         flags.append(_to_flag(observation, positions, "amber", {}, bill))
+
+    # The stay check, which nobody had to propose.
+    raised = {flag.row_position for flag in flags if flag.kind == "date_outside_stay"}
+    for position, on in _rows_outside_stay(bill, admitted_on, closed_on):
+        if position in raised:
+            continue
+        # Synthesised so this takes the same path as a confirmed observation:
+        # one way of building a flag, one shape of reference_detail.
+        checked = Observation(
+            kind="date_outside_stay",
+            row_positions=[position],
+            confidence="high",
+            note="Checked against the stay; the reader did not raise it.",
+        )
+        logger.info("Row %d is dated %s, outside the stay", position, on.isoformat())
+        flags.append(_to_flag(checked, [position], "amber", _date_detail(on, admitted_on, closed_on), bill))
 
     return _renumber(reference_flags + flags)
 
