@@ -92,6 +92,24 @@ class CaseMember(Base):
     user: Mapped[User] = relationship()
 
 
+class CaseInvite(Base):
+    """A code a member shares so family can join the case.
+
+    Separate from the case id on purpose: the id shows up in links and logs,
+    while a code can expire and be withdrawn. Only its hash is kept.
+    """
+
+    __tablename__ = "case_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class Bill(Base):
     """One day's itemized bill.
 

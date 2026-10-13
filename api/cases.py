@@ -1,28 +1,36 @@
 """Cases: one hospital admission, shared with family.
 
-Everything about a case is visible to its members and to nobody else. The
-invite is the case's own id: a link carrying it lets a family member join, the
-same way sending a WhatsApp link does.
+Everything about a case is visible to its members and to nobody else. Family
+join with an invite code a member creates: it expires, can be withdrawn, and is
+stored only as a hash. The case id is never enough to join, since ids show up
+in links and logs.
 """
 
+import hashlib
+import secrets
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from auth import CurrentUser, Db
 from db import utcnow
-from models import CaseCreate, CaseOut, DailyBillOut, MemberOut
-from tables import Bill, Case, CaseMember, Flag, LineItem, User
+from models import CaseCreate, CaseOut, DailyBillOut, InviteCreated, InviteOut, JoinCase, MemberOut
+from tables import Bill, Case, CaseInvite, CaseMember, Flag, LineItem, User
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
+INVITE_TTL = timedelta(days=7)
+
 ERRORS = {
     "case_not_found": "This case isn't available.",
-    "already_a_member": "You already follow this case.",
+    "invite_invalid": "This invite has expired or was withdrawn. Ask for a new one.",
+    "member_not_found": "That person doesn't follow this case.",
+    "not_case_owner": "Only the person who started the case can remove someone.",
+    "owner_cannot_leave": "You started this case, so you can't leave it.",
 }
 
 
@@ -176,28 +184,100 @@ def read_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> CaseOut:
     return case_out(db, load_case(db, case_id, user), user)
 
 
-@router.post("/{case_id}/join", response_model=CaseOut)
-def join_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> CaseOut:
-    """Joins a case from an invite link.
+def _hash_code(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
 
-    The link carries the case id, so anyone a family member shares it with can
-    follow the case. That is what sharing the link means; the id is random
-    enough not to be found by guessing.
-    """
-    case = db.scalar(
+
+def _load_case_by_id(db: Session, case_id: uuid.UUID) -> Case | None:
+    return db.scalar(
         select(Case)
         .where(Case.id == case_id)
         .options(selectinload(Case.members).selectinload(CaseMember.user), selectinload(Case.bills))
     )
-    if case is None:
-        raise case_error(status.HTTP_404_NOT_FOUND, "case_not_found")
-    if any(member.user_id == user.id for member in case.members):
-        return case_out(db, case, user)
 
-    db.add(CaseMember(case_id=case.id, user_id=user.id))
-    db.commit()
-    db.refresh(case)
+
+@router.post("/join", response_model=CaseOut)
+def join_case(body: JoinCase, db: Db, user: CurrentUser) -> CaseOut:
+    """Joins a case with an invite code from a family member.
+
+    An unknown, expired, or withdrawn code all answer the same way, so a code
+    can't be tested for whether it once existed.
+    """
+    invite = db.scalar(select(CaseInvite).where(CaseInvite.code_hash == _hash_code(body.code)))
+    if invite is None or invite.revoked_at is not None or invite.expires_at <= utcnow():
+        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
+    case = _load_case_by_id(db, invite.case_id)
+    if case is None:
+        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
+    if not any(member.user_id == user.id for member in case.members):
+        db.add(CaseMember(case_id=case.id, user_id=user.id))
+        db.commit()
+        db.refresh(case)
     return case_out(db, case, user)
+
+
+@router.post("/{case_id}/invites", status_code=status.HTTP_201_CREATED, response_model=InviteCreated)
+def create_invite(case_id: uuid.UUID, db: Db, user: CurrentUser) -> InviteCreated:
+    """A new invite code for this case, valid for 7 days. Members only.
+
+    The code is returned once and stored only as a hash; share it, and
+    withdraw it if it goes to the wrong person.
+    """
+    case = load_case(db, case_id, user)
+    code = secrets.token_urlsafe(16)
+    invite = CaseInvite(
+        case_id=case.id, code_hash=_hash_code(code), created_by=user.id, expires_at=utcnow() + INVITE_TTL
+    )
+    db.add(invite)
+    db.commit()
+    return InviteCreated(id=invite.id, code=code, expires_at=invite.expires_at)
+
+
+@router.get("/{case_id}/invites", response_model=list[InviteOut])
+def list_invites(case_id: uuid.UUID, db: Db, user: CurrentUser) -> list[InviteOut]:
+    """The invites still usable, so one sent to the wrong person can be withdrawn."""
+    case = load_case(db, case_id, user)
+    invites = db.scalars(
+        select(CaseInvite)
+        .where(
+            CaseInvite.case_id == case.id, CaseInvite.revoked_at.is_(None), CaseInvite.expires_at > utcnow()
+        )
+        .order_by(CaseInvite.created_at)
+    ).all()
+    return [
+        InviteOut(id=i.id, created_by=i.created_by, created_at=i.created_at, expires_at=i.expires_at)
+        for i in invites
+    ]
+
+
+@router.post("/{case_id}/invites/{invite_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_invite(case_id: uuid.UUID, invite_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
+    """Withdraws an invite. Anyone who already joined stays a member."""
+    case = load_case(db, case_id, user)
+    invite = db.get(CaseInvite, invite_id)
+    if invite is None or invite.case_id != case.id:
+        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
+    if invite.revoked_at is None:
+        invite.revoked_at = utcnow()
+        db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{case_id}/members/{member_id}/remove", status_code=status.HTTP_204_NO_CONTENT)
+def remove_member(case_id: uuid.UUID, member_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
+    """Takes someone off the case. Anyone can leave; only whoever started the
+    case can remove someone else, and they can't leave it themselves."""
+    case = load_case(db, case_id, user)
+    member = next((m for m in case.members if m.user_id == member_id), None)
+    if member is None:
+        raise case_error(status.HTTP_404_NOT_FOUND, "member_not_found")
+    if member_id != user.id and user.id != case.created_by:
+        raise case_error(status.HTTP_403_FORBIDDEN, "not_case_owner")
+    if member_id == case.created_by:
+        raise case_error(status.HTTP_409_CONFLICT, "owner_cannot_leave")
+    db.delete(member)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{case_id}/close", response_model=CaseOut)

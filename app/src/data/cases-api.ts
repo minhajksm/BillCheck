@@ -165,8 +165,18 @@ export async function createCase(token: string, body: NewCase): Promise<Case> {
   return toCase(created);
 }
 
-export async function joinCase(token: string, caseId: string): Promise<Case> {
-  return toCase(await apiFetch<ApiCase>(`/cases/${caseId}/join`, { method: 'POST', token }));
+/** A new invite code to share with family. Shown once; valid for 7 days. */
+export async function createInvite(token: string, caseId: string): Promise<{ code: string; expiresAt: string }> {
+  const invite = await apiFetch<{ id: string; code: string; expires_at: string }>(`/cases/${caseId}/invites`, {
+    method: 'POST',
+    token,
+  });
+  return { code: invite.code, expiresAt: invite.expires_at };
+}
+
+/** Joins with a code from a family member. The code goes in the body, never the URL. */
+export async function joinCase(token: string, code: string): Promise<Case> {
+  return toCase(await apiFetch<ApiCase>('/cases/join', { method: 'POST', token, body: { code } }));
 }
 
 export async function readBill(token: string, billId: string): Promise<Bill> {

@@ -140,6 +140,26 @@ class CaseOut(BaseModel):
     recovered_amount: float
 
 
+class InviteCreated(BaseModel):
+    """The code is shown once, here. Only its hash is stored."""
+
+    id: uuid.UUID
+    code: str
+    expires_at: datetime
+
+
+class InviteOut(BaseModel):
+    id: uuid.UUID
+    created_by: uuid.UUID
+    created_at: datetime
+    expires_at: datetime
+
+
+class JoinCase(BaseModel):
+    # In the body, not the URL, so it never lands in access logs.
+    code: Annotated[str, StringConstraints(strip_whitespace=True, min_length=8, max_length=64)]
+
+
 # --- bills ------------------------------------------------------------------
 
 

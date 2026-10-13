@@ -96,7 +96,9 @@ Tests use an in-memory SQLite database, so they don't need Postgres running.
 - **Cases** (`cases.py`), all signed in. A case is one admission, shared with family.
   - `POST /cases` opens one. Whoever opens it is its first member.
   - `GET /cases` lists the ones you follow; `GET /cases/{id}` reads one. A case you don't follow answers 404, not 403, so an id can't be used to confirm that someone is in hospital.
-  - `POST /cases/{id}/join` joins from an invite link. The link carries the case id, which is what sharing it means.
+  - `POST /cases/{id}/invites` makes an invite code (members only). It's shown once, stored only as a hash, and expires after 7 days. `GET /cases/{id}/invites` lists the live ones and `POST /cases/{id}/invites/{invite_id}/revoke` withdraws one.
+  - `POST /cases/join` with `{"code"}` joins. The code goes in the body so it never lands in access logs. An unknown, expired or withdrawn code all answer `404 invite_invalid`. The case id alone can't be used to join.
+  - `POST /cases/{id}/members/{user_id}/remove`: anyone can leave; only whoever started the case can remove someone else, and they can't leave it.
   - `POST /cases/{id}/close` marks the stay over. Reports stay readable.
 - **Bills and flags** (`bills.py`), all signed in.
   - `POST /cases/{id}/bills` takes the photographed pages as multipart `pages` (JPEG, PNG, WebP or HEIC, up to 15 MB each, 12 pages). It reads them into line items, runs the audit, and returns the bill with its flags. **The photos are never stored** — read in memory, then dropped.
