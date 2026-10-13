@@ -90,7 +90,7 @@ def _confirm_duplicate(bill: ExtractedBill, positions: list[int]) -> tuple[bool,
     return True, {"repeated_detail": first.detail or "", "first_row_position": str(positions[0])}
 
 
-def _date_detail(on: date, admitted_on: date, closed_on: date | None) -> dict[str, str]:
+def date_detail(on: date, admitted_on: date, closed_on: date | None) -> dict[str, str]:
     """What the app shows a family: the row's date, and the stay it is outside."""
     return {
         "row_date": on.isoformat(),
@@ -126,7 +126,7 @@ def _confirm_date(
         return False, {}
     if admitted_on <= on <= (closed_on or date.max):
         return False, {}
-    return True, _date_detail(on, admitted_on, closed_on)
+    return True, date_detail(on, admitted_on, closed_on)
 
 
 def _rows_outside_stay(
@@ -256,7 +256,7 @@ def review(
             note="Checked against the stay; the reader did not raise it.",
         )
         logger.info("Row %d is dated %s, outside the stay", position, on.isoformat())
-        flags.append(_to_flag(checked, [position], "amber", _date_detail(on, admitted_on, closed_on), bill))
+        flags.append(_to_flag(checked, [position], "amber", date_detail(on, admitted_on, closed_on), bill))
 
     return _renumber(reference_flags + flags)
 

@@ -23,6 +23,7 @@ const papa: Case = {
   admittedOn: '2026-10-09',
   dayOfStay: 3,
   members: [{ id: 'u1', name: 'Rohan Sharma', isYou: true }],
+  isOwner: true,
   bills: [
     bill({ id: 'b-day1', date: '2026-10-09', day: 1, itemCount: 24, total: 68490 }),
     bill({ id: 'b-day2', date: '2026-10-10', day: 2, itemCount: 37, total: 31400 }),

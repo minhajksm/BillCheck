@@ -32,6 +32,7 @@ type ApiCase = {
   closed_on: string | null;
   day_of_stay: number;
   members: ApiMember[];
+  is_owner: boolean;
   bills: ApiDailyBill[];
   recovered_amount: number;
 };
@@ -91,6 +92,7 @@ export const toCase = (c: ApiCase): Case => ({
   dayOfStay: c.day_of_stay,
   closedOn: c.closed_on ?? undefined,
   members: c.members.map(toMember),
+  isOwner: c.is_owner,
   bills: c.bills.map(toDailyBill),
   recoveredAmount: c.recovered_amount,
 });
@@ -163,6 +165,35 @@ export async function createCase(token: string, body: NewCase): Promise<Case> {
     },
   });
   return toCase(created);
+}
+
+/**
+ * Corrects the admission details. Only what is passed changes, so the screen
+ * can send the whole form and the server keeps the rest.
+ */
+export async function updateCase(token: string, caseId: string, body: NewCase): Promise<Case> {
+  const updated = await apiFetch<ApiCase>(`/cases/${caseId}`, {
+    method: 'PATCH',
+    token,
+    body: {
+      title: body.title,
+      hospital_name: body.hospitalName,
+      hospital_area: body.hospitalArea,
+      patient_name: body.patientName,
+      ip_number: body.ipNumber,
+      bed: body.bed || null,
+      admitted_on: body.admittedOn,
+    },
+  });
+  return toCase(updated);
+}
+
+/**
+ * Deletes the case and every bill under it, for everyone following it. Only
+ * whoever started it can; there is no undo, so the screen confirms first.
+ */
+export async function deleteCase(token: string, caseId: string): Promise<void> {
+  await apiFetch<void>(`/cases/${caseId}`, { method: 'DELETE', token });
 }
 
 /** A new invite code to share with family. Shown once; valid for 7 days. */

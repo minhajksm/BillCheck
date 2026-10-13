@@ -69,7 +69,22 @@ function CaseDashboard({ item }: { item: Case }) {
     <AppHeader
       title={item.title}
       showBack
-      right={<IconButton icon="users" label={t('case.inviteFamily')} onPress={() => toast(t('case.inviteSoon'))} />}
+      right={
+        <View style={styles.headerActions}>
+          <IconButton
+            icon="edit-2"
+            label={t('case.editDetails')}
+            onPress={() =>
+              router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })
+            }
+          />
+          <IconButton
+            icon="users"
+            label={t('case.inviteFamily')}
+            onPress={() => toast(t('case.inviteSoon'))}
+          />
+        </View>
+      }
     />
   );
 
@@ -283,4 +298,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   emptyBills: { padding: 16 },
   cta: { marginTop: 18, gap: 10 },
+  headerActions: { flexDirection: 'row', gap: 4 },
 });

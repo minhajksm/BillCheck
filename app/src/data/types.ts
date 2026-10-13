@@ -29,6 +29,8 @@ export type Case = {
   dayOfStay: number;
   closedOn?: string;
   members: Member[];
+  /** Whether you started this case. Only you can delete it. */
+  isOwner: boolean;
   /** Oldest first. */
   bills: DailyBill[];
   recoveredAmount: number;

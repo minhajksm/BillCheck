@@ -33,6 +33,8 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   resetTokenStore();
   server = installFakeApi();
+  // A signed-in session, as the sign-up flow would leave it.
+  server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
   server.sessions.set('saved-token', '+919876543210');
   resetTokenStore('saved-token');
 });
