@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
+from flag_kinds import FlagKind
 from phone import normalize_indian_mobile
 
 
@@ -178,22 +179,7 @@ class FlagOut(BaseModel):
     id: uuid.UUID
     position: int
     line_item_id: uuid.UUID | None
-    kind: Literal[
-        # From the price lists, with a citable reference.
-        "above_mrp",
-        "duplicate",
-        "quantity",
-        # From the reader. `reference_source` is "reader" for these.
-        "total_mismatch",
-        "duplicate_line",
-        "date_outside_stay",
-        "unit_price_high",
-        "quantity_high",
-        "non_medical_item",
-        "package_overlap",
-        "service_charge_on_room",
-        "same_test_two_names",
-    ]
+    kind: FlagKind
     level: Literal["red", "amber"]
     status: Literal["open", "corrected", "explained"]
     billed: float

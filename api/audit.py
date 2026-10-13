@@ -21,9 +21,9 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
+from flag_kinds import FlagKind
 from references import PACKED_UNITS, ReferenceData, is_timed, normalize, parse_count, parse_quantity
 
-FlagKind = Literal["above_mrp", "duplicate", "quantity"]
 FlagLevel = Literal["red", "amber"]
 
 PAISE = Decimal("0.01")
@@ -76,6 +76,9 @@ def _same_unit(row: BillRow, unit: str) -> bool:
 
 @dataclass(frozen=True)
 class Flag:
+    # Cited or reader; `reference_source` says which. review.py builds the
+    # reader ones, so narrowing this to the cited three only meant every call
+    # site silenced the type checker.
     kind: FlagKind
     level: FlagLevel
     row_position: int

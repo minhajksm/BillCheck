@@ -33,6 +33,8 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
+from flag_kinds import ReaderFlagKind as ObservationKind
+from flag_kinds import prompt_section
 from settings import get_settings
 
 logger = logging.getLogger("billcheck.ocr")
@@ -41,40 +43,7 @@ logger = logging.getLogger("billcheck.ocr")
 SUPPORTED_IMAGES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
 PDF_MEDIA = "application/pdf"
 
-# What the reader is allowed to report. Anything it notices that isn't one of
-# these goes unreported rather than inventing a flag the app can't word.
-ObservationKind = Literal[
-    # --- Contradictions on the page itself ----------------------------------
-    # These need nothing but the bill, read carefully. A clerk with a
-    # calculator finds them, which is why review.py can re-check several.
-    "total_mismatch",  # the rows don't add up to the printed total
-    "duplicate_line",  # the same charge twice at the same moment
-    "equipment_hours_exceed_stay",  # "ventilator 120 hrs" on a 3-day stay
-    "date_outside_stay",  # a visit dated after discharge
-    "implant_without_identity",  # an implant with no brand, batch or maker
-    "rounded_amounts",  # every line landing on a suspiciously round figure
-    "advance_not_deducted",  # a deposit shown on the bill but not taken off
-    # --- What an experienced eye notices ------------------------------------
-    # No second document, but knowledge in the reader's head: roughly what
-    # things cost, what a ward uses in a day, what a package covers. Nothing
-    # can confirm these, so they only ever stand as questions.
-    "unit_price_high",  # a consumable or drug well above the usual price
-    "branded_drug_margin",  # a brand billed where the molecule is cheap
-    "capped_item_above_ceiling",  # a stent, knee or scheduled drug over its cap
-    "non_medical_item",  # a carry bag, an attendant's meals
-    "package_overlap",  # billed beside a package that should include it
-    "nursing_billed_with_room",  # nursing in the room rate and as a line
-    "service_charge_on_room",  # a service charge on top of room rent
-    "quantity_high",  # 80 glove pairs in one ward day
-    "visits_in_one_day",  # more consultant visits than a day plausibly holds
-    "same_test_two_names",  # "CBC" and "Complete Blood Count"
-    "same_drug_twice_sources",  # the same drug from pharmacy and from the ward
-    "room_rate_vs_ward",  # a general ward billed at a private-room rate
-    "icu_rate_on_ward_day",  # an ICU rate on a day spent in the ward
-    "tax_on_exempt_item",  # GST against a category that shouldn't carry it
-]
-
-PROMPT = """You are reading an itemized hospital bill from India for a family
+_PROMPT = """You are reading an itemized hospital bill from India for a family
 who will ask the billing desk about anything that looks wrong. They are not
 clinicians and they are standing at a counter.
 
@@ -102,59 +71,7 @@ For each thing worth asking about, add an observation. `row_positions` are
 
 Report only these kinds.
 
-### Contradictions on the page
-
-These need nothing but the bill in front of you. Add the column, compare two
-fields, look for an entry that should be there and isn't.
-
-- `total_mismatch`: the rows you transcribed don't add up to the printed total.
-- `duplicate_line`: the same charge appears twice for the same moment.
-- `equipment_hours_exceed_stay`: billed hours for a machine exceed the stay,
-  e.g. "Ventilator, 120 hrs" on a three-day admission.
-- `date_outside_stay`: a row is dated before admission or after discharge.
-- `implant_without_identity`: an implant or device billed with no brand, batch
-  or manufacturer where the bill records those for other items.
-- `rounded_amounts`: the amounts are implausibly round across the bill, as if
-  each line were rounded up rather than priced.
-- `advance_not_deducted`: the bill itself shows a deposit or advance paid, and
-  the amount due does not take it off.
-
-### What an experienced eye notices
-
-No second document, but these rest on what you know: roughly what things cost
-in India, what a ward uses in a day, what a package normally covers. You cannot
-prove any of them from the page, so they are questions, and a wrong one costs a
-family more than a missed one.
-
-- `unit_price_high`: a consumable or drug priced well above what it usually
-  costs, including a drug that looks above its MRP.
-- `branded_drug_margin`: a brand billed at a large margin where you recognise
-  the molecule and know the generic costs far less.
-- `capped_item_above_ceiling`: a stent, knee implant or scheduled drug billed
-  above the government ceiling you know applies to it.
-- `non_medical_item`: an item that isn't treatment, e.g. a carry bag or an
-  attendant's meals.
-- `package_overlap`: something billed separately that a package named on this
-  bill would normally already cover — OT charges, PPE, consumables beside a
-  stent package.
-- `nursing_billed_with_room`: nursing billed as its own line where the room
-  rate normally includes it.
-- `service_charge_on_room`: a service or administration charge on top of room
-  rent.
-- `quantity_high`: far more of something than a stay like this uses, e.g. 80
-  pairs of gloves for one ward day.
-- `visits_in_one_day`: more consultant visits on one date than a day plausibly
-  holds.
-- `same_test_two_names`: one test billed twice under different names, e.g.
-  "CBC" and "Complete Blood Count".
-- `same_drug_twice_sources`: the same drug billed once from the pharmacy and
-  again as a ward charge for the same date.
-- `room_rate_vs_ward`: the room rate doesn't match the ward the bill names,
-  e.g. a general ward at a private-room rate.
-- `icu_rate_on_ward_day`: an ICU rate charged for a date the bill shows the
-  patient in a ward.
-- `tax_on_exempt_item`: tax charged against a line whose category does not
-  normally carry it.
+{kinds}
 
 Rules that matter more than finding things:
 
@@ -174,6 +91,10 @@ Rules that matter more than finding things:
   anyone, so write it for an engineer, not for the family.
 - Never write an accusation, in any field. These are questions.
 """
+
+# Built once, from the one table of kinds, so the reader is never told about a
+# kind the schema will reject or left unaware of one it allows.
+PROMPT = _PROMPT.format(kinds=prompt_section())
 
 
 @dataclass(frozen=True)
