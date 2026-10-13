@@ -7,7 +7,8 @@
     "loading": "लोड होत आहे…",
     "loadFailed": "हे लोड होऊ शकले नाही. इंटरनेट तपासा आणि पुन्हा प्रयत्न करा.",
     "tryAgain": "पुन्हा प्रयत्न करा",
-    "cancel": "रद्द करा"
+    "cancel": "रद्द करा",
+    "languageCode": "mr"
   },
   "dates": {
     "dayMonth": "{{day}} {{month}}",

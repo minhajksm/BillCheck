@@ -336,3 +336,52 @@ def test_a_cited_price_flag_wins_over_the_reader_s_ceiling_claim():
         bill([observe("capped_item_above_ceiling", [1])]), [reference_flag("above_mrp", 1)], ADMITTED
     )
     assert [flag.reference_source for flag in flags] == ["mrp"]
+
+
+# --- the sentence the reader writes for the family ---------------------------
+
+
+def test_the_reader_s_own_words_reach_the_flag():
+    """The one line on screen we don't write. It rides in reference_detail, per
+    language, for the app to show in place of its own wording."""
+    flags = review(
+        bill(
+            [
+                observe(
+                    "non_medical_item",
+                    [4],
+                    why_en="The bill lists meals for the attendant.",
+                    why_hi="बिल में परिचारक के भोजन का शुल्क है।",
+                    why_mr="बिलात सोबत्याच्या जेवणाचा समावेश आहे.",
+                )
+            ]
+        ),
+        [],
+        ADMITTED,
+    )
+
+    (flag,) = flags
+    assert flag.reference_detail["why_en"] == "The bill lists meals for the attendant."
+    assert flag.reference_detail["why_hi"] == "बिल में परिचारक के भोजन का शुल्क है।"
+    assert flag.reference_detail["why_mr"] == "बिलात सोबत्याच्या जेवणाचा समावेश आहे."
+
+
+def test_a_reader_that_writes_nothing_leaves_the_app_its_own_wording():
+    flags = review(bill([observe("non_medical_item", [4])]), [], ADMITTED)
+    assert not any(key.startswith("why_") for key in flags[0].reference_detail)
+
+
+def test_blank_explanations_are_not_carried_as_empty_strings():
+    """An empty string would read as "the reader wrote nothing to say", and the
+    app would show a blank line instead of falling back."""
+    flags = review(bill([observe("non_medical_item", [4], why_en="  ", why_hi="")]), [], ADMITTED)
+    assert not any(key.startswith("why_") for key in flags[0].reference_detail)
+
+
+def test_a_dropped_claim_takes_its_words_with_it():
+    """The explanation is only as good as the claim. One the rows contradict
+    reaches nobody, sentence and all."""
+    assert (
+        review(bill([observe("duplicate_line", [1, 2], why_en="These two look the same.")]), [], ADMITTED)
+        == []
+    )

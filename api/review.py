@@ -176,6 +176,7 @@ def _to_flag(
         reference_source="reader",
         excess=excess,
         reference_detail={
+            **observation.explanations(),
             **observation.numbers(),
             **numbers,
             "confidence": observation.confidence,
