@@ -41,6 +41,10 @@ logger = logging.getLogger("billcheck.review")
 # Bills round, and a figure read off a photograph can be a paisa out.
 TOTAL_TOLERANCE = Decimal("1")
 
+# Marks a flag that only exists because `keep_all` is on, so the report and
+# the logs can tell it from one that survived on its merits.
+_UNCONFIRMED = {"unconfirmed": "true"}
+
 
 def _amount(value: Decimal) -> str:
     """Money for the app to print: "11950", not "11950.0". Amounts summed from
@@ -190,11 +194,21 @@ def review(
     reference_flags: list[Flag],
     admitted_on: date,
     closed_on: date | None = None,
+    *,
+    keep_all: bool = False,
 ) -> list[Flag]:
     """Turns the reader's observations into flags, or drops them.
 
     `reference_flags` are what the price lists already found. Where the reader
     says the same thing about the same row, the cited flag wins.
+
+    `keep_all` keeps what would be dropped -- a claim the rows contradict, one
+    the reader called low confidence, one a price list already covers -- and
+    marks each kept one `unconfirmed` in its detail. It is for watching what
+    the reader does across different bills, not for families: a question the
+    rows already answered is exactly what this module exists to withhold. One
+    thing it cannot keep is a claim about a row that isn't there, because
+    there is no line for the flag to hang on.
     """
     already = {(flag.kind, flag.row_position) for flag in reference_flags}
     row_count = len(bill.rows)
@@ -203,13 +217,20 @@ def review(
     for observation in bill.observations:
         positions = _rows_of(observation, row_count)
         if not positions and observation.kind not in BILL_LEVEL:
-            logger.info("Dropped %s: points at rows that aren't there", observation.kind)
+            # Not kept even by keep_all: a flag needs a row to hang on.
+            logger.warning("Dropped %s: points at rows that aren't there", observation.kind)
             continue
 
         covered = COVERED_BY_REFERENCES.get(observation.kind)
         if covered and any((covered, position) in already for position in positions):
-            logger.info("Dropped %s on row %s: a reference list already says it", observation.kind, positions)
-            continue
+            logger.warning(
+                "%s %s on row %s: a reference list already says it",
+                "Kept" if keep_all else "Dropped",
+                observation.kind,
+                positions,
+            )
+            if not keep_all:
+                continue
 
         if observation.kind in CHECKABLE:
             match observation.kind:
@@ -225,11 +246,15 @@ def review(
                 # the signal worth keeping: it is either a misread page or a
                 # reader that over-reports, and both matter.
                 logger.warning(
-                    "Dropped %s on rows %s: the rows don't bear it out (%s)",
+                    "%s %s on rows %s: the rows don't bear it out (%s)",
+                    "Kept" if keep_all else "Dropped",
                     observation.kind,
                     positions,
                     observation.note,
                 )
+                if not keep_all:
+                    continue
+                flags.append(_to_flag(observation, positions, "amber", _UNCONFIRMED, bill))
                 continue
 
             # Even confirmed, these rest on figures read off a photograph, so
@@ -239,7 +264,15 @@ def review(
 
         # Nothing can check this one. It stands as a question or not at all.
         if observation.confidence == "low":
-            logger.info("Dropped %s: the reader wasn't sure", observation.kind)
+            logger.warning(
+                "%s %s: the reader wasn't sure (%s)",
+                "Kept" if keep_all else "Dropped",
+                observation.kind,
+                observation.note,
+            )
+            if not keep_all:
+                continue
+            flags.append(_to_flag(observation, positions, "amber", _UNCONFIRMED, bill))
             continue
         flags.append(_to_flag(observation, positions, "amber", {}, bill))
 

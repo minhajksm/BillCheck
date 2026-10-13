@@ -144,12 +144,16 @@ def main() -> int:
         print("\n  No --admitted given, so the out-of-stay check is off.")
         print("  Pass --admitted and --closed to run it.")
 
-    flags = review(bill, reference_flags, admitted, closed)
+    flags = review(bill, reference_flags, admitted, closed, keep_all=settings.review_keep_all)
     kept = {(flag.kind, flag.row_position) for flag in flags}
 
+    if settings.review_keep_all:
+        print("\n  REVIEW_KEEP_ALL is on: nothing the reader said is dropped.")
     print(f"\nAfter review, {len(flags)} flag(s) would be shown:\n")
     for flag in flags:
         source = "price list" if flag.reference_source != "reader" else "reader"
+        if flag.reference_detail.get("unconfirmed"):
+            source += ", unconfirmed"
         amount = f" {rupees(flag.excess)}" if flag.excess else ""
         print(f"  {flag.level:<6} {flag.kind:<24} row {flag.row_position:<4} ({source}){amount}")
 

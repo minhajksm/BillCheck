@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # How hard the reader thinks. Higher costs more per bill and reads more
     # carefully; "medium" is the starting point for this kind of extraction.
     ocr_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # Keeps every observation the reader makes, including the ones review.py
+    # would drop: a claim the rows contradict, one the reader itself called
+    # low confidence, one a price list already covers. For looking at what the
+    # reader does across different bills -- it shows a family questions that
+    # were checked and failed, so production refuses to start with it on.
+    review_keep_all: bool = True
     # The price lists bills are checked against. The file shipped in
     # data/samples is illustrative; point this at the real NPPA and CGHS
     # lists before any flag is shown to a real family.
@@ -59,6 +65,10 @@ class Settings(BaseSettings):
                 )
             if self.ocr_provider == "stub":
                 raise ValueError("OCR_PROVIDER=stub returns a sample bill instead of reading the real one.")
+            if self.review_keep_all:
+                raise ValueError(
+                    "REVIEW_KEEP_ALL=true shows families questions the rows already contradicted."
+                )
         return self
 
     @model_validator(mode="after")

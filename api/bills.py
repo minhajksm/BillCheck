@@ -280,7 +280,14 @@ async def upload_bill(
     reference_flags = audit.audit_bill(rows, references)
     # What the reader noticed, kept only where the rows bear it out or where
     # nothing can check it. A reference flag always wins over the same claim.
-    flags = review(extracted, reference_flags, case.admitted_on, case.closed_on)
+    # REVIEW_KEEP_ALL turns that filtering off, for watching the reader.
+    flags = review(
+        extracted,
+        reference_flags,
+        case.admitted_on,
+        case.closed_on,
+        keep_all=get_settings().review_keep_all,
+    )
 
     bill = Bill(
         case_id=case.id,

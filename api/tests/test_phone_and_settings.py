@@ -55,3 +55,25 @@ def test_production_refuses_the_stub_ocr():
 def test_claude_ocr_needs_a_key():
     with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY"):
         Settings(ocr_provider="claude", anthropic_api_key="")
+
+
+def test_production_refuses_to_start_showing_unconfirmed_questions(monkeypatch: pytest.MonkeyPatch):
+    """REVIEW_KEEP_ALL is for watching the reader on a laptop. Left on, it would
+    show a family questions the rows already answered."""
+    for name, value in {
+        "ENVIRONMENT": "production",
+        "SECRET_KEY": "x" * 48,
+        "OTP_DELIVERY": "msg91",
+        "MSG91_AUTH_KEY": "k",
+        "MSG91_TEMPLATE_ID": "t",
+        "OCR_PROVIDER": "claude",
+        "ANTHROPIC_API_KEY": "sk-test",
+        "REVIEW_KEEP_ALL": "true",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValidationError, match="REVIEW_KEEP_ALL"):
+        Settings(_env_file=None)
+
+    monkeypatch.setenv("REVIEW_KEEP_ALL", "false")
+    assert Settings(_env_file=None).review_keep_all is False

@@ -405,3 +405,48 @@ def test_a_dropped_claim_takes_its_words_with_it():
         review(bill([observe("duplicate_line", [1, 2], why_en="These two look the same.")]), [], ADMITTED)
         == []
     )
+
+
+# --- keeping everything, for watching the reader ------------------------------
+#
+# REVIEW_KEEP_ALL is a development switch: it shows what the reader said on a
+# bill, including the claims this module exists to withhold. Production refuses
+# to start with it on, so these tests are about the switch, not the product.
+
+
+def test_keeps_a_claim_the_rows_contradict():
+    """Normally dropped: the reader called two different rows the same charge."""
+    bill_ = bill([observe("duplicate_line", [1, 2])])
+
+    assert review(bill_, [], ADMITTED) == []
+    (kept,) = review(bill_, [], ADMITTED, keep_all=True)
+    assert kept.kind == "duplicate_line"
+    assert kept.reference_detail["unconfirmed"] == "true"
+
+
+def test_keeps_what_the_reader_was_unsure_of():
+    bill_ = bill([observe("nursing_billed_with_room", [1], confidence="low")])
+
+    assert review(bill_, [], ADMITTED) == []
+    (kept,) = review(bill_, [], ADMITTED, keep_all=True)
+    assert kept.reference_detail["unconfirmed"] == "true"
+    assert kept.reference_detail["confidence"] == "low"
+
+
+def test_keeps_a_claim_a_price_list_already_covers():
+    cited = [reference_flag("above_mrp", 1)]
+    bill_ = bill([observe("unit_price_high", [1])])
+
+    assert [f.reference_source for f in review(bill_, cited, ADMITTED)] == ["mrp"]
+    kept = review(bill_, cited, ADMITTED, keep_all=True)
+    assert [f.reference_source for f in kept] == ["mrp", "reader"]
+
+
+def test_still_drops_a_claim_about_a_row_that_is_not_there():
+    """The one thing keep_all cannot keep: there is no line to hang it on."""
+    assert review(bill([observe("non_medical_item", [9])]), [], ADMITTED, keep_all=True) == []
+
+
+def test_a_claim_that_stands_on_its_own_is_not_marked_unconfirmed():
+    (flag,) = review(bill([observe("non_medical_item", [4])]), [], ADMITTED, keep_all=True)
+    assert "unconfirmed" not in flag.reference_detail
