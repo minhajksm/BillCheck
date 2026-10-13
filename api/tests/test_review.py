@@ -93,9 +93,12 @@ def test_drops_a_total_claim_when_the_bill_prints_no_total():
 
 def test_keeps_a_date_outside_the_stay():
     flags = review(bill([observe("date_outside_stay", [2])]), [], date(2026, 10, 20), date(2026, 10, 25))
-    (flag,) = flags
-    assert flag.kind == "date_outside_stay"
-    assert flag.reference_detail["row_date"] == "2026-10-11"
+
+    # Rows 2 and 3 carry the same out-of-stay date. The reader raised only row
+    # 2; the stay check finds row 3 as well, which is the whole point of it.
+    assert [flag.kind for flag in flags] == ["date_outside_stay", "date_outside_stay"]
+    assert [flag.row_position for flag in flags] == [2, 3]
+    assert {flag.reference_detail["row_date"] for flag in flags} == {"2026-10-11"}
 
 
 def test_drops_a_date_inside_the_stay():
@@ -206,3 +209,82 @@ def test_no_observations_means_no_reader_flags():
 def test_a_reader_that_says_nothing_leaves_the_cited_flags_alone():
     cited = [reference_flag("above_mrp", 1)]
     assert review(bill([]), cited, ADMITTED) == cited
+
+
+# --- the stay check, which nobody has to propose ----------------------------
+#
+# The reader is never told when the admission was, so it cannot raise this.
+# These run over every row of every bill, which makes the rows that must *not*
+# be flagged the more important half.
+
+
+def dated(detail: str | None, name: str = "Pathology Services") -> ExtractedRow:
+    return ExtractedRow(name=name, detail=detail, quantity=None, amount=430.0)
+
+
+def dated_bill(details: list[str | None], bill_date: str | None = "2026-10-11") -> ExtractedBill:
+    return ExtractedBill(
+        bill_date=bill_date,
+        stated_total=None,
+        rows=[dated(detail) for detail in details],
+        observations=[],
+    )
+
+
+def test_flags_a_row_dated_before_the_admission():
+    flags = review(dated_bill(["2/10/2026, 9:00 am"]), [], ADMITTED)
+
+    (flag,) = flags
+    assert flag.kind == "date_outside_stay"
+    assert flag.level == "amber", "read off a photograph, so still a question"
+    assert flag.reference_detail["row_date"] == "2026-10-02"
+    assert flag.reference_detail["admitted_on"] == "2026-10-09"
+    assert flag.excess == Decimal("430"), "if the charge isn't ours, the line comes off"
+
+
+def test_flags_a_row_dated_after_discharge():
+    flags = review(dated_bill(["20 Oct, 9:00 am"]), [], ADMITTED, date(2026, 10, 15))
+    assert [flag.reference_detail["row_date"] for flag in flags] == ["2026-10-20"]
+
+
+def test_leaves_rows_inside_the_stay_alone():
+    flags = review(
+        dated_bill(["11 Oct, 10:30 am", "9 Oct, 8:00 am", "15/10/2026"]), [], ADMITTED, date(2026, 10, 15)
+    )
+    assert flags == [], "the admission and discharge days are inside the stay"
+
+
+def test_reads_an_undated_row_in_the_bill_s_own_year():
+    """The bug this check was written for: "11 Oct" with no year, on a bill
+    from years ago. Dating it in the current year would flag every row."""
+    old = dated_bill(["22 Oct, 10:20 am", "23 Oct, 1:30 pm"], bill_date="2018-10-23")
+    assert review(old, [], date(2018, 10, 22), date(2018, 10, 23)) == []
+
+
+def test_ignores_quantity_details_that_are_not_dates():
+    quantities = ["1 day", "6 vials", "80 pairs", "1 set", "4 bottles", "3 meals", "---", None]
+    assert review(dated_bill(quantities), [], ADMITTED) == []
+
+
+def test_does_not_ask_twice_when_the_reader_raised_it_too():
+    """The reader's own claim is confirmed by _confirm_date; the scan must not
+    add a second flag for the same row."""
+    bill = dated_bill(["2/10/2026, 9:00 am"])
+    bill.observations = [observe("date_outside_stay", [1])]
+
+    flags = review(bill, [], ADMITTED)
+    assert len(flags) == 1
+
+
+def test_scans_rows_the_reader_said_nothing_about():
+    bill = dated_bill(["11 Oct, 10:30 am", "2/10/2026, 9:00 am"])
+    bill.observations = [observe("non_medical_item", [1])]
+
+    flags = review(bill, [], ADMITTED)
+    assert {flag.kind for flag in flags} == {"non_medical_item", "date_outside_stay"}
+    assert [flag.row_position for flag in flags] == [1, 2]
+
+
+def test_an_open_stay_has_no_upper_bound():
+    """Mid-admission, there is no discharge date yet, so nothing is "after"."""
+    assert review(dated_bill(["20 Oct, 9:00 am"]), [], ADMITTED) == []

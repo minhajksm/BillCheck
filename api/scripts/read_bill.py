@@ -22,7 +22,7 @@ file, but a real bill must never end up in the repository.
 import argparse
 import logging
 import sys
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import audit  # noqa: E402
 from ocr import BillPage, OcrError, get_ocr_provider  # noqa: E402
-from references import get_reference_data  # noqa: E402
+from references import get_reference_data, parse_bill_date  # noqa: E402
 from review import review  # noqa: E402
 from settings import get_settings  # noqa: E402
 
@@ -44,6 +44,14 @@ MEDIA = {
 }
 
 
+def _iso(value: str | None) -> bool:
+    """Whether the reader gave us a date we can actually read."""
+    try:
+        return bool(value) and bool(date.fromisoformat(str(value)))
+    except ValueError:
+        return False
+
+
 def rupees(value: Decimal | float) -> str:
     return f"{Decimal(str(value)):,.2f}".rstrip("0").rstrip(".")
 
@@ -54,8 +62,12 @@ def main() -> int:
     parser.add_argument(
         "--admitted",
         type=date.fromisoformat,
-        default=date.today() - timedelta(days=2),
-        help="Admission date (YYYY-MM-DD), for the out-of-stay check.",
+        help="Admission date (YYYY-MM-DD). Without it the out-of-stay check is off.",
+    )
+    parser.add_argument(
+        "--closed",
+        type=date.fromisoformat,
+        help="Discharge date (YYYY-MM-DD). Leave it out for a stay still open.",
     )
     parser.add_argument("--verbose", action="store_true", help="Show the reader's own reasoning.")
     args = parser.parse_args()
@@ -90,6 +102,7 @@ def main() -> int:
         return 1
 
     print(f"\n{len(bill.rows)} row(s), bill date {bill.bill_date or 'not read'}:\n")
+    year = date.fromisoformat(bill.bill_date).year if _iso(bill.bill_date) else date.today().year
     summed = Decimal("0")
     for position, row in enumerate(bill.rows, start=1):
         summed += Decimal(str(row.amount))
@@ -121,7 +134,17 @@ def main() -> int:
         get_reference_data(),
     )
 
-    flags = review(bill, reference_flags, args.admitted)
+    admitted, closed = args.admitted, args.closed
+    if admitted is None:
+        # Guessing an admission date would date every row of an older bill
+        # outside the stay and flag the whole page. Take the window from the
+        # rows instead, which flags nothing, and say the check is off.
+        dated = [on for on in (parse_bill_date(row.detail, year) for row in bill.rows) if on]
+        admitted, closed = (min(dated), max(dated)) if dated else (date.min, date.max)
+        print("\n  No --admitted given, so the out-of-stay check is off.")
+        print("  Pass --admitted and --closed to run it.")
+
+    flags = review(bill, reference_flags, admitted, closed)
     kept = {(flag.kind, flag.row_position) for flag in flags}
 
     print(f"\nAfter review, {len(flags)} flag(s) would be shown:\n")
