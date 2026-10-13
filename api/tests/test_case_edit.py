@@ -24,6 +24,19 @@ def date_flags(bill: dict) -> list[dict]:
     return [flag for flag in bill["flags"] if flag["kind"] == "date_outside_stay"]
 
 
+def test_the_reader_s_words_survive_the_trip_to_the_app(client: TestClient, auth_headers: dict):
+    """FlagOut has to carry reference_detail through untouched. The last two
+    bugs here were both in a seam like this one, so it is worth asserting
+    rather than assuming."""
+    case = new_case(client, auth_headers)
+    bill = upload(client, auth_headers, case["id"])
+
+    noticed = next(f for f in bill["flags"] if f["reference_source"] == "reader")
+    assert noticed["reference_detail"]["why_en"].startswith("The bill charges")
+    assert noticed["reference_detail"]["why_hi"]
+    assert noticed["reference_detail"]["why_mr"]
+
+
 # --- correcting the details --------------------------------------------------
 
 

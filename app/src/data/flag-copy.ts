@@ -112,7 +112,29 @@ export function flagCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
  * where the rows confirmed the claim, because the figures it rests on were
  * read off a photograph.
  */
+/**
+ * What the reader wrote about this flag, in the family's language.
+ *
+ * This is the one line on screen the reader writes rather than us: specific to
+ * the bill, and so not reviewable the way the rest of the copy is. It is
+ * written under the rules in the prompt -- what the page shows, no verdict, no
+ * reference it doesn't have -- and an empty one falls back to our own wording,
+ * so a reader that says nothing costs the family nothing.
+ */
+function readerWhy(t: TFunction, flag: Flag): string | null {
+  const language = (t('common.languageCode') || 'en').slice(0, 2);
+  return str(flag, `why_${language}`) || str(flag, 'why_en') || null;
+}
+
 function readerCopy(t: TFunction, flag: Flag, tag: string, item?: LineItem): FlagCopy {
+  const written = writtenReaderCopy(t, flag, tag, item);
+  const why = readerWhy(t, flag);
+  // Only "why" is the reader's. The heading and the question a family repeats
+  // at the counter stay ours, written once and translated once.
+  return why ? { ...written, why } : written;
+}
+
+function writtenReaderCopy(t: TFunction, flag: Flag, tag: string, item?: LineItem): FlagCopy {
   const referenceLabel = t('flags.noticedBy');
 
   switch (flag.kind) {

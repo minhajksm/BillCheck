@@ -7,7 +7,8 @@
     "loading": "Loading…",
     "loadFailed": "Couldn't load this. Check your internet and try again.",
     "tryAgain": "Try again",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "languageCode": "en"
   },
   "dates": {
     "dayMonth": "{{day}} {{month}}",

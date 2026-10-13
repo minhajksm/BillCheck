@@ -50,3 +50,37 @@ describe('a kind with no wording of its own', () => {
     expect(copy.short).toMatch(/part of the treatment/i);
   });
 });
+
+describe("the reader's own explanation", () => {
+  const withWhy = (detail: Record<string, string>): Flag =>
+    ({
+      ...readerFlag('nursing_billed_with_room'),
+      referenceDetail: { confidence: 'medium', ...detail },
+    }) as never as Flag;
+
+  it('is what the family reads, in place of our wording', () => {
+    const copy = flagCopy(i18n.getFixedT('en'), withWhy({ why_en: 'Nursing is billed separately here.' }));
+    expect(copy.why).toBe('Nursing is billed separately here.');
+  });
+
+  it('is read in the language the family is using', () => {
+    const detail = { why_en: 'In English.', why_hi: 'हिंदी में।', why_mr: 'मराठीत.' };
+    expect(flagCopy(i18n.getFixedT('hi'), withWhy(detail)).why).toBe('हिंदी में।');
+    expect(flagCopy(i18n.getFixedT('mr'), withWhy(detail)).why).toBe('मराठीत.');
+  });
+
+  it('falls back to our own wording when the reader wrote none', () => {
+    const copy = flagCopy(i18n.getFixedT('en'), withWhy({}));
+    expect(copy.why).toBe(
+      'We noticed this while reading the bill. It may well be correct — the billing desk can tell you what it covers.',
+    );
+  });
+
+  it('never replaces the question the family asks at the counter', () => {
+    // The reader writes why. What they say out loud stays ours, written once
+    // and translated once, so a reader that goes wrong cannot put words in
+    // their mouth.
+    const copy = flagCopy(i18n.getFixedT('en'), withWhy({ why_en: 'Something the reader wrote.' }));
+    expect(copy.ask).toBe('Ask the billing desk what this charge is for.');
+  });
+});

@@ -90,6 +90,31 @@ Rules that matter more than finding things:
 - `note` is your reasoning in one line, for our logs. It is never shown to
   anyone, so write it for an engineer, not for the family.
 - Never write an accusation, in any field. These are questions.
+
+## Saying why, to the family
+
+`why_en`, `why_hi` and `why_mr` are the one thing you write that a family
+actually reads, standing at a billing counter, possibly out loud. Write the
+same one or two sentences in each: English, then Hindi, then Marathi, in plain
+spoken language rather than transliterated English.
+
+Say what this bill shows and why it is worth asking about. Nothing else.
+
+- Use only figures that are on this bill or in this observation. Never state a
+  price, a rate or a total you did not read off the page.
+- Never say a charge is wrong, excessive, illegal, inflated or fraudulent, and
+  never tell the family what to pay or refuse. You are giving them a question,
+  not a verdict.
+- Never claim it was checked against an MRP, an NPPA ceiling, a CGHS rate or
+  any price list. Nothing here was. Where the amount only looks high to you,
+  say that it looks high and leave it there.
+- If you cannot say why in those terms, leave all three empty. The app has its
+  own wording and will use it.
+
+Good: "The bill charges ₹2,200 for nursing as its own line, on top of ₹6,500
+room rent. Room rates usually include nursing."
+Bad: "The hospital has wrongly charged you twice for nursing, which is illegal
+under CGHS rules."
 """
 
 # Built once, from the one table of kinds, so the reader is never told about a
@@ -142,6 +167,20 @@ class Observation(BaseModel):
     summed: str | None = Field(default=None, description="For a total: what the rows add up to.")
     confidence: Literal["high", "medium", "low"] = "medium"
     note: str = Field(default="", description="One line of reasoning, for our logs only.")
+    why_en: str = Field(default="", description="Why this is worth asking, for the family, in English.")
+    why_hi: str = Field(default="", description="The same sentence in Hindi.")
+    why_mr: str = Field(default="", description="The same sentence in Marathi.")
+
+    def explanations(self) -> dict[str, str]:
+        """The sentence a family reads, per language.
+
+        Unlike every other string the app shows, this one is written by the
+        reader rather than translated once and reviewed. The app falls back to
+        its own copy for any language left empty, so a reader that skips this
+        degrades to the wording we wrote rather than to nothing.
+        """
+        given = {"why_en": self.why_en, "why_hi": self.why_hi, "why_mr": self.why_mr}
+        return {key: value.strip() for key, value in given.items() if value.strip()}
 
     def numbers(self) -> dict[str, str]:
         """The figures that were given, for the app to put in its copy."""
@@ -205,6 +244,18 @@ STUB_OBSERVATIONS = [
         expected="4000",
         confidence="medium",
         note="Stub observation: fixed, not read off the page.",
+        why_en=(
+            "The bill charges ₹6,500 a day for a twin-sharing room. That looks high for a "
+            "shared room, though nothing here was checked against a price list."
+        ),
+        why_hi=(
+            "बिल में ट्विन-शेयरिंग कमरे के ₹6,500 प्रतिदिन लिए गए हैं। साझा कमरे के लिए यह "
+            "ज़्यादा लगता है, हालाँकि इसे किसी सूची से नहीं मिलाया गया है।"
+        ),
+        why_mr=(
+            "बिलात ट्विन-शेअरिंग खोलीसाठी दररोज ₹6,500 आकारले आहेत. सामायिक खोलीसाठी हे जास्त "
+            "वाटते, मात्र याची कोणत्याही दरसूचीशी पडताळणी केलेली नाही."
+        ),
     )
 ]
 
