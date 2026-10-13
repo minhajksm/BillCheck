@@ -283,6 +283,36 @@ class StubOcr:
         )
 
 
+def _loggable(request: dict) -> str:
+    """The request as sent, with two substitutions for a terminal's sake.
+
+    A page is tens of thousands of characters of base64, which would bury
+    everything worth reading, so each one becomes its size. `output_format` is
+    a class; what actually goes over the wire is its JSON schema, so that is
+    what is shown -- and it is the part worth looking at when the API rejects
+    a request as too complex.
+    """
+    import copy
+    import json
+
+    shown = {key: value for key, value in request.items() if key != "output_format"}
+    shown = copy.deepcopy(shown)
+    for message in shown.get("messages", []):
+        for block in message.get("content", []):
+            source = block.get("source", {}) if isinstance(block, dict) else {}
+            if "data" in source:
+                source["data"] = f"<base64, {len(source['data']):,} chars>"
+
+    output_format = request.get("output_format")
+    if output_format is not None:
+        shown["output_format_schema"] = output_format.model_json_schema()
+
+    try:
+        return json.dumps(shown, indent=2, ensure_ascii=False)
+    except TypeError:
+        return repr(shown)
+
+
 class ClaudeOcr:
     """Reads the pages with Claude and reports what it noticed.
 
@@ -326,15 +356,21 @@ class ClaudeOcr:
             }
         )
 
+        request = {
+            "model": self._model,
+            "max_tokens": 16000,
+            "system": PROMPT,
+            "output_config": {"effort": self._effort},
+            "messages": [{"role": "user", "content": content}],
+            "output_format": ExtractedBill,
+        }
+
+        # Logged before the call, so a request the API rejects is visible at
+        # all: the response log below never runs when parse() raises.
+        logger.warning("Sending to Claude:\n%s", _loggable(request))
+
         try:
-            response = self._client.messages.parse(
-                model=self._model,
-                max_tokens=16000,
-                system=PROMPT,
-                output_config={"effort": self._effort},
-                messages=[{"role": "user", "content": content}],
-                output_format=ExtractedBill,
-            )
+            response = self._client.messages.parse(**request)
         except anthropic.APIError as exc:
             raise OcrError(f"Couldn't read the bill: {exc}") from exc
 
