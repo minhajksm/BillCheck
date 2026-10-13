@@ -107,6 +107,30 @@ class CaseCreate(BaseModel):
     admitted_on: date
 
 
+class CaseUpdate(BaseModel):
+    """Correcting the admission details. Every field is optional: what is sent
+    is what changes, so a field left out keeps its value and `bed: null`
+    clears it."""
+
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)] | None = (
+        None
+    )
+    hospital_name: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)] | None
+    ) = None
+    hospital_area: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)] | None
+    ) = None
+    patient_name: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)] | None
+    ) = None
+    ip_number: (
+        Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)] | None
+    ) = None
+    bed: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
+    admitted_on: date | None = None
+
+
 class MemberOut(BaseModel):
     id: uuid.UUID
     name: str
@@ -136,6 +160,9 @@ class CaseOut(BaseModel):
     # Counting the admission day as day 1.
     day_of_stay: int
     members: list[MemberOut]
+    # Whether the caller is the one who started it. Only they can delete a case,
+    # since it takes the bills away from everyone following it.
+    is_owner: bool
     # Oldest first.
     bills: list[DailyBillOut]
     recovered_amount: float

@@ -6,7 +6,8 @@
     "place": "{{name}}, {{area}}",
     "loading": "Loading…",
     "loadFailed": "Couldn't load this. Check your internet and try again.",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "cancel": "Cancel"
   },
   "dates": {
     "dayMonth": "{{day}} {{month}}",
@@ -71,7 +72,8 @@
     "askSoon": "Messages to the billing desk are coming soon",
     "tomorrowToast": "Tomorrow's bill can be added from here",
     "notFound": "We couldn't find this case.",
-    "noBillsYet": "No bills added yet."
+    "noBillsYet": "No bills added yet.",
+    "editDetails": "Case details"
   },
   "auth": {
     "welcomeTagline": "Check every hospital bill, and ask the right questions.",
@@ -292,5 +294,15 @@
     "required": "Fill this in to continue.",
     "badDate": "Use the form YYYY-MM-DD, e.g. 2026-10-09.",
     "failed": "Couldn't start the case. Try again."
+  },
+  "editCase": {
+    "title": "Case details",
+    "subtitle": "Correct anything that was typed wrong at the counter.",
+    "save": "Save changes",
+    "failed": "Couldn't save the changes. Try again.",
+    "delete": "Delete this case",
+    "confirmDelete": "This deletes {{name}} and every bill on it, for everyone following the case. It cannot be undone.",
+    "confirmDeleteAction": "Yes, delete it",
+    "deleteFailed": "Couldn't delete the case. Try again."
   }
 }

@@ -64,6 +64,7 @@ export const SAMPLE_CASE = {
     { id: 'u1', name: 'Rohan Sharma', is_you: true },
     { id: 'u2', name: 'Anita Sharma', is_you: false },
   ],
+  is_owner: true,
   bills: [
     { id: 'b-day2', date: '2026-10-10', day: 2, item_count: 37, total: 31400, flag_count: 0, open_flag_count: 0 },
     { id: 'b-day3', date: '2026-10-11', day: 3, item_count: 3, total: 42490, flag_count: 2, open_flag_count: 2 },
@@ -84,6 +85,7 @@ export const CLOSED_CASE = {
   closed_on: '2026-03-13',
   day_of_stay: 2,
   members: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
+  is_owner: true,
   bills: [
     { id: 'b-cat1', date: '2026-03-12', day: 1, item_count: 18, total: 41200, flag_count: 2, open_flag_count: 0 },
   ],
@@ -165,6 +167,22 @@ export function installFakeApi() {
         if (method === 'GET' && readCase) {
           const found = server.cases.find((c) => c.id === readCase[1]);
           return found ? json(200, found) : fail(404, 'case_not_found');
+        }
+
+        const editCase = /^\/cases\/([^/]+)$/.exec(path);
+        if (method === 'PATCH' && editCase) {
+          const found = server.cases.find((c) => c.id === editCase[1]);
+          if (!found) return fail(404, 'case_not_found');
+          // Only what was sent changes, as the real endpoint does.
+          Object.assign(found, body);
+          return json(200, found);
+        }
+        if (method === 'DELETE' && editCase) {
+          const at = server.cases.findIndex((c) => c.id === editCase[1]);
+          if (at < 0) return fail(404, 'case_not_found');
+          if (!server.cases[at].is_owner) return fail(403, 'not_case_owner');
+          server.cases.splice(at, 1);
+          return new Response(null, { status: 204 });
         }
 
         const readBill = /^\/bills\/([^/]+)$/.exec(path);

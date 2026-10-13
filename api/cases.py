@@ -18,7 +18,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from auth import CurrentUser, Db
 from db import india_today, utcnow
-from models import CaseCreate, CaseOut, DailyBillOut, InviteCreated, InviteOut, JoinCase, MemberOut
+from models import (
+    CaseCreate,
+    CaseOut,
+    CaseUpdate,
+    DailyBillOut,
+    InviteCreated,
+    InviteOut,
+    JoinCase,
+    MemberOut,
+)
+from stay import recheck_stay
 from tables import Bill, Case, CaseInvite, CaseMember, Flag, LineItem, User
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -127,6 +137,7 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
             MemberOut(id=member.user_id, name=member.user.name, is_you=member.user_id == user.id)
             for member in case.members
         ],
+        is_owner=case.created_by == user.id,
         bills=[
             DailyBillOut(
                 id=bill.id,
@@ -182,6 +193,54 @@ def list_cases(db: Db, user: CurrentUser) -> list[CaseOut]:
 @router.get("/{case_id}", response_model=CaseOut)
 def read_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> CaseOut:
     return case_out(db, load_case(db, case_id, user), user)
+
+
+@router.patch("/{case_id}", response_model=CaseOut)
+def update_case(case_id: uuid.UUID, body: CaseUpdate, db: Db, user: CurrentUser) -> CaseOut:
+    """Corrects the admission details.
+
+    Any member can, as with closing: these are facts about one admission that
+    whoever is at the hospital that day is best placed to fix, and a wrong bed
+    number shouldn't wait for whoever started the case.
+
+    Changing the admission date moves what was derived from it, so the bills
+    are re-checked against the new stay. See stay.py for what that does and
+    does not touch.
+    """
+    case = load_case(db, case_id, user)
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        return case_out(db, case, user)
+
+    moved = "admitted_on" in changes and changes["admitted_on"] != case.admitted_on
+    for field, value in changes.items():
+        setattr(case, field, value)
+
+    if moved:
+        recheck_stay(db, case)
+    db.commit()
+    db.refresh(case)
+    return case_out(db, case, user)
+
+
+@router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
+    """Deletes the case and everything under it, for everyone following it.
+
+    Only whoever started the case, as with removing a member: it takes the
+    bills away from the whole family, and someone who only wants out can leave
+    instead.
+
+    The bills, line items and flags go with it, by the foreign keys' own
+    cascade. That is the point rather than a side effect — health data is kept
+    only while a family wants it kept, and "delete" has to mean deleted.
+    """
+    case = load_case(db, case_id, user)
+    if user.id != case.created_by:
+        raise case_error(status.HTTP_403_FORBIDDEN, "not_case_owner")
+    db.delete(case)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _hash_code(code: str) -> str:

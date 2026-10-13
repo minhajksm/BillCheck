@@ -9,7 +9,7 @@ import { Text } from './text';
 type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'danger';
   icon?: IconName;
   disabled?: boolean;
   /** Shows a spinner and ignores presses while work is in flight. */
@@ -19,7 +19,11 @@ type ButtonProps = {
 export function Button({ label, onPress, variant = 'primary', icon, disabled = false, loading = false }: ButtonProps) {
   const palette = usePalette();
   const primary = variant === 'primary';
-  const fg = primary ? 'onIndigo' : 'ink';
+  // A destructive action should not look like the way forward. It is outlined
+  // in red rather than filled, so it reads as a warning and not as the button
+  // a thumb lands on by habit.
+  const danger = variant === 'danger';
+  const fg = primary ? 'onIndigo' : danger ? 'red' : 'ink';
   const inactive = disabled || loading;
 
   return (
@@ -32,7 +36,11 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled = f
         styles.button,
         primary
           ? { backgroundColor: palette.indigo }
-          : { backgroundColor: palette.card, borderColor: palette.line, borderWidth: 1 },
+          : {
+              backgroundColor: palette.card,
+              borderColor: danger ? palette.red : palette.line,
+              borderWidth: 1,
+            },
         disabled && styles.disabled,
         pressed && styles.pressed,
       ]}>
