@@ -14,6 +14,7 @@ import { useToast } from '@/components/toast';
 import { Gutter, Radius } from '@/constants/theme';
 import { uploadBill, type ScannedPage } from '@/data/cases-api';
 import { preparePage } from '@/data/prepare-page';
+import { scanErrorMessage } from '@/data/scan-errors';
 import { usePalette } from '@/hooks/use-palette';
 
 const MAX_PAGES = 12;
@@ -89,9 +90,10 @@ export default function ScanScreen() {
     try {
       const bill = await uploadBill(token, caseId, pages);
       router.replace({ pathname: '/bills/[billId]', params: { billId: bill.id } });
-    } catch {
+    } catch (error) {
+      // The pages stay, so a retry doesn't mean photographing them again.
       setChecking(false);
-      toast(t('scan.failed'));
+      toast(scanErrorMessage(t, error, MAX_PAGES));
     }
   };
 

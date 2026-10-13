@@ -5,7 +5,7 @@
  * and nowhere else, so screens only ever see the types in `types.ts`.
  */
 
-import { apiFetch, API_URL, ApiError } from '@/lib/api';
+import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
 import type { Bill, Case, DailyBill, Flag, LineItem, Member } from './types';
 
 type ApiMember = { id: string; name: string; is_you: boolean };
@@ -230,7 +230,7 @@ export async function uploadBill(
   if (!response.ok) {
     const detail = (data as { detail?: { code?: unknown } } | null)?.detail;
     const code = typeof detail?.code === 'string' ? detail.code : 'unknown';
-    throw new ApiError(code as never, response.status);
+    throw new ApiError(code as ApiErrorCode, response.status);
   }
   return toBill(data as ApiBill);
 }

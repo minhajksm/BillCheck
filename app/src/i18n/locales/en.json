@@ -130,7 +130,13 @@
     "step2": "Matching medicines to MRP and NPPA prices",
     "step3": "Comparing charges with similar hospital stays",
     "failed": "This bill couldn't be read. Try again in better light, one page at a time.",
-    "needPage": "Add at least one page of the bill."
+    "needPage": "Add at least one page of the bill.",
+    "errorNetwork": "Couldn't reach BillCheck. Check your internet and try again. Your pages are still here.",
+    "errorTooLarge": "A page is too large to send. Remove it and photograph it again.",
+    "errorUnsupported": "One of the pages isn't a photo BillCheck can read. Use JPEG or PNG photos.",
+    "errorTooMany": "A bill can have up to {{max}} pages. Remove some and check them as a second bill.",
+    "errorLimit": "You've checked a lot of bills today. Try again tomorrow.",
+    "errorUnknown": "Something went wrong. Your pages are still here. Try again."
   },
   "flags": {
     "tagAboveMrp": "Above MRP",
