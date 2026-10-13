@@ -17,7 +17,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,
-    allow_methods=["GET", "POST", "PATCH"],
+    # Every method the API answers. One missing is invisible from the tests,
+    # which call endpoints directly, and fatal in the browser, which asks
+    # permission first: the app never gets to send the request at all.
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
 )
 

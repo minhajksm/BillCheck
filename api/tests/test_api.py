@@ -112,3 +112,29 @@ def test_upload_rejects_too_many_pages(
     )
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "too_many_pages"
+
+
+# --- what the browser is allowed to ask for ----------------------------------
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PATCH", "DELETE"])
+def test_the_browser_may_use_every_method_the_api_answers(client: TestClient, method: str):
+    """The app runs in a browser, which asks permission before a PATCH or a
+    DELETE and never sends the request if the answer is no.
+
+    These tests call endpoints directly and never ask, so a method missing from
+    CORS passes everything here and is unreachable from the app. That is how
+    DELETE /cases/{id} shipped: 13 passing tests, and a 400 on the preflight the
+    moment a family tried it.
+    """
+    response = client.options(
+        "/cases/bb1b4a8c-0000-0000-0000-000000000000",
+        headers={
+            "Origin": "http://localhost:8081",
+            "Access-Control-Request-Method": method,
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+    assert response.status_code == 200, f"the browser cannot send a {method}: {response.text}"
+    assert method in response.headers.get("access-control-allow-methods", "")
