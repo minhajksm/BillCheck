@@ -101,7 +101,7 @@ Tests use an in-memory SQLite database, so they don't need Postgres running.
   - `POST /cases/{id}/members/{user_id}/remove`: anyone can leave; only whoever started the case can remove someone else, and they can't leave it.
   - `POST /cases/{id}/close` marks the stay over. Reports stay readable.
 - **Bills and flags** (`bills.py`), all signed in.
-  - `POST /cases/{id}/bills` takes the photographed pages as multipart `pages` (JPEG, PNG, WebP or HEIC, up to 15 MB each, 12 pages). It reads them into line items, runs the audit, and returns the bill with its flags. **The photos are never stored** — read in memory, then dropped.
+  - `POST /cases/{id}/bills` takes the photographed pages as multipart `pages` (JPEG, PNG, WebP or HEIC, up to 15 MB each, 12 pages). It reads them into line items, runs the audit, and returns the bill with its flags. **The photos are never stored** — read in memory, then dropped. Each person can send `BILL_UPLOADS_PER_DAY` bills (default 20) in 24 hours, counting reads that fail, since each is a paid call; past that it answers `429 upload_limit`.
   - `GET /bills/{id}` reads a bill back with its line items and flags.
   - `PATCH /flags/{id}` with `{"status": "corrected" | "explained" | "open"}` records what the hospital said. A corrected flag's difference counts as recovered.
 

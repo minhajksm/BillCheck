@@ -138,6 +138,20 @@ class Bill(Base):
     )
 
 
+class UploadAttempt(Base):
+    """One bill sent to the reader, kept to cap how many a person can send.
+
+    Counted per attempt, not per saved bill: a read that fails still costs a
+    paid call, so failures count too. Holds no bill content.
+    """
+
+    __tablename__ = "upload_attempts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+
 class LineItem(Base):
     """One row of the itemized bill, as printed."""
 

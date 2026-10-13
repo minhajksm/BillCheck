@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # data/samples is illustrative; point this at the real NPPA and CGHS
     # lists before any flag is shown to a real family.
     reference_data_path: str = "../data/samples/reference-prices.json"
+    # Bills one person can send to be read in 24 hours. Every read is a paid
+    # Claude call, so this caps what one account can run up. A family adding
+    # one bill a day per case stays far below it.
+    bill_uploads_per_day: int = 20
     # Origins allowed to call the API from a browser (Expo web dev server).
     cors_origins: list[str] = ["http://localhost:8081"]
 

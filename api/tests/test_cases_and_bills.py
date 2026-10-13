@@ -411,3 +411,60 @@ def test_a_bill_after_midnight_in_india_lands_on_the_new_day(
     monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 10, 11, 20, 0, tzinfo=UTC))
     bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
     assert (bill["date"], bill["day"]) == ("2026-10-12", 3)
+
+
+# --- upload limit ---------------------------------------------------------------
+
+
+def test_bill_uploads_are_capped_per_day(
+    client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Every read is a paid call, so one account can't send bills without end."""
+    from settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "bill_uploads_per_day", 2)
+    case = new_case(client, auth_headers)
+    for _ in range(2):
+        assert (
+            client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).status_code == 201
+        )
+
+    refused = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers)
+    assert refused.status_code == 429
+    assert refused.json()["detail"]["code"] == "upload_limit"
+    assert "Retry-After" in refused.headers
+
+
+def test_an_unreadable_bill_still_counts(
+    client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """A failed read was paid for too, so retrying a bad photo can't go on forever."""
+    from main import app
+    from ocr import OcrError, get_ocr_provider
+    from settings import get_settings
+
+    class Unreadable:
+        def read_bill(self, pages):
+            raise OcrError("blurry")
+
+    monkeypatch.setattr(get_settings(), "bill_uploads_per_day", 1)
+    app.dependency_overrides[get_ocr_provider] = lambda: Unreadable()
+    case = new_case(client, auth_headers)
+    assert client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).status_code == 422
+    assert client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).status_code == 429
+
+
+def test_a_rejected_file_does_not_count(
+    client: TestClient, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """Nothing was sent to the reader, so nothing was spent."""
+    from settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "bill_uploads_per_day", 1)
+    case = new_case(client, auth_headers)
+    not_an_image = ("pages", ("page.pdf", io.BytesIO(b"%PDF-1.7" + b"\x00" * 64), "image/jpeg"))
+    assert (
+        client.post(f"/cases/{case['id']}/bills", files=[not_an_image], headers=auth_headers).status_code
+        == 415
+    )
+    assert client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).status_code == 201

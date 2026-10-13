@@ -7,13 +7,13 @@ bill the family can see and question.
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 import audit
@@ -23,7 +23,8 @@ from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
 from ocr import BillImage, ExtractedBill, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data
-from tables import Bill, Case, CaseMember, Flag, LineItem
+from settings import get_settings
+from tables import Bill, Case, CaseMember, Flag, LineItem, UploadAttempt
 
 router = APIRouter(tags=["bills"])
 
@@ -39,7 +40,30 @@ ERRORS = {
     "no_pages": "Add at least one page of the bill.",
     "too_many_pages": f"A bill can have up to {MAX_PAGES} pages.",
     "unreadable_bill": "This bill couldn't be read. Try again in better light, one page at a time.",
+    "upload_limit": "That's a lot of bills for one day. Try again tomorrow.",
 }
+
+
+def check_upload_limit(db: Session, user_id: uuid.UUID) -> None:
+    """Refuses once a person has sent the day's allowance, and records this one.
+
+    Recorded before the read, so a bill that can't be read still counts: that
+    read was paid for all the same.
+    """
+    now = utcnow()
+    sent = db.scalar(
+        select(func.count())
+        .select_from(UploadAttempt)
+        .where(UploadAttempt.user_id == user_id, UploadAttempt.created_at > now - timedelta(days=1))
+    )
+    if (sent or 0) >= get_settings().bill_uploads_per_day:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "upload_limit", "message": ERRORS["upload_limit"]},
+            headers={"Retry-After": "3600"},
+        )
+    db.add(UploadAttempt(user_id=user_id, created_at=now))
+    db.commit()
 
 
 def bill_error(status_code: int, code: str) -> HTTPException:
@@ -217,6 +241,7 @@ async def upload_bill(
         raise bill_error(status.HTTP_400_BAD_REQUEST, "too_many_pages")
 
     images = [await read_page(page, index) for index, page in enumerate(pages, start=1)]
+    check_upload_limit(db, user.id)
 
     try:
         # Reading a bill can take most of a minute, and the reader is a plain
