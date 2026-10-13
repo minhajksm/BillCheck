@@ -338,6 +338,18 @@ class ClaudeOcr:
         except anthropic.APIError as exc:
             raise OcrError(f"Couldn't read the bill: {exc}") from exc
 
+        # The whole response, verbatim, before anything here touches it. Logged
+        # at WARNING so it shows with the API's default level, and logged
+        # before the checks below so a refusal or an unparseable answer is
+        # visible too rather than disappearing into an OcrError.
+        #
+        # It contains the transcribed bill, so this is a development tool: it
+        # puts a patient's charges wherever the logs go.
+        try:
+            logger.warning("Claude responded:\n%s", response.model_dump_json(indent=2))
+        except Exception:  # noqa: BLE001 - never let logging break a read
+            logger.warning("Claude responded (unserialisable):\n%r", response)
+
         if response.stop_reason == "refusal":
             raise OcrError("The bill couldn't be read.")
 
