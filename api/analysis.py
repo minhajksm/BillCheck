@@ -15,9 +15,12 @@ string, and null is kept only where it means something a blank cannot: a
 quantity that is not stated is not a quantity of zero.
 """
 
-from typing import Literal
+import logging
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger("billcheck.analysis")
 
 Category = Literal[
     "room_and_nursing",
@@ -51,24 +54,6 @@ CATEGORY_ORDER: tuple[Category, ...] = (
 Severity = Literal["high", "medium", "low"]
 
 
-class LineAttributes(BaseModel):
-    """The specification attributes PHASE 2 asks for, each as printed.
-
-    Named fields rather than a free-form mapping: a `dict[str, str]` compiles
-    to a schema that permits no keys at all, so the reader could never fill
-    one in. These are the eight the prompt lists.
-    """
-
-    size: str = Field(description="As printed, e.g. '7.5'. Empty when not readable.")
-    gauge: str = Field(description="As printed, e.g. '18G'. Empty when not readable.")
-    french: str = Field(description="French size as printed. Empty when not readable.")
-    volume: str = Field(description="As printed, e.g. '500ml'. Empty when not readable.")
-    strength: str = Field(description="As printed, e.g. '40mg'. Empty when not readable.")
-    pack_size: str = Field(description="As printed, e.g. '10s'. Empty when not readable.")
-    material: str = Field(description="As printed. Empty when not readable.")
-    brand: str = Field(description="As printed. Empty when not readable.")
-
-
 class AnalysedLine(BaseModel):
     """One line of the bill, transcribed verbatim and then normalised."""
 
@@ -78,7 +63,14 @@ class AnalysedLine(BaseModel):
     description_verbatim: str = Field(description="Exactly as printed. Not cleaned or translated.")
     item_name_plain: str = Field(description="The same item in plain English.")
     category: Category
-    attributes: LineAttributes
+    attributes: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "PHASE 2's specification attributes, whichever the bill prints: size, gauge, "
+            "French, volume, strength, pack size, material, brand. Open rather than a fixed "
+            "set of keys, because a bill prints what it prints."
+        ),
+    )
     quantity: float | None = Field(description="As printed. Null when the bill states none.")
     unit: str = Field(description="As printed, e.g. 'vial'. Empty when the bill states none.")
     rate: float | None = Field(description="Rate per unit as printed. Null when none is printed.")
@@ -88,6 +80,26 @@ class AnalysedLine(BaseModel):
     confidence: float = Field(description="0.0-1.0, how sure you are this line was read correctly.")
     ambiguous: bool = Field(description="True where the line cannot be resolved without asking.")
     ambiguity_reason: str = Field(description="What is ambiguous. Empty when it isn't.")
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _known_category(cls, value: Any) -> Any:
+        """A category we don't recognise becomes the catch-all, not a refusal.
+
+        Nothing is enforcing the shape any more, so the reader can write
+        "Pharmacy" where PHASE 2 asked for "pharmacy_drug". The only thing
+        this field decides is which heading a line sits under in the report,
+        and the wrong heading on one line is a far smaller harm than throwing
+        away a bill a family can otherwise read. Compare `Finding.severity`,
+        where the cost of guessing is a verdict.
+        """
+        if not isinstance(value, str):
+            return value
+        tidied = value.strip().lower().replace(" ", "_").replace("-", "_")
+        if tidied in CATEGORY_ORDER:
+            return tidied
+        logger.warning("Reader sent category %r, filing the line as unclassified", value)
+        return "unclassified"
 
 
 class Finding(BaseModel):
@@ -100,6 +112,19 @@ class Finding(BaseModel):
     evidence_quoted: str = Field(description="Quoted from the bill. Never paraphrased.")
     statement: str = Field(description="What the bill shows, in one or two sentences.")
     confirmation_required: str = Field(description="What would be needed to confirm it.")
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _known_severity(cls, value: Any) -> Any:
+        """Case and spacing are forgiven. An unrecognised severity is not.
+
+        This is the field that decides whether a family is shown a red flag
+        or an amber question, so there is no safe guess: reading "serious" as
+        amber understates what the bill proves, and as red overstates it.
+        A bill whose severities can't be read is refused instead, and the
+        family is asked to retake it.
+        """
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class BillHeader(BaseModel):
@@ -124,12 +149,16 @@ class Structural(BaseModel):
 
 
 class BillAnalysis(BaseModel):
-    """PHASE 4, the whole object."""
+    """PHASE 4, the whole object, field for field.
 
-    error: str = Field(
-        description="Empty when the document read. Otherwise why it could not be analysed, "
-        "with `lines` and `findings` empty."
-    )
+    Nothing is added to the prompt's shape and nothing is left out, so the
+    JSON the reader is asked for and the JSON this parses are the same
+    document. Fields the pipeline never reads are still here, because the
+    prompt asks the reader to produce them and the four phases are the
+    method -- PHASE 3 H's percentages are arrived at by classifying every
+    line, not by being asked for a percentage.
+    """
+
     bill: BillHeader
     lines: list[AnalysedLine]
     findings: list[Finding]
@@ -143,3 +172,21 @@ class BillAnalysis(BaseModel):
 
     def line(self, line_id: str) -> AnalysedLine | None:
         return next((line for line in self.lines if line.line_id == line_id), None)
+
+    def unreadable(self) -> str:
+        """Why this bill can't be shown to a family, or "" when it can.
+
+        PHASE 4's own last instruction: a document that isn't a hospital bill,
+        or is too degraded, comes back asking for human review. There is no
+        `error` field to read -- the format has none -- so this is the same
+        judgement made from the fields the format does have.
+        """
+        if not self.lines:
+            reasons = "; ".join(self.review_reasons)
+            return f"No itemized lines were found on these pages. {reasons}".strip()
+        if self.needs_human_review and not self.findings and self.bill.extraction_confidence < 0.5:
+            # Read badly enough that the reader itself asked for a human, with
+            # nothing to show for the read. Not a report to put in front of a
+            # family as though the bill were clean.
+            return "; ".join(self.review_reasons) or "The reader could not read these pages."
+        return ""

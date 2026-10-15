@@ -122,6 +122,13 @@ def main() -> int:
         mrp = f"  MRP {rupees(line.mrp_printed)}" if line.mrp_printed is not None else ""
         mark = "  ?" if line.ambiguous else ""
         print(f"  {position:>3}. {shown:<44} {extra[:18]:<18} {rupees(line.amount or 0):>12}{mrp}{mark}")
+        if args.verbose:
+            # PHASE 2's own reading of the line: what kind of charge it is, and
+            # whichever specification attributes the bill printed.
+            spec = ", ".join(f"{key} {value}" for key, value in sorted(line.attributes.items()) if value)
+            print(f"       {line.category}{'  [' + spec + ']' if spec else ''}")
+            if line.ambiguous and line.ambiguity_reason:
+                print(f"       ambiguous: {line.ambiguity_reason}")
 
     print(f"\n      {'lines add up to':<64} {rupees(summed):>12}")
     if header.total is not None:

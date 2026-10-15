@@ -1,7 +1,10 @@
 """Reading a bill and analysing it, in one call.
 
-The reader's instructions live in `analysis_prompt.py` and the shape it returns
-in `analysis.py`. It transcribes every line, normalises it, and reports what the
+The reader's instructions live in `analysis_prompt.py`, and PHASE 4 of those
+instructions is the only place the shape of the answer is stated. `analysis.py`
+mirrors it field for field and validates what comes back; no schema is sent, so
+the prompt and the parser are the two halves of one contract and have to be
+changed together. It transcribes every line, normalises it, and reports what the
 bill itself proves -- arithmetic that doesn't add up, a rate above a printed
 MRP, a line billed twice. It never prices anything: `requires_reference_price`
 is the handoff to the price lists in `references.py`, which is the only part of
@@ -18,13 +21,15 @@ only health data kept is the structured bill.
 """
 
 import base64
+import json
 import logging
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import lru_cache
 from typing import Protocol
 
-from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, LineAttributes, Structural
+from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, Structural
 from analysis_prompt import PROMPT
 from db import india_today
 from settings import get_settings
@@ -43,17 +48,21 @@ class BillPage:
 
 
 class OcrError(Exception):
-    """The pages couldn't be read. The caller tells the user to retake them."""
+    """The pages couldn't be read. The caller tells the user to retake them.
+
+    `retryable` marks the ones where the pages were fine and the answer was
+    not -- malformed JSON, a field missing from PHASE 4 -- so one more read is
+    worth paying for. A refusal, a bill with no lines on it, or a document
+    that isn't a bill will come back the same the second time.
+    """
+
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 class OcrProvider(Protocol):
     def read_bill(self, pages: list[BillPage]) -> BillAnalysis: ...
-
-
-def _blank() -> LineAttributes:
-    return LineAttributes(
-        size="", gauge="", french="", volume="", strength="", pack_size="", material="", brand=""
-    )
 
 
 # The prototype's day 3 bill. Sample data, not a real patient or hospital.
@@ -189,6 +198,15 @@ STUB_FINDINGS = [
 # instead, which is how most of a bill reads.
 STUB_DATED = frozenset({"Consultant visit, Dr. A. Mehta"})
 
+# PHASE 2's attributes, on the lines of the sample bill that print any. Open
+# keys, as the prompt has them: a bill states what it states, and these are
+# what these lines state. Lines not named here print none.
+STUB_ATTRIBUTES: dict[str, dict[str, str]] = {
+    "Inj. Meropenem 1g": {"strength": "1g"},
+    "Inj. Pantoprazole 40mg": {"strength": "40mg"},
+    "IV fluid, Ringer lactate 500ml": {"volume": "500ml"},
+}
+
 
 class StubOcr:
     """Development and tests: returns one fixed sample analysis, whatever is sent.
@@ -211,7 +229,7 @@ class StubOcr:
                 description_verbatim=verbatim,
                 item_name_plain=plain,
                 category=category,  # type: ignore[arg-type]
-                attributes=_blank(),
+                attributes=dict(STUB_ATTRIBUTES.get(verbatim, {})),
                 quantity=float(quantity),
                 unit=unit,
                 rate=float(rate),
@@ -228,7 +246,6 @@ class StubOcr:
         ]
         total = float(sum(line.amount or 0 for line in lines))
         return BillAnalysis(
-            error="",
             bill=BillHeader(
                 hospital="City Care Hospital",
                 bill_no="",
@@ -255,28 +272,20 @@ class StubOcr:
 
 
 def _loggable(request: dict) -> str:
-    """The request as sent, with two substitutions for a terminal's sake.
+    """The request as sent, with the pages' base64 replaced by its size.
 
     A page is tens of thousands of characters of base64, which would bury
-    everything worth reading, so each one becomes its size. `output_format` is
-    a class; what actually goes over the wire is its JSON schema, so that is
-    what is shown -- and it is the part worth looking at when the API rejects
-    a request as too complex.
+    everything worth reading. Everything else is shown exactly as it goes
+    over the wire.
     """
     import copy
-    import json
 
-    shown = {key: value for key, value in request.items() if key != "output_format"}
-    shown = copy.deepcopy(shown)
+    shown = copy.deepcopy({key: value for key, value in request.items()})
     for message in shown.get("messages", []):
         for block in message.get("content", []):
             source = block.get("source", {}) if isinstance(block, dict) else {}
             if "data" in source:
                 source["data"] = f"<base64, {len(source['data']):,} chars>"
-
-    output_format = request.get("output_format")
-    if output_format is not None:
-        shown["output_format_schema"] = output_format.model_json_schema()
 
     try:
         return json.dumps(shown, indent=2, ensure_ascii=False)
@@ -314,11 +323,6 @@ class ClaudeOcr:
         raise OcrError(f"Page {index} is a {page.content_type}, which can't be read.")
 
     def read_bill(self, pages: list[BillPage]) -> BillAnalysis:
-        import anthropic
-
-        if not pages:
-            raise OcrError("No pages to read.")
-
         content: list[dict] = [self._block(page, index) for index, page in enumerate(pages, start=1)]
         content.append(
             {
@@ -333,15 +337,31 @@ class ClaudeOcr:
             "system": PROMPT,
             "output_config": {"effort": self._effort},
             "messages": [{"role": "user", "content": content}],
-            "output_format": BillAnalysis,
         }
 
         # Logged before the call, so a request the API rejects is visible at
-        # all: the response log below never runs when parse() raises.
+        # all: the response log below never runs when the call raises.
         logger.warning("Sending to Claude:\n%s", _loggable(request))
 
         try:
-            response = self._client.messages.parse(**request)
+            return _parse(self._ask(request))
+        except OcrError as first:
+            if not first.retryable:
+                raise
+            # Nothing constrains the shape of the answer, so a malformed one is
+            # a thing that happens rather than a thing that cannot. One more
+            # read is cheaper than telling a family their bill is unreadable --
+            # and if the second answer is malformed too, that is not a coin
+            # landing badly twice, it is this bill.
+            logger.warning("Couldn't read the reader's answer (%s). Asking once more.", first)
+            return _parse(self._ask(request))
+
+    def _ask(self, request: dict) -> str:
+        """One call, returning the text of the answer."""
+        import anthropic
+
+        try:
+            response = self._client.messages.create(**request)
         except anthropic.APIError as exc:
             raise OcrError(f"Couldn't read the bill: {exc}") from exc
 
@@ -359,24 +379,128 @@ class ClaudeOcr:
 
         if response.stop_reason == "refusal":
             raise OcrError("The bill couldn't be read.")
+        if response.stop_reason == "max_tokens":
+            # The JSON is cut off mid-object. Worth its own message, because
+            # the fix is a bigger max_tokens, not a better photograph.
+            raise OcrError("The answer was cut off at max_tokens; this bill may have too many lines.")
 
-        analysis = response.parsed_output
-        if analysis is None:
-            raise OcrError("The reader returned nothing that fits the schema.")
-        if analysis.error:
-            # PHASE 4: not a hospital bill, or too degraded to read.
-            raise OcrError(analysis.error)
-        if not analysis.lines:
-            raise OcrError("No itemized lines were found on these pages.")
+        parts = [block.text for block in response.content if getattr(block, "type", "") == "text"]
+        if not parts:
+            raise OcrError("The reader answered with no text.")
+        return "\n".join(parts)
 
-        logger.info(
-            "Read %d line(s), %d finding(s)%s: %s",
-            len(analysis.lines),
-            len(analysis.findings),
-            " [needs human review]" if analysis.needs_human_review else "",
-            ", ".join(f"{f.rule}({f.severity})" for f in analysis.findings) or "none",
-        )
-        return analysis
+
+# The reader is asked for "a single JSON object and nothing else", and mostly
+# sends one. These put right the two ways an answer still arrives wrapped: in a
+# ```json fence, or with a sentence either side of the object.
+_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.S)
+
+# How many openings to try before giving up. Prose around the object is common;
+# prose containing a dozen false starts is not, and trying every one of them on
+# a long answer is work for nothing.
+_MAX_CANDIDATES = 20
+
+
+def _balanced(text: str, start: int) -> str | None:
+    """The brace-balanced span from `start`, or None if it never closes.
+
+    Walks the string rather than matching a pattern: the reader quotes a
+    bill's own descriptions verbatim, so a brace inside a JSON string has to
+    count for nothing.
+    """
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
+def _json_object(text: str) -> str:
+    """The JSON object in `text`, whatever is written around it.
+
+    Every opening brace is a candidate, tried in turn, because the first one
+    need not be the answer: "The bill uses {braces} in a description" ahead of
+    the object would otherwise be the whole of what we parsed.
+    """
+    fenced = _FENCE.search(text)
+    if fenced:
+        text = fenced.group(1)
+
+    if "{" not in text:
+        raise OcrError("The reader's answer has no JSON object in it.", retryable=True)
+
+    unclosed = False
+    for found, _ in zip(re.finditer(r"\{", text), range(_MAX_CANDIDATES), strict=False):
+        span = _balanced(text, found.start())
+        if span is None:
+            # This opening never closes, so neither will any after it.
+            unclosed = True
+            break
+        try:
+            if isinstance(json.loads(span), dict):
+                return span
+        except json.JSONDecodeError:
+            continue
+
+    if unclosed:
+        raise OcrError("The reader's answer stops in the middle of the JSON object.", retryable=True)
+    raise OcrError("The reader's answer has no JSON object in it.", retryable=True)
+
+
+def _parse(text: str) -> BillAnalysis:
+    """The reader's answer as PHASE 4's object, or an OcrError saying why not.
+
+    This is the half of the contract that `analysis_prompt.py` states and
+    nothing enforces, so every way the answer can be wrong is answered for
+    here rather than reaching a family as a half-read bill.
+    """
+    import pydantic
+
+    # `_json_object` has already proved this parses to an object.
+    raw = json.loads(_json_object(text))
+
+    # PHASE 4's last instruction, which is a shape of its own rather than a
+    # field of the analysis: not a hospital bill, or too degraded to read.
+    # Asking again would get the same answer.
+    if raw.get("error"):
+        raise OcrError(str(raw["error"]))
+
+    try:
+        analysis = BillAnalysis.model_validate(raw)
+    except pydantic.ValidationError as exc:
+        # Every field PHASE 4 asks for is required, so this names the one the
+        # reader left out or sent the wrong kind of thing for.
+        raise OcrError(f"The reader's answer doesn't match PHASE 4: {exc}", retryable=True) from exc
+
+    refusal = analysis.unreadable()
+    if refusal:
+        raise OcrError(refusal)
+
+    logger.info(
+        "Read %d line(s), %d finding(s)%s: %s",
+        len(analysis.lines),
+        len(analysis.findings),
+        " [needs human review]" if analysis.needs_human_review else "",
+        ", ".join(f"{f.rule}({f.severity})" for f in analysis.findings) or "none",
+    )
+    return analysis
 
 
 def to_decimal(value: float | None) -> Decimal | None:
