@@ -107,6 +107,50 @@ describe('the bill report', () => {
     expect(screen.getByText('Bill total')).toBeVisible();
     expect(screen.getByText('₹42,490')).toBeVisible();
   });
+
+  it('groups the marked bill by the kind of charge', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    fireEvent.press(await screen.findByText('Marked bill'));
+
+    // One heading per kind of charge the bill actually has, and no others.
+    expect(await screen.findByText('Room and nursing')).toBeVisible();
+    expect(screen.getByText('Medicines')).toBeVisible();
+    expect(screen.getByText('Consumables')).toBeVisible();
+    expect(screen.queryByText('Implants and devices')).toBeNull();
+    expect(screen.queryByText('Other charges')).toBeNull();
+  });
+
+  it('shows each group what its lines come to', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    fireEvent.press(await screen.findByText('Marked bill'));
+
+    // The point of the grouping: the medicines alone are more than the room,
+    // which is worth asking about even where no single line was flagged.
+    // 17,700 is both the group's subtotal and its one line, so it appears
+    // twice; the room's 6,500 likewise.
+    expect(await screen.findAllByText('₹17,700')).toHaveLength(2);
+    expect(screen.getAllByText('₹6,500')).toHaveLength(2);
+  });
+
+  it('keeps every line of the bill on screen', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    fireEvent.press(await screen.findByText('Marked bill'));
+
+    // Grouping must not lose a row. A family holds this up beside the
+    // hospital's own copy, so a line that quietly isn't here is the one
+    // failure this screen cannot have.
+    for (const name of ['Room rent, twin sharing', 'Inj. Meropenem 1g', 'Surgical gloves']) {
+      expect(await screen.findByText(name)).toBeVisible();
+    }
+  });
+
+  it('still lets a flagged line in a group be opened', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    fireEvent.press(await screen.findByText('Marked bill'));
+    fireEvent.press(await screen.findByText('Inj. Meropenem 1g'));
+
+    expect(await screen.findByText("Why it's flagged")).toBeVisible();
+  });
 });
 
 describe('asking the billing desk', () => {

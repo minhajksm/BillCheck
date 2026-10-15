@@ -32,6 +32,22 @@ Category = Literal[
     "unclassified",
 ]
 
+# PHASE 2's categories in the order a bill is read, not the order the prompt
+# lists them: where the money usually goes first, and the catch-all last. The
+# report groups by this, so it is what a family sees.
+CATEGORY_ORDER: tuple[Category, ...] = (
+    "room_and_nursing",
+    "professional_fees",
+    "procedure_or_ot",
+    "investigation",
+    "pharmacy_drug",
+    "consumable_disposable",
+    "implant_device",
+    "equipment_charge",
+    "non_medical",
+    "unclassified",
+)
+
 Severity = Literal["high", "medium", "low"]
 
 

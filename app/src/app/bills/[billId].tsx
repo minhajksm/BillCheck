@@ -16,7 +16,7 @@ import { useToast } from '@/components/toast';
 import { Gutter, Radius } from '@/constants/theme';
 import { readBill, readCase, setFlagStatus } from '@/data/cases-api';
 import { flagAmountLine, flagCopy, flagTag } from '@/data/flag-copy';
-import type { Bill, Case, Flag, LineItem } from '@/data/types';
+import type { Bill, Case, Flag, LineCategory, LineItem } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth } from '@/i18n/dates';
@@ -253,6 +253,55 @@ function FlagList({
   );
 }
 
+/**
+ * The categories in the order the report shows them: where the money usually
+ * goes first, the catch-all last. Mirrors `CATEGORY_ORDER` in
+ * `api/analysis.py`, and `api/tests/test_categories.py` keeps the two in step.
+ */
+const CATEGORY_ORDER: LineCategory[] = [
+  'room_and_nursing',
+  'professional_fees',
+  'procedure_or_ot',
+  'investigation',
+  'pharmacy_drug',
+  'consumable_disposable',
+  'implant_device',
+  'equipment_charge',
+  'non_medical',
+  'unclassified',
+];
+
+/**
+ * The bill's rows under the kind of charge each one is, in the bill's own
+ * order within each group.
+ *
+ * Grouping is what makes a sixty-line bill answerable: a family can see that
+ * the consumables came to more than the room, which is the question worth
+ * asking even where no single line was flagged. Only groups with rows appear,
+ * so a short bill still reads as a short bill.
+ */
+function groupByCategory(rows: LineItem[]): { category: LineCategory; rows: LineItem[]; total: number }[] {
+  const groups = new Map<LineCategory, LineItem[]>();
+  for (const row of rows) {
+    // A category this build doesn't know about falls in with the catch-all
+    // rather than out of the report. Grouping must never lose a row: this is
+    // the family's own bill, and a line that silently isn't there is worse
+    // than one filed under the wrong heading.
+    const category = CATEGORY_ORDER.includes(row.category) ? row.category : 'unclassified';
+    const existing = groups.get(category);
+    if (existing) existing.push(row);
+    else groups.set(category, [row]);
+  }
+  return CATEGORY_ORDER.filter((category) => groups.has(category)).map((category) => {
+    const inGroup = (groups.get(category) ?? []).slice().sort((a, b) => a.position - b.position);
+    return {
+      category,
+      rows: inGroup,
+      total: inGroup.reduce((sum, row) => sum + row.amount, 0),
+    };
+  });
+}
+
 function MarkedBill({
   bill,
   item,
@@ -265,6 +314,7 @@ function MarkedBill({
   const { t } = useTranslation();
   const palette = usePalette();
   const byItem = new Map(bill.flags.filter((f) => f.lineItemId).map((f) => [f.lineItemId as string, f]));
+  const groups = groupByCategory(bill.lineItems);
 
   return (
     <Card style={styles.paper}>
@@ -276,41 +326,54 @@ function MarkedBill({
         </Text>
       </View>
 
-      {bill.lineItems.map((row) => {
-        const flag = byItem.get(row.id);
-        const content = (
-          <>
-            <View style={styles.billName}>
-              <Text variant="small">{row.name}</Text>
-              {row.detail ? <Text variant="faint">{row.detail}</Text> : null}
-            </View>
-            <Text variant="small" style={flag?.status === 'corrected' && styles.struck}>
-              {formatINR(row.amount)}
+      {groups.map((group) => (
+        <View key={group.category}>
+          <View style={[styles.groupHead, { borderBottomColor: palette.line }]}>
+            <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
+              {t(`report.categories.${group.category}`)}
             </Text>
-          </>
-        );
-        if (!flag) {
-          return (
-            <View key={row.id} style={[styles.billRow, { borderBottomColor: palette.line }]}>
-              {content}
-            </View>
-          );
-        }
-        return (
-          <Pressable
-            key={row.id}
-            accessibilityRole="button"
-            accessibilityLabel={`${flag.position}: ${row.name}`}
-            onPress={() => onOpen(flag)}
-            style={[
-              styles.billRow,
-              { borderBottomColor: palette.line },
-              flag.status === 'open' && { backgroundColor: palette.marigoldSoft },
-            ]}>
-            {content}
-          </Pressable>
-        );
-      })}
+            <Text variant="small" weight="semibold" color="ink2">
+              {formatINR(group.total)}
+            </Text>
+          </View>
+
+          {group.rows.map((row) => {
+            const flag = byItem.get(row.id);
+            const content = (
+              <>
+                <View style={styles.billName}>
+                  <Text variant="small">{row.name}</Text>
+                  {row.detail ? <Text variant="faint">{row.detail}</Text> : null}
+                </View>
+                <Text variant="small" style={flag?.status === 'corrected' && styles.struck}>
+                  {formatINR(row.amount)}
+                </Text>
+              </>
+            );
+            if (!flag) {
+              return (
+                <View key={row.id} style={[styles.billRow, { borderBottomColor: palette.line }]}>
+                  {content}
+                </View>
+              );
+            }
+            return (
+              <Pressable
+                key={row.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${flag.position}: ${row.name}`}
+                onPress={() => onOpen(flag)}
+                style={[
+                  styles.billRow,
+                  { borderBottomColor: palette.line },
+                  flag.status === 'open' && { backgroundColor: palette.marigoldSoft },
+                ]}>
+                {content}
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
 
       <View style={styles.billTotal}>
         <Text weight="bold">{t('report.billTotal')}</Text>
@@ -483,6 +546,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderRadius: 2,
+  },
+  groupHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 10,
+    paddingTop: 14,
+    paddingBottom: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
   },
   billName: { flex: 1 },
   struck: { textDecorationLine: 'line-through' },

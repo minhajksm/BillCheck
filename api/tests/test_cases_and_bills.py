@@ -250,6 +250,29 @@ def test_uploading_a_bill_returns_line_items_and_flags(client: TestClient, auth_
     assert all(f["status"] == "open" for f in bill["flags"])
 
 
+def test_every_line_carries_the_kind_of_charge_it_is(client: TestClient, auth_headers: dict):
+    """The report groups the bill by this, so every line needs one. The
+    reader classifies them in PHASE 2; nothing used to keep it."""
+    case = new_case(client, auth_headers)
+    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
+
+    assert all(row["category"] for row in bill["line_items"]), "a line with no category groups nowhere"
+    by_name = {row["name"]: row["category"] for row in bill["line_items"]}
+    assert by_name["Room rent, twin sharing"] == "room_and_nursing"
+    assert by_name["Inj. Meropenem 1g"] == "pharmacy_drug"
+    assert by_name["Surgical gloves"] == "consumable_disposable"
+
+
+def test_the_kind_of_charge_survives_reading_the_bill_back(client: TestClient, auth_headers: dict):
+    """It is stored, not recomputed: the pages are dropped once read, so a
+    category lost on the way in is lost for good."""
+    case = new_case(client, auth_headers)
+    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
+
+    again = client.get(f"/bills/{bill['id']}", headers=auth_headers).json()
+    assert [row["category"] for row in again["line_items"]] == [row["category"] for row in bill["line_items"]]
+
+
 def test_every_flag_carries_its_reasoning_and_reference(client: TestClient, auth_headers: dict):
     """CLAUDE.md: a flag must show what it was checked against."""
     case = new_case(client, auth_headers)

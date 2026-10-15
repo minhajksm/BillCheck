@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, StringConstraints
 
+from analysis import Category
 from flag_kinds import FlagKind
 from phone import normalize_indian_mobile
 
@@ -198,6 +199,7 @@ class LineItemOut(BaseModel):
     detail: str | None
     quantity: float | None
     amount: float
+    category: Category
 
 
 class FlagOut(BaseModel):

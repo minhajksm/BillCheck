@@ -44,6 +44,7 @@ type ApiLineItem = {
   detail: string | null;
   quantity: number | null;
   amount: number;
+  category: LineItem['category'];
 };
 
 type ApiFlag = {
@@ -104,6 +105,7 @@ const toLineItem = (i: ApiLineItem): LineItem => ({
   detail: i.detail ?? undefined,
   quantity: i.quantity ?? undefined,
   amount: i.amount,
+  category: i.category,
 });
 
 const toFlag = (f: ApiFlag): Flag => ({

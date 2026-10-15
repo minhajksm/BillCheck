@@ -36,6 +36,23 @@ export type Case = {
   recoveredAmount: number;
 };
 
+/**
+ * What kind of charge a line is, as the reader classified it while reading
+ * the bill. The report groups by this. Must match `CATEGORY_ORDER` in
+ * `api/analysis.py`; `api/tests/test_categories.py` checks that it does.
+ */
+export type LineCategory =
+  | 'room_and_nursing'
+  | 'professional_fees'
+  | 'procedure_or_ot'
+  | 'investigation'
+  | 'pharmacy_drug'
+  | 'consumable_disposable'
+  | 'implant_device'
+  | 'equipment_charge'
+  | 'non_medical'
+  | 'unclassified';
+
 /** One row of the itemized bill, as printed. */
 export type LineItem = {
   id: string;
@@ -44,6 +61,7 @@ export type LineItem = {
   detail?: string;
   quantity?: number;
   amount: number;
+  category: LineCategory;
 };
 
 /** Checked against a published price list, so the reference can be shown. */

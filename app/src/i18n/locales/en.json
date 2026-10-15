@@ -227,6 +227,18 @@
     "billTotal": "Bill total",
     "billHeader": "Interim bill, {{date}}",
     "patientLine": "IP no. {{ip}}, {{patient}}",
+    "categories": {
+      "room_and_nursing": "Room and nursing",
+      "professional_fees": "Doctors' fees",
+      "procedure_or_ot": "Procedures and OT",
+      "investigation": "Tests and scans",
+      "pharmacy_drug": "Medicines",
+      "consumable_disposable": "Consumables",
+      "implant_device": "Implants and devices",
+      "equipment_charge": "Equipment charges",
+      "non_medical": "Non-medical items",
+      "unclassified": "Other charges"
+    },
     "whyFlagged": "Why it's flagged",
     "whatToAsk": "What to ask",
     "whatHappened": "What happened?",
