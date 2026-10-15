@@ -14,7 +14,7 @@ from decimal import Decimal
 
 import pytest
 
-from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, LineAttributes, Structural
+from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, Structural
 from audit import Flag
 from flag_kinds import CitedFlagKind
 from review import flags_from_findings
@@ -41,9 +41,7 @@ def line(
         description_verbatim=name,
         item_name_plain=name,
         category="unclassified",
-        attributes=LineAttributes(
-            size="", gauge="", french="", volume="", strength="", pack_size="", material="", brand=""
-        ),
+        attributes={},
         quantity=quantity,
         unit=unit,
         rate=None,
@@ -94,7 +92,6 @@ def analysis(
 ) -> BillAnalysis:
     rows = LINES if lines is None else lines
     return BillAnalysis(
-        error="",
         bill=BillHeader(
             hospital="City Care Hospital",
             bill_no="",
