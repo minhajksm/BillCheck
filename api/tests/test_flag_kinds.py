@@ -17,17 +17,9 @@ from typing import get_args
 import pytest
 from pydantic import ValidationError
 
-from flag_kinds import (
-    CHECKABLE,
-    COVERED_BY_REFERENCES,
-    READER_KINDS,
-    WHOLE_LINE,
-    CitedFlagKind,
-    ReaderFlagKind,
-    prompt_section,
-)
+from analysis import BillAnalysis
+from flag_kinds import READER_KINDS, CitedFlagKind, KindSpec, ReaderFlagKind
 from models import FlagOut
-from ocr import PROMPT, ExtractedBill
 
 READER = get_args(ReaderFlagKind)
 CITED = get_args(CitedFlagKind)
@@ -71,38 +63,24 @@ def test_the_table_covers_exactly_the_declared_kinds():
     assert set(READER_KINDS) == set(READER)
 
 
-def test_the_reader_s_schema_allows_exactly_the_declared_kinds():
-    schema = ExtractedBill.model_json_schema()
-    assert set(schema["$defs"]["Observation"]["properties"]["kind"]["enum"]) == set(READER)
+def test_the_reader_s_schema_no_longer_names_a_kind():
+    """The reader states its own rule and writes its own sentence, so there is
+    no enum of ours for it to pick from. A `kind` back in that schema would
+    mean the taxonomy had crept back in by the side door."""
+    schema = BillAnalysis.model_json_schema()
+    assert "kind" not in schema["$defs"]["Finding"]["properties"]
 
 
-@pytest.mark.parametrize("kind", READER)
-def test_the_prompt_describes_every_kind_it_allows(kind: str):
-    """A kind in the schema the reader was never told about is never reported;
-    one described but not in the schema is rejected on the way back."""
-    assert f"`{kind}`" in PROMPT
-    # The prompt wraps each line, so compare with the wrapping taken out.
-    flattened = " ".join(prompt_section().split())
-    assert f"`{kind}`: {READER_KINDS[kind].description}" in flattened
+def test_the_kinds_the_code_still_raises_are_declared():
+    """Not every kind is produced any more -- the older ones are kept so a
+    stored flag still serialises -- but these two are raised on every bill."""
+    assert {"analysis_finding", "date_outside_stay"} <= set(READER)
 
 
-# --- the sets review works from ---------------------------------------------
-
-
-def test_only_kinds_with_a_confirm_step_are_checkable():
-    """`review.py` matches on these by name. A kind marked checkable with no
-    `_confirm_*` behind it would fall to the date branch and be dropped."""
-    assert CHECKABLE == {"total_mismatch", "duplicate_line", "date_outside_stay"}
-
-
-def test_what_a_correction_gives_back_is_only_claimed_for_whole_line_kinds():
-    degree = {"unit_price_high", "quantity_high", "branded_drug_margin", "room_rate_vs_ward"}
-    assert not (degree & WHOLE_LINE), "a judgment of degree has no defensible figure"
-
-
-@pytest.mark.parametrize("kind,cited", sorted(COVERED_BY_REFERENCES.items()))
-def test_a_kind_is_only_covered_by_a_real_cited_kind(kind: str, cited: str):
-    assert cited in CITED
+@pytest.mark.parametrize("kind,spec", sorted(READER_KINDS.items()))
+def test_every_kind_says_what_it_means(kind: str, spec: KindSpec):
+    """Whoever reads a stored flag years from now has only this to go on."""
+    assert spec.description.strip(), kind
 
 
 # --- the copy that cannot be derived ----------------------------------------

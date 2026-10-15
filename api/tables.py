@@ -184,7 +184,9 @@ class Flag(Base):
     line_item_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("line_items.id", ondelete="CASCADE"))
     position: Mapped[int] = mapped_column(Integer)
     # What was noticed: "above_mrp", "duplicate" and "quantity" come from the
-    # price lists; the rest from the reader (see ocr.ObservationKind).
+    # price lists, "analysis_finding" from the reader's own analysis, and
+    # "date_outside_stay" from the stay check. See flag_kinds.py, which also
+    # keeps the older kinds bills read before that change carry.
     kind: Mapped[str] = mapped_column(String(30))
     # "red" for a clear issue, "amber" for one worth asking about.
     level: Mapped[str] = mapped_column(String(10))

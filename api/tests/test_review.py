@@ -1,9 +1,12 @@
-"""What the reader's observations are worth.
+"""What the reader's findings are worth once they reach a family.
 
-The reader says what it noticed; this decides what a family is shown. The point
-of every test here is the same: a claim that the rows don't bear out must not
-reach the family, because a charge that was correct, questioned at a counter,
-costs them more than a charge we missed.
+The reader states what the bill proves and writes its own sentence, so this
+module no longer second-guesses the claim itself: there is no list of kinds to
+re-check against. What it still decides is what reaches the screen, and the
+tests here are about the parts that can still go wrong -- a finding naming
+lines that aren't there, a price-list flag and a finding about the same line,
+and the stay check, which the reader cannot make because it is never told when
+the admission was.
 """
 
 from datetime import date
@@ -11,10 +14,10 @@ from decimal import Decimal
 
 import pytest
 
+from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, LineAttributes, Structural
 from audit import Flag
 from flag_kinds import CitedFlagKind
-from ocr import ExtractedBill, ExtractedRow, Observation
-from review import review
+from review import flags_from_findings
 
 ADMITTED = date(2026, 10, 9)
 
@@ -22,153 +25,182 @@ ADMITTED = date(2026, 10, 9)
 # The schema requires every field, so these helpers fill in the blanks a test
 # doesn't care about. Keeping that here rather than in the model is the point:
 # the reader has to send them, and nothing downstream may quietly default them.
-def row(name: str, detail: str | None, amount: float) -> ExtractedRow:
-    return ExtractedRow(name=name, detail=detail or "", quantity=None, amount=amount)
+def line(
+    line_id: str,
+    name: str,
+    amount: float,
+    *,
+    on: str = "",
+    quantity: float | None = None,
+    unit: str = "",
+) -> AnalysedLine:
+    return AnalysedLine(
+        line_id=line_id,
+        page=1,
+        section="",
+        description_verbatim=name,
+        item_name_plain=name,
+        category="unclassified",
+        attributes=LineAttributes(
+            size="", gauge="", french="", volume="", strength="", pack_size="", material="", brand=""
+        ),
+        quantity=quantity,
+        unit=unit,
+        rate=None,
+        amount=amount,
+        date=on,
+        mrp_printed=None,
+        confidence=0.9,
+        ambiguous=False,
+        ambiguity_reason="",
+    )
 
 
-def observation(kind: str, rows: list[int], **given) -> Observation:
-    blank = {
-        "unit_price": "",
-        "expected": "",
-        "quantity": "",
-        "usual": "",
-        "stated": "",
-        "summed": "",
-        "confidence": "medium",
-        "note": "",
-        "why_en": "",
-        "why_hi": "",
-        "why_mr": "",
-    }
-    return Observation(kind=kind, row_positions=rows, **{**blank, **given})
+def finding(
+    rule: str,
+    line_ids: list[str],
+    *,
+    severity: str = "medium",
+    statement: str = "The bill charges for this twice.",
+    evidence: str = "Consultant visit, Dr. A. Mehta — 2,500 — twice",
+    confirm: str = "The case sheet.",
+) -> Finding:
+    return Finding(
+        finding_id="f1",
+        rule=rule,
+        severity=severity,  # type: ignore[arg-type]
+        line_ids=line_ids,
+        evidence_quoted=evidence,
+        statement=statement,
+        confirmation_required=confirm,
+    )
 
 
-ROWS = [
-    row("Room rent, twin sharing", "1 day", 6500),
-    row("Consultant visit, Dr. A. Mehta", "11 Oct, 10:30 am", 2500),
-    row("Consultant visit, Dr. A. Mehta", "11 Oct, 10:30 am", 2500),
-    row("Attendant meals", "3 meals", 450),
+LINES = [
+    line("L1", "Room rent, twin sharing", 6500, quantity=1, unit="day"),
+    line("L2", "Consultant visit, Dr. A. Mehta", 2500, on="11 Oct, 10:30 am"),
+    line("L3", "Consultant visit, Dr. A. Mehta", 2500, on="11 Oct, 10:30 am"),
+    line("L4", "Attendant meals", 450, quantity=3, unit="meals"),
 ]
 
 
-def bill(observations: list[Observation], stated_total: float | None = 11950.0) -> ExtractedBill:
-    return ExtractedBill(
-        bill_date="2026-10-11",
-        stated_total=stated_total,
-        rows=list(ROWS),
-        observations=observations,
+def analysis(
+    findings: list[Finding],
+    *,
+    lines: list[AnalysedLine] | None = None,
+    bill_date: str = "2026-10-11",
+    needs_human_review: bool = False,
+    review_reasons: list[str] | None = None,
+) -> BillAnalysis:
+    rows = LINES if lines is None else lines
+    return BillAnalysis(
+        error="",
+        bill=BillHeader(
+            hospital="City Care Hospital",
+            bill_no="",
+            bill_date=bill_date,
+            admission_date="",
+            discharge_date="",
+            stay_days=None,
+            room_category="",
+            total=float(sum(row.amount or 0 for row in rows)),
+            pages_processed=1,
+            extraction_confidence=0.9,
+        ),
+        lines=list(rows),
+        findings=findings,
+        requires_reference_price=[],
+        structural=Structural(consumable_share_pct=0.0, unitemised_share_pct=0.0, unreadable_line_count=0),
+        needs_human_review=needs_human_review,
+        review_reasons=review_reasons or [],
     )
 
 
-def observe(kind: str, rows: list[int], **kwargs) -> Observation:
-    return observation(kind, rows, **kwargs)
+# --- a finding becomes a flag ------------------------------------------------
 
 
-# --- claims the rows can check ----------------------------------------------
-
-
-def test_keeps_a_duplicate_the_rows_bear_out():
-    flags = review(bill([observe("duplicate_line", [2, 3])]), [], ADMITTED)
+def test_a_finding_reaches_the_family_as_one_flag():
+    flags = flags_from_findings(analysis([finding("C. identical item billed twice", ["L2", "L3"])]), [])
 
     (flag,) = flags
-    assert flag.kind == "duplicate_line"
-    assert flag.level == "amber", "read off a photograph, so still a question"
+    assert flag.kind == "analysis_finding", "the finding carries its own rule, so there is one kind"
+    assert flag.row_position == 2, "the first line it names"
     assert flag.billed == Decimal("2500")
-    assert flag.excess == Decimal("2500"), "the repeat is what a correction gives back"
     assert flag.reference_source == "reader"
 
 
-def test_drops_a_duplicate_the_rows_contradict():
-    """The reader called two different rows the same charge. The rows say
-    otherwise, so the family is told nothing."""
-    flags = review(bill([observe("duplicate_line", [1, 2])]), [], ADMITTED)
-    assert flags == []
-
-
-def test_keeps_a_total_that_really_does_not_add_up():
-    flags = review(bill([observe("total_mismatch", [])], stated_total=13000.0), [], ADMITTED)
-
-    (flag,) = flags
-    assert flag.kind == "total_mismatch"
-    assert flag.reference_detail["summed"] == "11950"
-    assert flag.reference_detail["stated"] == "13000"
-    assert flag.excess == Decimal("1050")
-
-
-def test_drops_a_total_that_does_add_up():
-    """The commonest false alarm: the reader miscounts, the rows are fine."""
-    flags = review(bill([observe("total_mismatch", [])], stated_total=11950.0), [], ADMITTED)
-    assert flags == []
-
-
-def test_tolerates_rounding_in_the_total():
-    """A rupee either way is rounding on the bill, not a billing error."""
-    flags = review(bill([observe("total_mismatch", [])], stated_total=11950.75), [], ADMITTED)
-    assert flags == []
-
-
-def test_drops_a_total_claim_when_the_bill_prints_no_total():
-    flags = review(bill([observe("total_mismatch", [])], stated_total=None), [], ADMITTED)
-    assert flags == []
-
-
-def test_keeps_a_date_outside_the_stay():
-    flags = review(bill([observe("date_outside_stay", [2])]), [], date(2026, 10, 20), date(2026, 10, 25))
-
-    # Rows 2 and 3 carry the same out-of-stay date. The reader raised only row
-    # 2; the stay check finds row 3 as well, which is the whole point of it.
-    assert [flag.kind for flag in flags] == ["date_outside_stay", "date_outside_stay"]
-    assert [flag.row_position for flag in flags] == [2, 3]
-    assert {flag.reference_detail["row_date"] for flag in flags} == {"2026-10-11"}
-
-
-def test_drops_a_date_inside_the_stay():
-    flags = review(bill([observe("date_outside_stay", [2])]), [], ADMITTED, date(2026, 10, 15))
-    assert flags == []
-
-
-def test_drops_a_date_claim_about_a_row_with_no_date():
-    flags = review(bill([observe("date_outside_stay", [1])]), [], ADMITTED)
-    assert flags == []
-
-
-# --- claims nothing can check ------------------------------------------------
-
-
-def test_keeps_a_judgment_as_a_question():
-    flags = review(bill([observe("non_medical_item", [4])]), [], ADMITTED)
-
-    (flag,) = flags
-    assert flag.kind == "non_medical_item"
-    assert flag.level == "amber"
-    assert flag.billed == Decimal("450")
-    assert flag.excess == Decimal("450")
-
-
-def test_a_judgment_of_degree_claims_no_amount():
-    """ "This looks dear" has no defensible figure behind it. Putting one on
-    screen would dress the reader's guess up as an amount."""
-    flags = review(
-        bill([observe("unit_price_high", [1], unit_price="6500", expected="3000")]),
+def test_the_reader_s_own_sentence_is_what_the_app_shows():
+    """The one line on screen we don't write. It rides in reference_detail as
+    `why_en`, which is the field the app prefers over its own wording."""
+    flags = flags_from_findings(
+        analysis(
+            [
+                finding(
+                    "C. identical item billed twice",
+                    ["L2", "L3"],
+                    statement="Two consultant visits by the same doctor are billed for 11 Oct.",
+                    evidence="Consultant visit, Dr. A. Mehta — 2,500 — twice",
+                    confirm="The case sheet showing two separate visits.",
+                )
+            ]
+        ),
         [],
-        ADMITTED,
     )
-    (flag,) = flags
-    assert flag.excess == Decimal("0")
-    assert flag.billed == Decimal("6500")
-    # The reader's own figures are kept for the app to show as an expectation.
-    assert flag.reference_detail["expected"] == "3000"
+
+    detail = flags[0].reference_detail
+    assert detail["why_en"] == "Two consultant visits by the same doctor are billed for 11 Oct."
+    assert detail["rule"] == "C. identical item billed twice"
+    assert detail["evidence"] == "Consultant visit, Dr. A. Mehta — 2,500 — twice"
+    assert detail["confirm"] == "The case sheet showing two separate visits."
+    assert detail["lines"] == "L2,L3", "every line it named, not just the one it hangs on"
 
 
-def test_drops_what_the_reader_was_unsure_of():
-    flags = review(bill([observe("non_medical_item", [4], confidence="low")]), [], ADMITTED)
-    assert flags == []
+def test_a_finding_never_claims_an_amount_back():
+    """The prompt forbids pricing anything, so a finding has no figure behind
+    it. Putting one on screen would dress the reader's reading up as money the
+    family is owed; that is the price lists' job."""
+    flags = flags_from_findings(analysis([finding("B. rate above printed MRP", ["L1"])]), [])
+    assert flags[0].excess == Decimal("0")
 
 
-@pytest.mark.parametrize("confidence", ["medium", "high"])
-def test_keeps_what_the_reader_was_sure_of(confidence: str):
-    flags = review(bill([observe("non_medical_item", [4], confidence=confidence)]), [], ADMITTED)
-    assert len(flags) == 1
+@pytest.mark.parametrize(
+    "severity,level",
+    [("high", "red"), ("medium", "amber"), ("low", "amber")],
+)
+def test_only_what_the_bill_proves_is_red(severity: str, level: str):
+    """The prompt reserves "high" for a finding the page itself settles. Those
+    are as hard as a price-list flag; the rest are questions."""
+    flags = flags_from_findings(analysis([finding("A. check", ["L1"], severity=severity)]), [])
+    assert flags[0].level == level
+
+
+def test_a_bill_level_finding_may_name_no_line():
+    """Checks about the bill as a whole -- a total that doesn't add up, an
+    advance not deducted -- are about no one line."""
+    flags = flags_from_findings(analysis([finding("A. total does not add up", [])]), [])
+    assert [flag.kind for flag in flags] == ["analysis_finding"]
+    assert flags[0].row_position == 0
+    assert flags[0].billed == Decimal("0"), "no line to take an amount from"
+
+
+def test_no_findings_means_no_reader_flags():
+    assert flags_from_findings(analysis([]), []) == []
+
+
+# --- a reader that loses the thread -----------------------------------------
+
+
+def test_drops_a_finding_about_a_line_that_is_not_there():
+    """L9 of a four-line bill means the reader lost its own numbering, which is
+    reason enough to show the family nothing about it."""
+    assert flags_from_findings(analysis([finding("A. check", ["L9"])]), []) == []
+
+
+def test_keeps_the_half_of_a_finding_that_is_there():
+    """Unlike the duplicate check it replaces, a finding is one statement about
+    whatever lines it names: half the ids landing is still a line to show."""
+    flags = flags_from_findings(analysis([finding("C. billed twice", ["L2", "L99"])]), [])
+    assert [flag.row_position for flag in flags] == [2]
 
 
 # --- not stepping on the cited flags ----------------------------------------
@@ -187,73 +219,81 @@ def reference_flag(kind: CitedFlagKind, position: int) -> Flag:
     )
 
 
-def test_a_cited_flag_wins_over_the_same_claim():
-    """Asked once. The price list can show the family where its number came
-    from; the reader can't."""
-    flags = review(bill([observe("unit_price_high", [1])]), [reference_flag("above_mrp", 1)], ADMITTED)
-    assert [flag.reference_source for flag in flags] == ["mrp"]
-
-
-def test_the_reader_still_speaks_about_other_rows():
-    flags = review(bill([observe("unit_price_high", [4])]), [reference_flag("above_mrp", 1)], ADMITTED)
-    assert [flag.reference_source for flag in flags] == ["mrp", "reader"]
+def test_a_reader_that_says_nothing_leaves_the_cited_flags_alone():
+    cited = [reference_flag("above_mrp", 1)]
+    assert flags_from_findings(analysis([]), cited) == cited
 
 
 def test_red_comes_before_amber():
-    flags = review(
-        bill([observe("non_medical_item", [4]), observe("duplicate_line", [2, 3])]),
+    flags = flags_from_findings(
+        analysis(
+            [
+                finding("G. non-medical item", ["L4"], severity="low"),
+                finding("C. billed twice", ["L2", "L3"]),
+            ]
+        ),
         [reference_flag("above_mrp", 1)],
-        ADMITTED,
     )
     assert [flag.level for flag in flags] == ["red", "amber", "amber"]
+    assert [flag.row_position for flag in flags] == [1, 2, 4], "then the bill's own order"
 
 
-# --- a reader that loses the thread -----------------------------------------
+# --- severity, and the switch that keeps everything --------------------------
 
 
-def test_drops_a_claim_about_a_row_that_is_not_there():
-    """Row 9 of a 4-row bill means the reader lost its own numbering, which is
-    reason enough to show the family nothing about it."""
-    flags = review(bill([observe("non_medical_item", [9])]), [], ADMITTED)
-    assert flags == []
+def test_keeping_everything_is_the_default():
+    """REVIEW_KEEP_ALL on: nothing the reader said is withheld, so a bill can
+    be read in full while the prompt is being worked on."""
+    kept = flags_from_findings(analysis([finding("A. check", ["L1"], severity="low")]), [])
+    assert len(kept) == 1
 
 
-def test_drops_the_out_of_range_half_of_a_claim():
-    flags = review(bill([observe("duplicate_line", [2, 99])]), [], ADMITTED)
-    assert flags == []
+def test_the_switch_off_drops_what_the_reader_itself_called_low():
+    dropped = flags_from_findings(analysis([finding("A. check", ["L1"], severity="low")]), [], keep_all=False)
+    assert dropped == []
 
 
-def test_no_observations_means_no_reader_flags():
-    assert review(bill([]), [], ADMITTED) == []
+def test_the_switch_off_keeps_the_rest():
+    for severity in ("high", "medium"):
+        flags = flags_from_findings(
+            analysis([finding("A. check", ["L1"], severity=severity)]), [], keep_all=False
+        )
+        assert len(flags) == 1, severity
 
 
-def test_a_reader_that_says_nothing_leaves_the_cited_flags_alone():
-    cited = [reference_flag("above_mrp", 1)]
-    assert review(bill([]), cited, ADMITTED) == cited
+def test_a_reader_asking_for_a_human_still_hands_its_findings_over(caplog):
+    """`needs_human_review` is for whoever is running this, not a reason to
+    show the family nothing: the findings are what they came for."""
+    with caplog.at_level("WARNING"):
+        flags = flags_from_findings(
+            analysis(
+                [finding("A. check", ["L1"])],
+                needs_human_review=True,
+                review_reasons=["page 2 is cut off"],
+            ),
+            [],
+        )
+    assert len(flags) == 1
+    assert "page 2 is cut off" in caplog.text
 
 
-# --- the stay check, which nobody has to propose ----------------------------
+# --- the stay check, which the reader cannot make ---------------------------
 #
-# The reader is never told when the admission was, so it cannot raise this.
-# These run over every row of every bill, which makes the rows that must *not*
-# be flagged the more important half.
+# The reader is given the bill and nothing else, so it is never told when the
+# admission was. This runs over every line of every bill, which makes the lines
+# that must *not* be flagged the more important half.
 
 
-def dated(detail: str | None, name: str = "Pathology Services") -> ExtractedRow:
-    return ExtractedRow(name=name, detail=detail or "", quantity=None, amount=430.0)
-
-
-def dated_bill(details: list[str | None], bill_date: str | None = "2026-10-11") -> ExtractedBill:
-    return ExtractedBill(
+def dated(details: list[str], bill_date: str = "2026-10-11") -> BillAnalysis:
+    return analysis(
+        [],
+        lines=[line(f"L{n}", "Pathology Services", 430, on=on) for n, on in enumerate(details, start=1)],
         bill_date=bill_date,
-        stated_total=None,
-        rows=[dated(detail) for detail in details],
-        observations=[],
     )
 
 
-def test_flags_a_row_dated_before_the_admission():
-    flags = review(dated_bill(["2/10/2026, 9:00 am"]), [], ADMITTED)
+def test_flags_a_line_dated_before_the_admission():
+    flags = flags_from_findings(dated(["2/10/2026, 9:00 am"]), [], ADMITTED)
 
     (flag,) = flags
     assert flag.kind == "date_outside_stay"
@@ -263,190 +303,46 @@ def test_flags_a_row_dated_before_the_admission():
     assert flag.excess == Decimal("430"), "if the charge isn't ours, the line comes off"
 
 
-def test_flags_a_row_dated_after_discharge():
-    flags = review(dated_bill(["20 Oct, 9:00 am"]), [], ADMITTED, date(2026, 10, 15))
+def test_flags_a_line_dated_after_discharge():
+    flags = flags_from_findings(dated(["20 Oct, 9:00 am"]), [], ADMITTED, date(2026, 10, 15))
     assert [flag.reference_detail["row_date"] for flag in flags] == ["2026-10-20"]
+    assert flags[0].reference_detail["closed_on"] == "2026-10-15"
 
 
-def test_leaves_rows_inside_the_stay_alone():
-    flags = review(
-        dated_bill(["11 Oct, 10:30 am", "9 Oct, 8:00 am", "15/10/2026"]), [], ADMITTED, date(2026, 10, 15)
+def test_leaves_lines_inside_the_stay_alone():
+    flags = flags_from_findings(
+        dated(["11 Oct, 10:30 am", "9 Oct, 8:00 am", "15/10/2026"]), [], ADMITTED, date(2026, 10, 15)
     )
     assert flags == [], "the admission and discharge days are inside the stay"
 
 
-def test_reads_an_undated_row_in_the_bill_s_own_year():
+def test_reads_an_undated_line_in_the_bill_s_own_year():
     """The bug this check was written for: "11 Oct" with no year, on a bill
-    from years ago. Dating it in the current year would flag every row."""
-    old = dated_bill(["22 Oct, 10:20 am", "23 Oct, 1:30 pm"], bill_date="2018-10-23")
-    assert review(old, [], date(2018, 10, 22), date(2018, 10, 23)) == []
-
-
-def test_ignores_quantity_details_that_are_not_dates():
-    quantities = ["1 day", "6 vials", "80 pairs", "1 set", "4 bottles", "3 meals", "---", None]
-    assert review(dated_bill(quantities), [], ADMITTED) == []
-
-
-def test_does_not_ask_twice_when_the_reader_raised_it_too():
-    """The reader's own claim is confirmed by _confirm_date; the scan must not
-    add a second flag for the same row."""
-    bill = dated_bill(["2/10/2026, 9:00 am"])
-    bill.observations = [observe("date_outside_stay", [1])]
-
-    flags = review(bill, [], ADMITTED)
-    assert len(flags) == 1
-
-
-def test_scans_rows_the_reader_said_nothing_about():
-    bill = dated_bill(["11 Oct, 10:30 am", "2/10/2026, 9:00 am"])
-    bill.observations = [observe("non_medical_item", [1])]
-
-    flags = review(bill, [], ADMITTED)
-    assert {flag.kind for flag in flags} == {"non_medical_item", "date_outside_stay"}
-    assert [flag.row_position for flag in flags] == [1, 2]
+    from years ago. Dating it in the current year would flag every line."""
+    old = dated(["22 Oct, 10:20 am", "23 Oct, 1:30 pm"], bill_date="2018-10-23")
+    assert flags_from_findings(old, [], date(2018, 10, 22), date(2018, 10, 23)) == []
 
 
 def test_an_open_stay_has_no_upper_bound():
     """Mid-admission, there is no discharge date yet, so nothing is "after"."""
-    assert review(dated_bill(["20 Oct, 9:00 am"]), [], ADMITTED) == []
+    assert flags_from_findings(dated(["20 Oct, 9:00 am"]), [], ADMITTED) == []
 
 
-# --- the wider set of kinds --------------------------------------------------
+def test_a_line_with_no_date_is_not_a_date_outside_the_stay():
+    """Most lines carry a quantity where this one carries a date, and the
+    analysis keeps those apart, so there is nothing to misread."""
+    assert flags_from_findings(analysis([]), [], ADMITTED) == []
 
 
-@pytest.mark.parametrize("kind", ["rounded_amounts", "advance_not_deducted"])
-def test_a_bill_level_claim_may_name_no_rows(kind: str):
-    """These are about the bill, not a row, so citing none is not a reader that
-    lost its numbering."""
-    flags = review(bill([observe(kind, [])]), [], ADMITTED)
-    assert [flag.kind for flag in flags] == [kind]
-    assert flags[0].excess == Decimal("0"), "no figure we could defend"
+def test_no_admission_date_turns_the_check_off():
+    """What `scripts/read_bill.py` does when it is handed pages and no case."""
+    assert flags_from_findings(dated(["2/10/2026, 9:00 am"]), []) == []
 
 
-@pytest.mark.parametrize("kind", ["tax_on_exempt_item", "icu_rate_on_ward_day"])
-def test_a_row_level_claim_still_has_to_name_a_row(kind: str):
-    assert review(bill([observe(kind, [])]), [], ADMITTED) == []
+def test_the_stay_check_runs_beside_the_reader_s_own_findings():
+    bill = dated(["11 Oct, 10:30 am", "2/10/2026, 9:00 am"])
+    bill.findings = [finding("G. non-medical item", ["L1"])]
 
-
-def test_the_whole_line_comes_off_a_tax_on_an_exempt_item():
-    flags = review(bill([observe("tax_on_exempt_item", [4])]), [], ADMITTED)
-    assert flags[0].excess == Decimal("450"), "if the tax shouldn't be there, it all comes off"
-
-
-def test_a_drug_billed_twice_from_two_places_is_worth_the_repeat():
-    flags = review(bill([observe("same_drug_twice_sources", [2, 3])]), [], ADMITTED)
-    assert flags[0].excess == Decimal("2500")
-
-
-@pytest.mark.parametrize(
-    "kind", ["room_rate_vs_ward", "branded_drug_margin", "capped_item_above_ceiling", "visits_in_one_day"]
-)
-def test_the_new_judgments_of_degree_claim_no_amount(kind: str):
-    """ "This looks dear" has no defensible figure behind it, whichever way the
-    reader phrases it."""
-    flags = review(bill([observe(kind, [1])]), [], ADMITTED)
-    assert flags[0].excess == Decimal("0")
-    assert flags[0].level == "amber"
-
-
-def test_a_cited_price_flag_wins_over_the_reader_s_ceiling_claim():
-    """Asked once. The price list can show the family the ceiling; the reader
-    can only remember it."""
-    flags = review(
-        bill([observe("capped_item_above_ceiling", [1])]), [reference_flag("above_mrp", 1)], ADMITTED
-    )
-    assert [flag.reference_source for flag in flags] == ["mrp"]
-
-
-# --- the sentence the reader writes for the family ---------------------------
-
-
-def test_the_reader_s_own_words_reach_the_flag():
-    """The one line on screen we don't write. It rides in reference_detail, per
-    language, for the app to show in place of its own wording."""
-    flags = review(
-        bill(
-            [
-                observe(
-                    "non_medical_item",
-                    [4],
-                    why_en="The bill lists meals for the attendant.",
-                    why_hi="बिल में परिचारक के भोजन का शुल्क है।",
-                    why_mr="बिलात सोबत्याच्या जेवणाचा समावेश आहे.",
-                )
-            ]
-        ),
-        [],
-        ADMITTED,
-    )
-
-    (flag,) = flags
-    assert flag.reference_detail["why_en"] == "The bill lists meals for the attendant."
-    assert flag.reference_detail["why_hi"] == "बिल में परिचारक के भोजन का शुल्क है।"
-    assert flag.reference_detail["why_mr"] == "बिलात सोबत्याच्या जेवणाचा समावेश आहे."
-
-
-def test_a_reader_that_writes_nothing_leaves_the_app_its_own_wording():
-    flags = review(bill([observe("non_medical_item", [4])]), [], ADMITTED)
-    assert not any(key.startswith("why_") for key in flags[0].reference_detail)
-
-
-def test_blank_explanations_are_not_carried_as_empty_strings():
-    """An empty string would read as "the reader wrote nothing to say", and the
-    app would show a blank line instead of falling back."""
-    flags = review(bill([observe("non_medical_item", [4], why_en="  ", why_hi="")]), [], ADMITTED)
-    assert not any(key.startswith("why_") for key in flags[0].reference_detail)
-
-
-def test_a_dropped_claim_takes_its_words_with_it():
-    """The explanation is only as good as the claim. One the rows contradict
-    reaches nobody, sentence and all."""
-    assert (
-        review(bill([observe("duplicate_line", [1, 2], why_en="These two look the same.")]), [], ADMITTED)
-        == []
-    )
-
-
-# --- keeping everything, for watching the reader ------------------------------
-#
-# REVIEW_KEEP_ALL is a development switch: it shows what the reader said on a
-# bill, including the claims this module exists to withhold. Production refuses
-# to start with it on, so these tests are about the switch, not the product.
-
-
-def test_keeps_a_claim_the_rows_contradict():
-    """Normally dropped: the reader called two different rows the same charge."""
-    bill_ = bill([observe("duplicate_line", [1, 2])])
-
-    assert review(bill_, [], ADMITTED) == []
-    (kept,) = review(bill_, [], ADMITTED, keep_all=True)
-    assert kept.kind == "duplicate_line"
-    assert kept.reference_detail["unconfirmed"] == "true"
-
-
-def test_keeps_what_the_reader_was_unsure_of():
-    bill_ = bill([observe("nursing_billed_with_room", [1], confidence="low")])
-
-    assert review(bill_, [], ADMITTED) == []
-    (kept,) = review(bill_, [], ADMITTED, keep_all=True)
-    assert kept.reference_detail["unconfirmed"] == "true"
-    assert kept.reference_detail["confidence"] == "low"
-
-
-def test_keeps_a_claim_a_price_list_already_covers():
-    cited = [reference_flag("above_mrp", 1)]
-    bill_ = bill([observe("unit_price_high", [1])])
-
-    assert [f.reference_source for f in review(bill_, cited, ADMITTED)] == ["mrp"]
-    kept = review(bill_, cited, ADMITTED, keep_all=True)
-    assert [f.reference_source for f in kept] == ["mrp", "reader"]
-
-
-def test_still_drops_a_claim_about_a_row_that_is_not_there():
-    """The one thing keep_all cannot keep: there is no line to hang it on."""
-    assert review(bill([observe("non_medical_item", [9])]), [], ADMITTED, keep_all=True) == []
-
-
-def test_a_claim_that_stands_on_its_own_is_not_marked_unconfirmed():
-    (flag,) = review(bill([observe("non_medical_item", [4])]), [], ADMITTED, keep_all=True)
-    assert "unconfirmed" not in flag.reference_detail
+    flags = flags_from_findings(bill, [], ADMITTED)
+    assert {flag.kind for flag in flags} == {"analysis_finding", "date_outside_stay"}
+    assert [flag.row_position for flag in flags] == [1, 2]

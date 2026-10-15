@@ -32,9 +32,15 @@ def test_the_reader_s_words_survive_the_trip_to_the_app(client: TestClient, auth
     bill = upload(client, auth_headers, case["id"])
 
     noticed = next(f for f in bill["flags"] if f["reference_source"] == "reader")
-    assert noticed["reference_detail"]["why_en"].startswith("The bill charges")
-    assert noticed["reference_detail"]["why_hi"]
-    assert noticed["reference_detail"]["why_mr"]
+    detail = noticed["reference_detail"]
+    # The sentence the app shows in place of its own wording.
+    assert detail["why_en"].startswith("The bill charges")
+    # And what it was: the rule that fired, the words quoted off the bill, and
+    # what the hospital would have to produce to settle it.
+    assert detail["rule"].startswith("B.")
+    assert detail["evidence"]
+    assert detail["confirm"]
+    assert detail["lines"] == "L5", "the lines the finding named, as the reader numbered them"
 
 
 # --- correcting the details --------------------------------------------------

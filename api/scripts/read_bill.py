@@ -30,8 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import audit  # noqa: E402
 from ocr import BillPage, OcrError, get_ocr_provider  # noqa: E402
-from references import get_reference_data, parse_bill_date  # noqa: E402
-from review import review  # noqa: E402
+from references import get_reference_data  # noqa: E402
+from review import flags_from_findings  # noqa: E402
 from settings import get_settings  # noqa: E402
 
 MEDIA = {
@@ -101,75 +101,76 @@ def main() -> int:
         print(f"\nCouldn't read it: {exc}", file=sys.stderr)
         return 1
 
-    print(f"\n{len(bill.rows)} row(s), bill date {bill.bill_date or 'not read'}:\n")
-    year = date.fromisoformat(bill.bill_date).year if _iso(bill.bill_date) else date.today().year
-    summed = Decimal("0")
-    for position, row in enumerate(bill.rows, start=1):
-        summed += Decimal(str(row.amount))
-        detail = f"  [{row.detail}]" if row.detail else ""
-        print(f"  {position:>3}. {row.name[:48]:<48}{detail:<22} {rupees(row.amount):>12}")
-    print(f"\n      {'rows add up to':<70} {rupees(summed):>12}")
-    if bill.stated_total is not None:
-        print(f"      {'bill states':<70} {rupees(bill.stated_total):>12}")
+    analysis = bill
+    header = analysis.bill
+    print(
+        f"\n{header.hospital or 'hospital not read'}  bill {header.bill_no or '-'}  "
+        f"dated {header.bill_date or '-'}"
+    )
+    print(
+        f"stay {header.admission_date or '-'} to {header.discharge_date or '-'}"
+        f"  room {header.room_category or '-'}"
+        f"  confidence {header.extraction_confidence:.2f}"
+    )
 
-    print(f"\nThe reader noticed {len(bill.observations)}:\n")
-    for observation in bill.observations:
-        numbers = " ".join(f"{k}={v}" for k, v in observation.numbers().items())
-        rows = str(observation.row_positions)
-        print(f"  {observation.kind:<24} rows {rows:<10} {observation.confidence:<7} {numbers}")
-        if observation.note:
-            print(f"      {observation.note}")
+    print(f"\n{len(analysis.lines)} line(s):\n")
+    summed = Decimal("0")
+    for position, line in enumerate(analysis.lines, start=1):
+        summed += Decimal(str(line.amount or 0))
+        shown = line.description_verbatim[:44]
+        extra = line.date or (f"{line.quantity:g} {line.unit}".strip() if line.quantity else line.unit)
+        mrp = f"  MRP {rupees(line.mrp_printed)}" if line.mrp_printed is not None else ""
+        mark = "  ?" if line.ambiguous else ""
+        print(f"  {position:>3}. {shown:<44} {extra[:18]:<18} {rupees(line.amount or 0):>12}{mrp}{mark}")
+
+    print(f"\n      {'lines add up to':<64} {rupees(summed):>12}")
+    if header.total is not None:
+        print(f"      {'bill states':<64} {rupees(header.total):>12}")
+
+    print(
+        f"\nStructural: consumables {analysis.structural.consumable_share_pct:.1f}%  "
+        f"unitemised {analysis.structural.unitemised_share_pct:.1f}%  "
+        f"unreadable lines {analysis.structural.unreadable_line_count}"
+    )
+    if analysis.requires_reference_price:
+        print(f"Needs a reference price: {', '.join(analysis.requires_reference_price)}")
+    if analysis.needs_human_review:
+        print(f"Needs human review: {'; '.join(analysis.review_reasons) or 'no reason given'}")
+
+    print(f"\n{len(analysis.findings)} finding(s):\n")
+    for finding in analysis.findings:
+        print(f"  [{finding.severity}] {finding.rule}  lines {finding.line_ids or '-'}")
+        print(f"      {finding.statement}")
+        print(f"      evidence: {finding.evidence_quoted}")
+        print(f"      to confirm: {finding.confirmation_required}")
 
     reference_flags = audit.audit_bill(
         [
             audit.BillRow(
                 position=position,
-                name=row.name,
-                detail=row.detail,
-                quantity=None if row.quantity is None else Decimal(str(row.quantity)),
-                amount=Decimal(str(row.amount)),
+                name=line.description_verbatim,
+                detail=line.date or line.unit or None,
+                quantity=None if line.quantity is None else Decimal(str(line.quantity)),
+                amount=Decimal(str(line.amount or 0)),
             )
-            for position, row in enumerate(bill.rows, start=1)
+            for position, line in enumerate(analysis.lines, start=1)
         ],
         get_reference_data(),
     )
 
-    admitted, closed = args.admitted, args.closed
-    if admitted is None:
-        # Guessing an admission date would date every row of an older bill
-        # outside the stay and flag the whole page. Take the window from the
-        # rows instead, which flags nothing, and say the check is off.
-        dated = [on for on in (parse_bill_date(row.detail, year) for row in bill.rows) if on]
-        admitted, closed = (min(dated), max(dated)) if dated else (date.min, date.max)
-        print("\n  No --admitted given, so the out-of-stay check is off.")
-        print("  Pass --admitted and --closed to run it.")
+    flags = flags_from_findings(
+        analysis, reference_flags, args.admitted, args.closed, keep_all=settings.review_keep_all
+    )
+    if args.admitted is None:
+        print("\n  No --admitted date: the out-of-stay check is off.")
+    if not settings.review_keep_all:
+        print("\n  REVIEW_KEEP_ALL is off: low-severity findings are dropped.")
 
-    flags = review(bill, reference_flags, admitted, closed, keep_all=settings.review_keep_all)
-    kept = {(flag.kind, flag.row_position) for flag in flags}
-
-    if settings.review_keep_all:
-        print("\n  REVIEW_KEEP_ALL is on: nothing the reader said is dropped.")
     print(f"\nAfter review, {len(flags)} flag(s) would be shown:\n")
     for flag in flags:
         source = "price list" if flag.reference_source != "reader" else "reader"
-        if flag.reference_detail.get("unconfirmed"):
-            source += ", unconfirmed"
         amount = f" {rupees(flag.excess)}" if flag.excess else ""
-        print(f"  {flag.level:<6} {flag.kind:<24} row {flag.row_position:<4} ({source}){amount}")
-
-    dropped = [
-        observation
-        for observation in bill.observations
-        if not any(
-            (observation.kind, position) in kept or (observation.kind, 0) in kept
-            for position in (observation.row_positions or [0])
-        )
-    ]
-    if dropped:
-        print(f"\n{len(dropped)} observation(s) did not survive review:\n")
-        for observation in dropped:
-            print(f"  {observation.kind:<24} rows {observation.row_positions}  — {observation.note}")
-        print("\n  Run with --verbose to see why each was dropped.")
+        print(f"  {flag.level:<6} {flag.kind:<18} row {flag.row_position:<4} ({source}){amount}")
 
     return 0
 

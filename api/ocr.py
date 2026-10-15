@@ -1,23 +1,16 @@
-"""Reading a bill, and noticing what looks wrong on it.
+"""Reading a bill and analysing it, in one call.
 
-One call does both. The reader is already looking at the page, so asking it to
-also say "these two rows are identical" costs a sentence, not a request.
-
-What comes back is in two parts:
-
-- `rows`: the bill transcribed, which everything downstream works from.
-- `observations`: what the reader noticed. These are *claims*, not flags.
-  `review.py` re-checks every claim it can against the rows, and only a claim
-  that survives that check is shown as settled; the rest stay questions.
-
-Observations carry a kind and numbers, never a sentence. Every word a family
-reads has to exist in all three languages, so the copy is written in the app
-and nothing user-facing is generated here.
+The reader's instructions live in `analysis_prompt.py` and the shape it returns
+in `analysis.py`. It transcribes every line, normalises it, and reports what the
+bill itself proves -- arithmetic that doesn't add up, a rate above a printed
+MRP, a line billed twice. It never prices anything: `requires_reference_price`
+is the handoff to the price lists in `references.py`, which is the only part of
+this system that knows what an item costs.
 
 Two providers, chosen by OCR_PROVIDER, the same shape as SMS delivery:
 
-- `stub` needs no API key and returns one fixed sample bill, so the whole loop
-  runs in development and tests without a real bill leaving the machine.
+- `stub` needs no API key and returns one fixed sample analysis, so the whole
+  loop runs in development and tests without a real bill leaving the machine.
 - `claude` reads the real pages.
 
 Pages are never written to disk. They arrive, are read, and are dropped, so the
@@ -29,12 +22,11 @@ import logging
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import lru_cache
-from typing import Literal, Protocol
+from typing import Protocol
 
-from pydantic import BaseModel, Field
-
-from flag_kinds import ReaderFlagKind as ObservationKind
-from flag_kinds import prompt_section
+from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, LineAttributes, Structural
+from analysis_prompt import PROMPT
+from db import india_today
 from settings import get_settings
 
 logger = logging.getLogger("billcheck.ocr")
@@ -43,91 +35,6 @@ logger = logging.getLogger("billcheck.ocr")
 SUPPORTED_IMAGES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
 PDF_MEDIA = "application/pdf"
 
-_PROMPT = """You are reading an itemized hospital bill from India for a family
-who will ask the billing desk about anything that looks wrong. They are not
-clinicians and they are standing at a counter.
-
-## First, transcribe
-
-Transcribe the itemized rows exactly as printed. Do not infer, correct, convert
-or price anything: a wrong transcription becomes a wrong accusation against a
-hospital, which is worse than a missing row.
-
-- `name` is the charge as written, e.g. "Inj. Meropenem 1g".
-- `detail` is the quantity or date column as written, e.g. "6 vials" or
-  "11 Oct, 10:30 am". Use an empty string when the bill has no such column.
-- `quantity` is the number of units only when the bill states one. Never guess
-  it from the name, and use null for a date.
-- `amount` is the row's rupee amount, digits only.
-- Keep the printed order, and include every row, including repeated ones: a
-  charge entered twice must appear twice.
-- Leave out totals, subtotals, taxes and balance-due lines from `rows`. Put the
-  printed grand total in `stated_total` instead, or null if the bill prints none.
-- `bill_date` is the date on the bill as YYYY-MM-DD, or an empty string if the
-  page doesn't show one.
-
-Every field is required. Where something doesn't apply, send an empty string
-rather than leaving the field out -- only `quantity` and `stated_total` take
-null, because a missing count is not the same as a count of zero.
-
-## Then, say what you noticed
-
-For each thing worth asking about, add an observation. `row_positions` are
-1-based positions in the `rows` you just returned.
-
-Report only these kinds.
-
-{kinds}
-
-Rules that matter more than finding things:
-
-- Report what the bill shows, not what you assume. If you are unsure, use a
-  lower `confidence` or leave it out. A charge that was correct, questioned at
-  a counter, costs a family more than a charge you missed.
-- Give the figures that apply, as strings of digits: for a price, `unit_price`
-  and the `expected` you would have guessed; for a quantity or a count of hours
-  or visits, `quantity` and the `usual` you would expect; for a total or an
-  advance, `stated` and `summed`. The rest are empty strings -- send every
-  field, every time.
-- Most kinds name the rows they are about. `rounded_amounts` and
-  `advance_not_deducted` are about the bill as a whole, so they may leave
-  `row_positions` empty, as `total_mismatch` does.
-- One finding per thing. If a package covers three lines billed separately,
-  that is one `package_overlap` naming three rows, not three observations.
-- `note` is your reasoning in one line, for our logs. It is never shown to
-  anyone, so write it for an engineer, not for the family.
-- Never write an accusation, in any field. These are questions.
-
-## Saying why, to the family
-
-`why_en`, `why_hi` and `why_mr` are the one thing you write that a family
-actually reads, standing at a billing counter, possibly out loud. Write the
-same one or two sentences in each: English, then Hindi, then Marathi, in plain
-spoken language rather than transliterated English.
-
-Say what this bill shows and why it is worth asking about. Nothing else.
-
-- Use only figures that are on this bill or in this observation. Never state a
-  price, a rate or a total you did not read off the page.
-- Never say a charge is wrong, excessive, illegal, inflated or fraudulent, and
-  never tell the family what to pay or refuse. You are giving them a question,
-  not a verdict.
-- Never claim it was checked against an MRP, an NPPA ceiling, a CGHS rate or
-  any price list. Nothing here was. Where the amount only looks high to you,
-  say that it looks high and leave it there.
-- If you cannot say why in those terms, send all three as empty strings. The
-  app has its own wording and will use it.
-
-Good: "The bill charges ₹2,200 for nursing as its own line, on top of ₹6,500
-room rent. Room rates usually include nursing."
-Bad: "The hospital has wrongly charged you twice for nursing, which is illegal
-under CGHS rules."
-"""
-
-# Built once, from the one table of kinds, so the reader is never told about a
-# kind the schema will reject or left unaware of one it allows.
-PROMPT = _PROMPT.format(kinds=prompt_section())
-
 
 @dataclass(frozen=True)
 class BillPage:
@@ -135,166 +42,215 @@ class BillPage:
     content_type: str
 
 
-class ExtractedRow(BaseModel):
-    """One row as printed on the bill.
-
-    Every field is required. An optional field costs far more than it looks:
-    the schema compiles to a grammar that must accept any subset of them in
-    any order, for every row of every bill, and the API rejects the request
-    outright once that grows too large. So "not applicable" is an empty
-    string, not an absent field.
-    """
-
-    name: str = Field(description="The charge exactly as written on the bill.")
-    detail: str = Field(
-        description='The quantity or date column as written, e.g. "6 vials". '
-        "Empty string when the bill has no such column."
-    )
-    quantity: float | None = Field(description="Units, only where the bill states a count. Null for a date.")
-    amount: float = Field(description="The row's amount in rupees.")
-
-
-class Observation(BaseModel):
-    """Something the reader noticed. A claim to check, not a flag.
-
-    The figures are separate fields rather than a free-form mapping: a
-    `dict[str, str]` becomes a schema that allows no keys at all, so under
-    structured outputs the reader could never fill one in.
-
-    All of them are required, and "not applicable" is an empty string. With
-    twelve optional fields on an array element the API rejected the whole
-    request -- "Schema is too complex" -- because the grammar has to accept
-    every subset of them in every order. `numbers()` and `explanations()`
-    drop the blanks, so nothing downstream can tell the difference.
-    """
-
-    kind: ObservationKind
-    row_positions: list[int] = Field(description="1-based positions in `rows` this is about.")
-    unit_price: str = Field(description="For a price: what one unit was billed at, digits only.")
-    expected: str = Field(description="For a price: what you would have expected one unit to cost.")
-    quantity: str = Field(description="For a quantity: how many were billed.")
-    usual: str = Field(description="For a quantity: how many a stay like this usually uses.")
-    stated: str = Field(description="For a total: the total printed on the bill.")
-    summed: str = Field(description="For a total: what the rows add up to.")
-    confidence: Literal["high", "medium", "low"]
-    note: str = Field(description="One line of reasoning, for our logs only.")
-    why_en: str = Field(description="Why this is worth asking, for the family, in English.")
-    why_hi: str = Field(description="The same sentence in Hindi.")
-    why_mr: str = Field(description="The same sentence in Marathi.")
-
-    def explanations(self) -> dict[str, str]:
-        """The sentence a family reads, per language.
-
-        Unlike every other string the app shows, this one is written by the
-        reader rather than translated once and reviewed. The app falls back to
-        its own copy for any language left empty, so a reader that skips this
-        degrades to the wording we wrote rather than to nothing.
-        """
-        given = {"why_en": self.why_en, "why_hi": self.why_hi, "why_mr": self.why_mr}
-        return {key: value.strip() for key, value in given.items() if value.strip()}
-
-    def numbers(self) -> dict[str, str]:
-        """The figures that were given, for the app to put in its copy."""
-        given = {
-            "unit_price": self.unit_price,
-            "expected": self.expected,
-            "quantity": self.quantity,
-            "usual": self.usual,
-            "stated": self.stated,
-            "summed": self.summed,
-        }
-        return {key: value for key, value in given.items() if value}
-
-
-class ExtractedBill(BaseModel):
-    bill_date: str = Field(
-        description="The bill date as printed, in YYYY-MM-DD form. Empty string if it can't be read."
-    )
-    stated_total: float | None = Field(
-        description="The grand total printed on the bill. Null if the bill prints none."
-    )
-    rows: list[ExtractedRow]
-    observations: list[Observation]
-
-
 class OcrError(Exception):
     """The pages couldn't be read. The caller tells the user to retake them."""
 
 
 class OcrProvider(Protocol):
-    def read_bill(self, pages: list[BillPage]) -> ExtractedBill: ...
+    def read_bill(self, pages: list[BillPage]) -> BillAnalysis: ...
+
+
+def _blank() -> LineAttributes:
+    return LineAttributes(
+        size="", gauge="", french="", volume="", strength="", pack_size="", material="", brand=""
+    )
 
 
 # The prototype's day 3 bill. Sample data, not a real patient or hospital.
-STUB_ROWS = [
-    ("Room rent, twin sharing", "1 day", None, 6500),
-    ("Nursing charges", "1 day", None, 2200),
-    ("Consultant visit, Dr. A. Mehta", "11 Oct, 10:30 am", None, 2500),
-    ("Consultant visit, Dr. A. Mehta", "11 Oct, 10:30 am", None, 2500),
-    ("Inj. Meropenem 1g", "6 vials", 6, 17700),
-    ("Inj. Pantoprazole 40mg", "2 vials", 2, 120),
-    ("IV fluid, Ringer lactate 500ml", "4 bottles", 4, 520),
-    ("CBC and CRP tests", "1 set", 1, 1450),
-    ("Chest X-ray", "1 view", 1, 950),
-    ("Surgical gloves", "80 pairs", 80, 6800),
-    ("Syringes and IV cannula", "1 set", 1, 1250),
+# (section, verbatim, plain, category, quantity, unit, rate, amount, mrp)
+#
+# The dated lines are dated today, read from the clock rather than written in.
+# A date written in would sit inside the stay the day it was typed and drift
+# outside it a week later, so every test that turns on the stay check would
+# start failing on a date nobody chose.
+STUB_LINES = [
+    (
+        "Room",
+        "Room rent, twin sharing",
+        "Room rent, twin sharing",
+        "room_and_nursing",
+        1,
+        "day",
+        6500,
+        6500,
+        None,
+    ),
+    ("Room", "Nursing charges", "Nursing charges", "room_and_nursing", 1, "day", 2200, 2200, None),
+    (
+        "Doctor",
+        "Consultant visit, Dr. A. Mehta",
+        "Consultant visit",
+        "professional_fees",
+        1,
+        "visit",
+        2500,
+        2500,
+        None,
+    ),
+    (
+        "Doctor",
+        "Consultant visit, Dr. A. Mehta",
+        "Consultant visit",
+        "professional_fees",
+        1,
+        "visit",
+        2500,
+        2500,
+        None,
+    ),
+    (
+        "Pharmacy",
+        "Inj. Meropenem 1g",
+        "Meropenem injection 1g",
+        "pharmacy_drug",
+        6,
+        "vial",
+        2950,
+        17700,
+        1840,
+    ),
+    (
+        "Pharmacy",
+        "Inj. Pantoprazole 40mg",
+        "Pantoprazole injection",
+        "pharmacy_drug",
+        2,
+        "vial",
+        60,
+        120,
+        None,
+    ),
+    (
+        "Pharmacy",
+        "IV fluid, Ringer lactate 500ml",
+        "Ringer lactate IV fluid",
+        "pharmacy_drug",
+        4,
+        "bottle",
+        130,
+        520,
+        None,
+    ),
+    ("Lab", "CBC and CRP tests", "Blood count and CRP", "investigation", 1, "set", 1450, 1450, None),
+    ("Imaging", "Chest X-ray", "Chest X-ray", "investigation", 1, "view", 950, 950, None),
+    (
+        "Consumables",
+        "Surgical gloves",
+        "Surgical gloves",
+        "consumable_disposable",
+        80,
+        "pair",
+        85,
+        6800,
+        None,
+    ),
+    (
+        "Consumables",
+        "Syringes and IV cannula",
+        "Syringes and IV cannula",
+        "consumable_disposable",
+        1,
+        "set",
+        1250,
+        1250,
+        None,
+    ),
 ]
 
-# One observation the stub always makes, so the review path has something to
-# exercise in development without a key.
-#
-# It is deliberately a judgment of degree about a line the price lists don't
-# cover: it shows the honest shape of a reader flag — a question, with the
-# reader's own expectation shown as an expectation, and no rupee figure claimed
-# behind it.
-STUB_OBSERVATIONS = [
-    Observation(
-        kind="unit_price_high",
-        row_positions=[1],
-        unit_price="6500",
-        expected="4000",
-        quantity="",
-        usual="",
-        stated="",
-        summed="",
-        confidence="medium",
-        note="Stub observation: fixed, not read off the page.",
-        why_en=(
-            "The bill charges ₹6,500 a day for a twin-sharing room. That looks high for a "
-            "shared room, though nothing here was checked against a price list."
+# One finding the stub always makes, so the whole path is exercised in
+# development without a key. It is a hard one the bill itself proves: the
+# billed rate is above the MRP printed beside it.
+STUB_FINDINGS = [
+    Finding(
+        finding_id="f1",
+        rule="B. billed rate above printed MRP",
+        severity="high",
+        line_ids=["L5"],
+        evidence_quoted="Inj. Meropenem 1g — rate 2,950 — MRP 1,840",
+        statement=(
+            "The bill charges Rs 2,950 per vial for Inj. Meropenem 1g against an MRP of "
+            "Rs 1,840 printed on the same line."
         ),
-        why_hi=(
-            "बिल में ट्विन-शेयरिंग कमरे के ₹6,500 प्रतिदिन लिए गए हैं। साझा कमरे के लिए यह "
-            "ज़्यादा लगता है, हालाँकि इसे किसी सूची से नहीं मिलाया गया है।"
-        ),
-        why_mr=(
-            "बिलात ट्विन-शेअरिंग खोलीसाठी दररोज ₹6,500 आकारले आहेत. सामायिक खोलीसाठी हे जास्त "
-            "वाटते, मात्र याची कोणत्याही दरसूचीशी पडताळणी केलेली नाही."
-        ),
-    )
+        confirmation_required="The MRP printed on the pack supplied.",
+    ),
+    Finding(
+        finding_id="f2",
+        rule="C. identical item billed twice on the same date",
+        severity="medium",
+        line_ids=["L3", "L4"],
+        evidence_quoted="Consultant visit, Dr. A. Mehta — 2,500 — twice",
+        statement="Two consultant visits by the same doctor are billed for the same date.",
+        confirmation_required="The case sheet showing two separate visits.",
+    ),
 ]
+
+
+# The lines the sample bill dates. Everything else carries a quantity
+# instead, which is how most of a bill reads.
+STUB_DATED = frozenset({"Consultant visit, Dr. A. Mehta"})
 
 
 class StubOcr:
-    """Development and tests: returns one fixed sample bill, whatever is sent.
+    """Development and tests: returns one fixed sample analysis, whatever is sent.
 
     It exists so the scan loop, the review and every screen can be exercised
     without an API key and without a real bill leaving the machine.
     """
 
-    def read_bill(self, pages: list[BillPage]) -> ExtractedBill:
+    def read_bill(self, pages: list[BillPage]) -> BillAnalysis:
         if not pages:
             raise OcrError("No pages to read.")
         logger.warning("Stub OCR: returning the sample bill, not reading the %d page(s) sent", len(pages))
-        rows = [
-            ExtractedRow(name=name, detail=detail, quantity=quantity, amount=float(amount))
-            for name, detail, quantity, amount in STUB_ROWS
+
+        today = india_today().strftime("%d %b")
+        lines = [
+            AnalysedLine(
+                line_id=f"L{number}",
+                page=1,
+                section=section,
+                description_verbatim=verbatim,
+                item_name_plain=plain,
+                category=category,  # type: ignore[arg-type]
+                attributes=_blank(),
+                quantity=float(quantity),
+                unit=unit,
+                rate=float(rate),
+                amount=float(amount),
+                date=today if verbatim in STUB_DATED else "",
+                mrp_printed=None if mrp is None else float(mrp),
+                confidence=0.9,
+                ambiguous=False,
+                ambiguity_reason="",
+            )
+            for number, (section, verbatim, plain, category, quantity, unit, rate, amount, mrp) in enumerate(
+                STUB_LINES, start=1
+            )
         ]
-        return ExtractedBill(
-            bill_date="",
-            stated_total=float(sum(row.amount for row in rows)),
-            rows=rows,
-            observations=[obs.model_copy(deep=True) for obs in STUB_OBSERVATIONS],
+        total = float(sum(line.amount or 0 for line in lines))
+        return BillAnalysis(
+            error="",
+            bill=BillHeader(
+                hospital="City Care Hospital",
+                bill_no="",
+                bill_date="",
+                admission_date="",
+                discharge_date="",
+                stay_days=None,
+                room_category="Twin sharing",
+                total=total,
+                pages_processed=len(pages),
+                extraction_confidence=0.9,
+            ),
+            lines=lines,
+            findings=[finding.model_copy(deep=True) for finding in STUB_FINDINGS],
+            requires_reference_price=["L10", "L11"],
+            structural=Structural(
+                consumable_share_pct=round(100 * 8050 / total, 1),
+                unitemised_share_pct=0.0,
+                unreadable_line_count=0,
+            ),
+            needs_human_review=False,
+            review_reasons=[],
         )
 
 
@@ -357,7 +313,7 @@ class ClaudeOcr:
             }
         raise OcrError(f"Page {index} is a {page.content_type}, which can't be read.")
 
-    def read_bill(self, pages: list[BillPage]) -> ExtractedBill:
+    def read_bill(self, pages: list[BillPage]) -> BillAnalysis:
         import anthropic
 
         if not pages:
@@ -367,7 +323,7 @@ class ClaudeOcr:
         content.append(
             {
                 "type": "text",
-                "text": "Transcribe every itemized row on these pages, then say what you noticed.",
+                "text": "Analyse this hospital bill. Work the four phases and return the JSON object.",
             }
         )
 
@@ -377,7 +333,7 @@ class ClaudeOcr:
             "system": PROMPT,
             "output_config": {"effort": self._effort},
             "messages": [{"role": "user", "content": content}],
-            "output_format": ExtractedBill,
+            "output_format": BillAnalysis,
         }
 
         # Logged before the call, so a request the API rejects is visible at
@@ -404,17 +360,23 @@ class ClaudeOcr:
         if response.stop_reason == "refusal":
             raise OcrError("The bill couldn't be read.")
 
-        bill = response.parsed_output
-        if bill is None or not bill.rows:
-            raise OcrError("No itemized rows were found on these pages.")
+        analysis = response.parsed_output
+        if analysis is None:
+            raise OcrError("The reader returned nothing that fits the schema.")
+        if analysis.error:
+            # PHASE 4: not a hospital bill, or too degraded to read.
+            raise OcrError(analysis.error)
+        if not analysis.lines:
+            raise OcrError("No itemized lines were found on these pages.")
 
         logger.info(
-            "Read %d row(s), %d observation(s): %s",
-            len(bill.rows),
-            len(bill.observations),
-            ", ".join(f"{obs.kind}({obs.confidence})" for obs in bill.observations) or "none",
+            "Read %d line(s), %d finding(s)%s: %s",
+            len(analysis.lines),
+            len(analysis.findings),
+            " [needs human review]" if analysis.needs_human_review else "",
+            ", ".join(f"{f.rule}({f.severity})" for f in analysis.findings) or "none",
         )
-        return bill
+        return analysis
 
 
 def to_decimal(value: float | None) -> Decimal | None:

@@ -153,16 +153,27 @@ _MONTH_NUMBER = {
 }
 _DAY_MONTH = re.compile(r"\b(\d{1,2})\s*([a-z]{3,9})\b", re.IGNORECASE)
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b")
+# Year first, which is how a reader that tidies dates writes them. Without
+# this, "2026-10-15" reads as the 20th of the 26th month and comes back as no
+# date at all -- and the stay check, which is the one caller that matters,
+# would quietly stop finding anything.
+_ISO_DATE = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 
 
 def parse_bill_date(detail: str | None, year: int | None = None) -> date | None:
-    """Reads the date a row is dated, where it has one: "11 Oct, 10:30 am" or
-    "11/10/2026". Bills often print no year, so the caller's `year` fills in.
+    """Reads the date a row is dated, where it has one: "11 Oct, 10:30 am",
+    "11/10/2026" or "2026-10-11". Bills often print no year, so the caller's
+    `year` fills in.
 
     Returns None for anything that isn't a date, which is most details.
     """
     if not detail:
         return None
+
+    iso = _ISO_DATE.search(detail)
+    if iso:
+        on_year, month, day = (int(part) for part in iso.groups())
+        return _safe_date(on_year, month, day)
 
     numeric = _NUMERIC_DATE.search(detail)
     if numeric:
