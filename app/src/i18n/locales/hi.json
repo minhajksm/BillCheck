@@ -227,6 +227,18 @@
     "billTotal": "बिल का कुल",
     "billHeader": "अंतरिम बिल, {{date}}",
     "patientLine": "IP नं. {{ip}}, {{patient}}",
+    "categories": {
+      "room_and_nursing": "कमरा और नर्सिंग",
+      "professional_fees": "डॉक्टर की फीस",
+      "procedure_or_ot": "प्रक्रियाएँ और ओ.टी.",
+      "investigation": "जाँच और स्कैन",
+      "pharmacy_drug": "दवाइयाँ",
+      "consumable_disposable": "उपभोग्य सामग्री",
+      "implant_device": "इंप्लांट और उपकरण",
+      "equipment_charge": "मशीन शुल्क",
+      "non_medical": "गैर-चिकित्सा वस्तुएँ",
+      "unclassified": "अन्य शुल्क"
+    },
     "whyFlagged": "यह सवाल क्यों है",
     "whatToAsk": "क्या पूछें",
     "whatHappened": "क्या हुआ?",

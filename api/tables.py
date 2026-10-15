@@ -165,6 +165,11 @@ class LineItem(Base):
     detail: Mapped[str | None] = mapped_column(String(120))
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # What kind of charge this is, from the reader's PHASE 2 categories (see
+    # analysis.Category). The report groups the bill by it, so a family can
+    # see what the consumables came to. "unclassified" is both the reader's
+    # own fallback and what bills read before this column carry.
+    category: Mapped[str] = mapped_column(String(24), server_default="unclassified")
 
     bill: Mapped[Bill] = relationship(back_populates="line_items")
 

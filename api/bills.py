@@ -154,6 +154,7 @@ def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audi
             detail=(line_detail(line) or None),
             quantity=to_decimal(line.quantity),
             amount=amount,
+            category=line.category,
         )
         db.add(item)
         items_by_position[position] = item
@@ -197,6 +198,7 @@ def bill_out(bill: Bill) -> BillOut:
                 detail=item.detail,
                 quantity=float(item.quantity) if item.quantity is not None else None,
                 amount=float(item.amount),
+                category=item.category,  # type: ignore[arg-type]
             )
             for item in bill.line_items
         ],
