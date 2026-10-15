@@ -18,13 +18,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 import audit
+from analysis import AnalysedLine, BillAnalysis
 from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
-from ocr import BillPage, ExtractedBill, OcrError, OcrProvider, get_ocr_provider, to_decimal
+from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data
-from review import review
+from review import flags_from_findings
 from settings import get_settings
 from tables import Bill, Case, CaseMember, Flag, LineItem, UploadAttempt
 
@@ -124,20 +125,34 @@ async def read_page(file: UploadFile, index: int) -> BillPage:
     return BillPage(data=data, content_type=content_type)
 
 
-def store_bill(
-    db: Session, case: Case, extracted: ExtractedBill, flags: list[audit.Flag], bill: Bill
-) -> Bill:
+def line_detail(line: AnalysedLine) -> str | None:
+    """The quantity-or-date column, as the app has always shown it.
+
+    The analysis splits what one column used to hold -- a count and its unit,
+    or a date -- so this puts it back together for the screen. The date wins
+    where the bill prints one, because that is what a family looks for.
+    """
+    if line.date:
+        return line.date
+    if line.quantity is None:
+        return line.unit or None
+    count = f"{line.quantity:g}"
+    return f"{count} {line.unit}".strip() or None
+
+
+def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audit.Flag], bill: Bill) -> Bill:
     """Writes the line items and their flags, and totals the bill."""
     items_by_position: dict[int, LineItem] = {}
     total = Decimal("0")
-    for position, extracted_row in enumerate(extracted.rows, start=1):
-        amount = to_decimal(extracted_row.amount) or Decimal("0")
+    for position, line in enumerate(analysis.lines, start=1):
+        amount = to_decimal(line.amount) or Decimal("0")
         item = LineItem(
             bill_id=bill.id,
             position=position,
-            name=extracted_row.name[:200],
-            detail=(extracted_row.detail or None),
-            quantity=to_decimal(extracted_row.quantity),
+            # Verbatim, because it is what a family will find on their copy.
+            name=line.description_verbatim[:200],
+            detail=(line_detail(line) or None),
+            quantity=to_decimal(line.quantity),
             amount=amount,
         )
         db.add(item)
@@ -253,7 +268,7 @@ async def upload_bill(
         # Reading a bill can take most of a minute, and the reader is a plain
         # blocking call. Run on the event loop, it would stall every other
         # request (sign-ins, other families' cases) until it finished.
-        extracted = await run_in_threadpool(ocr.read_bill, images)
+        analysis = await run_in_threadpool(ocr.read_bill, images)
     except OcrError as exc:
         # The family is told one thing -- try again in better light -- because
         # there is nothing useful they can do with the rest. Whoever is running
@@ -267,22 +282,21 @@ async def upload_bill(
         del images
 
     on = bill_date or india_today()
+    # The prompt refuses to price anything and hands the lines over instead.
+    # This is the pricing system it means: the published lists in references.py.
     rows = [
         audit.BillRow(
             position=position,
-            name=row.name,
-            detail=row.detail,
-            quantity=to_decimal(row.quantity),
-            amount=to_decimal(row.amount) or Decimal("0"),
+            name=line.description_verbatim,
+            detail=line_detail(line),
+            quantity=to_decimal(line.quantity),
+            amount=to_decimal(line.amount) or Decimal("0"),
         )
-        for position, row in enumerate(extracted.rows, start=1)
+        for position, line in enumerate(analysis.lines, start=1)
     ]
     reference_flags = audit.audit_bill(rows, references)
-    # What the reader noticed, kept only where the rows bear it out or where
-    # nothing can check it. A reference flag always wins over the same claim.
-    # REVIEW_KEEP_ALL turns that filtering off, for watching the reader.
-    flags = review(
-        extracted,
+    flags = flags_from_findings(
+        analysis,
         reference_flags,
         case.admitted_on,
         case.closed_on,
@@ -298,7 +312,7 @@ async def upload_bill(
     )
     db.add(bill)
     db.flush()
-    store_bill(db, case, extracted, flags, bill)
+    store_bill(db, case, analysis, flags, bill)
     db.commit()
 
     return bill_out(load_bill(db, bill.id, user.id))

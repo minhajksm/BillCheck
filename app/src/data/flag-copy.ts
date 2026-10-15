@@ -226,6 +226,12 @@ function writtenReaderCopy(t: TFunction, flag: Flag, tag: string, item?: LineIte
         ask: t('flags.askNonMedicalItem'),
         referenceLabel,
       };
+    // The reader's analysis writes the "why" itself, and `readerCopy` puts
+    // that sentence here in place of ours. The heading and the question a
+    // family repeats at the counter stay generic on purpose: the finding's
+    // own rule is specific to one bill, so there is nothing to translate
+    // ahead of time.
+    case 'analysis_finding':
     // A kind with no wording of its own yet. It must not borrow another
     // kind's: telling a family a tax line "isn't part of the treatment" is
     // simply false. This says only what we actually know — that we noticed it.

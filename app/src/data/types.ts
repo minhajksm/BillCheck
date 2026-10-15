@@ -54,7 +54,11 @@ export type CitedFlagKind = 'above_mrp' | 'duplicate' | 'quantity';
  * the rows; none has a published reference behind it, so none is ever red.
  */
 export type ReaderFlagKind =
-  // Contradictions on the page. Some are re-checked against the rows.
+  // What the reader's analysis produces now: one kind, carrying its own rule,
+  // the evidence it quoted and the sentence it wrote for the family.
+  | 'analysis_finding'
+  // Contradictions on the page. `date_outside_stay` is still raised by the
+  // stay check the API makes itself. The rest are kinds older bills carry.
   | 'total_mismatch'
   | 'duplicate_line'
   | 'equipment_hours_exceed_stay'

@@ -231,15 +231,21 @@ def test_uploading_a_bill_returns_line_items_and_flags(client: TestClient, auth_
     assert len(bill["line_items"]) == 11
     assert bill["total"] == 42490, "the eleven rows add up to the prototype's day 3 total"
     assert [(f["kind"], f["level"]) for f in bill["flags"]] == [
+        # The price lists first: they can show a family where the number came
+        # from, so they are the ones that are ever red on their own account.
         ("duplicate", "red"),
         ("above_mrp", "red"),
-        # Amber in the bill's own order, so the reader's note on row 1 comes
-        # before the quantity flag on row 10.
-        ("unit_price_high", "amber"),
+        # The reader's own findings. "High" is what the bill itself proves, so
+        # it is red too; everything else is a question. Both groups are in the
+        # bill's own order, which is why row 5 precedes row 3 here only
+        # because red precedes amber.
+        ("analysis_finding", "red"),
+        ("analysis_finding", "amber"),
         ("quantity", "amber"),
     ]
     reader = next(f for f in bill["flags"] if f["reference_source"] == "reader")
-    # A judgment of degree claims no amount, so it adds nothing to the total.
+    # The prompt forbids pricing anything, so a finding adds nothing to the
+    # total a family is told they might get back.
     assert reader["excess"] == 0
     assert all(f["status"] == "open" for f in bill["flags"])
 
@@ -267,8 +273,8 @@ def test_a_bill_lands_on_its_case(client: TestClient, auth_headers: dict):
     refreshed = client.get(f"/cases/{case['id']}", headers=auth_headers).json()
     (summary,) = refreshed["bills"]
     assert summary["item_count"] == 11
-    assert summary["flag_count"] == 4
-    assert summary["open_flag_count"] == 4
+    assert summary["flag_count"] == 5
+    assert summary["open_flag_count"] == 5
     assert summary["total"] == 42490
 
 
@@ -342,7 +348,7 @@ def test_marking_a_flag_corrected_counts_as_recovered(
 
     case = client.get(f"/cases/{bill_with_flags['case_id']}", headers=auth_headers).json()
     assert case["recovered_amount"] == 6660
-    assert case["bills"][0]["open_flag_count"] == 3
+    assert case["bills"][0]["open_flag_count"] == 4
 
 
 def test_an_explained_flag_is_settled_but_not_recovered(
@@ -354,7 +360,7 @@ def test_an_explained_flag_is_settled_but_not_recovered(
 
     case = client.get(f"/cases/{bill_with_flags['case_id']}", headers=auth_headers).json()
     assert case["recovered_amount"] == 0
-    assert case["bills"][0]["open_flag_count"] == 3
+    assert case["bills"][0]["open_flag_count"] == 4
 
 
 def test_a_question_can_be_reopened(client: TestClient, auth_headers: dict, bill_with_flags: dict):
