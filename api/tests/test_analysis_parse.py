@@ -392,3 +392,76 @@ def test_a_refusal_is_not_read_again():
     client.refuse = True
     with pytest.raises(OcrError, match="couldn't be read"):
         bill.read_bill(one_page())
+
+
+# --- the prompt's own conventions, which the model has to take --------------
+#
+# These were found the hard way: a real bill came back as valid JSON and the
+# parser threw all 26 lines of it away. Both causes are the prompt instructing
+# the reader to do something the model refused to accept.
+
+
+@pytest.mark.parametrize("field", ["unit", "date", "ambiguity_reason", "section", "item_name_plain"])
+def test_a_null_text_field_reads_as_nothing_printed(field: str):
+    """ABSOLUTE CONSTRAINT 3 tells the reader to output null where a field is
+    unreadable. "Not printed" and "unreadable" are the same to everything
+    downstream -- nothing to show -- so both are ""."""
+    lines = [{**GOOD["lines"][0], field: None}]
+    assert getattr(_parse(answer(lines=lines)).lines[0], field) == ""
+
+
+@pytest.mark.parametrize(
+    "printed,read",
+    [
+        ("1 1/4", 1.25),
+        ("1/4", 0.25),
+        ("2 1/2", 2.5),
+        ("3", 3.0),
+        ("5,150.00", 5150.0),
+        ("Rs. 450", 450.0),
+        ("₹1,250.50", 1250.5),
+        (" 6 ", 6.0),
+    ],
+)
+def test_a_figure_is_read_as_the_bill_prints_it(printed: str, read: float):
+    """PHASE 1 asks for verbatim transcription, so figures arrive formatted
+    the way a hospital writes them. Part-day beds really are billed "1 1/4"."""
+    lines = [{**GOOD["lines"][0], "quantity": printed}]
+    assert _parse(answer(lines=lines)).lines[0].quantity == read
+
+
+@pytest.mark.parametrize("printed", ["---", "", "as per chart", "N/A"])
+def test_a_figure_that_is_not_one_reads_as_nothing_stated(printed: str):
+    """Null, not zero: a quantity the bill does not state is not a quantity of
+    none, and treating it as one would understate a line."""
+    lines = [{**GOOD["lines"][0], "quantity": printed}]
+    assert _parse(answer(lines=lines)).lines[0].quantity is None
+
+
+def test_a_part_day_stay_is_not_rounded_away():
+    """31 hours 45 minutes is 1.32 days, and the reader says so."""
+    assert _parse(answer(bill={**GOOD["bill"], "stay_days": 1.32})).bill.stay_days == 1.32
+
+
+def test_a_count_arriving_as_text_is_still_a_count():
+    lines = [{**GOOD["lines"][0], "page": "1"}]
+    assert _parse(answer(lines=lines)).lines[0].page == 1
+
+
+def test_fields_the_reader_invents_are_ignored():
+    """Readers add detail the format never asked for -- a payment block, a
+    note beside a figure. None of it is read, and none of it is fatal: the
+    format is the contract, and extra is not a breach of it."""
+    extra = {**GOOD["bill"], "payment": {"status": "PAID"}, "stay_days_note": "about 31 hours"}
+    analysis = _parse(answer(bill=extra, consulting_doctors=["Dr. A. Example"]))
+    assert analysis.bill.total == 6500.0
+    assert not hasattr(analysis.bill, "payment")
+
+
+def test_a_reader_that_states_no_confidence_is_not_a_bad_read():
+    """An absent figure says nothing either way, so it must not be read as
+    zero and condemn a bill the reader actually read."""
+    bill = {**GOOD["bill"], "extraction_confidence": None}
+    analysis = _parse(answer(bill=bill, findings=[], needs_human_review=True))
+    assert analysis.unreadable() == ""
+    assert analysis.lines
