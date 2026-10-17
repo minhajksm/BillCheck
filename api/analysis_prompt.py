@@ -33,8 +33,9 @@ normalise yet. Capture: section heading, description as printed, quantity, unit,
 rate, amount, date, batch/HSN if shown. Preserve original spelling and
 abbreviations. Record page and approximate position for each line.
 Also capture: hospital name, bill number, bill date, admission and discharge
-dates, room category, patient age/sex if printed, bill total, every subtotal,
-GST lines, discounts, advance paid, amount payable.
+dates, room category, patient name, IP or admission number, patient age/sex if
+printed, bill total, every subtotal, GST lines, discounts, advance paid, amount
+payable.
 
 PHASE 2 — NORMALISATION
 For each line, add: a plain-English item name; a category from
@@ -108,6 +109,7 @@ Return a single JSON object and nothing else:
 {
   "bill": { "hospital", "bill_no", "bill_date", "admission_date",
             "discharge_date", "stay_days", "room_category", "total",
+            "patient_name", "ip_number",
             "pages_processed", "extraction_confidence": 0.0-1.0 },
   "lines": [ { "line_id", "page", "section", "description_verbatim",
                "item_name_plain", "category", "attributes": {},

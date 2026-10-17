@@ -255,6 +255,8 @@ class StubOcr:
                 stay_days=None,
                 room_category="Twin sharing",
                 total=total,
+                patient_name="Ramesh Sharma",
+                ip_number="IP/2026/4417",
                 pages_processed=len(pages),
                 extraction_confidence=0.9,
             ),

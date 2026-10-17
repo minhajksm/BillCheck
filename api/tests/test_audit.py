@@ -4,6 +4,7 @@ The worked examples are the ones in docs/prototype.html, so the numbers here
 and the numbers on screen stay in step.
 """
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from references import (
     is_timed,
     load_reference_data,
     normalize,
+    parse_bill_date,
     parse_count,
     parse_quantity,
 )
@@ -427,3 +429,45 @@ def test_quantities_print_as_whole_things(quantity: str, expected: str):
     flags = audit_bill([row(1, "Surgical gloves", "unused", "6800", quantity=quantity)], REFERENCES)
     assert flags[0].reference_detail["quantity"] == expected
     assert flags[0].reference_detail["usual_max_per_day"] == "20"
+
+
+# --- the date formats hospital software actually prints ----------------------
+#
+# The admission date is what a stay is counted from, and `date_outside_stay`
+# compares every line against it, so a format that reads as None dates the
+# case from today and flags the whole bill. These were found on real bills.
+
+
+@pytest.mark.parametrize(
+    "printed,expected",
+    [
+        ("23-Oct-18", date(2018, 10, 23)),
+        ("23-Oct-2018", date(2018, 10, 23)),
+        ("23/Oct/2018", date(2018, 10, 23)),
+        ("23.Oct.18", date(2018, 10, 23)),
+        ("2 Sept 2019", date(2019, 9, 2)),
+        ("22-10-18 10:45 AM", date(2018, 10, 22)),
+        ("2026-10-15", date(2026, 10, 15)),
+        ("15/10/2026", date(2026, 10, 15)),
+    ],
+)
+def test_reads_the_date_formats_bills_print(printed: str, expected: date):
+    assert parse_bill_date(printed, 2026) == expected
+
+
+def test_a_time_is_not_read_as_a_year():
+    """ "11 Oct, 10:30 am" with the year taken from "10:30" would date the line
+    in 2010 and put every line of every bill outside its stay."""
+    assert parse_bill_date("11 Oct, 10:30 am", 2026) == date(2026, 10, 11)
+    assert parse_bill_date("11 Oct 10:30", 2026) == date(2026, 10, 11)
+
+
+def test_a_printed_year_beats_the_caller_s(printed: str = "23-Oct-18"):
+    """A bill from 2018 read in 2026: the page wins."""
+    assert parse_bill_date(printed, 2026) == date(2018, 10, 23)
+
+
+@pytest.mark.parametrize("quantity", ["1 day", "6 vials", "80 pair", "1 set", "4 bottles", "3 meals"])
+def test_a_quantity_is_still_not_a_date(quantity: str):
+    """These sit in the same column as a date on most bills."""
+    assert parse_bill_date(quantity, 2026) is None

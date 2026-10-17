@@ -27,6 +27,8 @@ GOOD = {
         "stay_days": 3,
         "room_category": "Twin sharing",
         "total": 6500.0,
+        "patient_name": "Ramesh Sharma",
+        "ip_number": "IP/4417",
         "pages_processed": 1,
         "extraction_confidence": 0.92,
     },
