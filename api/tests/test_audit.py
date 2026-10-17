@@ -447,6 +447,10 @@ def test_quantities_print_as_whole_things(quantity: str, expected: str):
         ("23.Oct.18", date(2018, 10, 23)),
         ("2 Sept 2019", date(2019, 9, 2)),
         ("22-10-18 10:45 AM", date(2018, 10, 22)),
+        # A worded month with a year AND a time after it: how a bill stamps
+        # the line it is dating, and the shape that read as 2026 at first.
+        ("22-Oct-18 10:45 AM", date(2018, 10, 22)),
+        ("23-Oct-18 6:30 PM", date(2018, 10, 23)),
         ("2026-10-15", date(2026, 10, 15)),
         ("15/10/2026", date(2026, 10, 15)),
     ],

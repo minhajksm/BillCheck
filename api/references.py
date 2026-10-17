@@ -151,13 +151,18 @@ _MONTH_NUMBER = {
     )
     for name in names
 }
-# "11 Oct", "23-Oct-18", "23/Oct/2018", "2 Sept 2019", "11 Oct, 10:30 am".
-# Hospital software writes the month as a word about as often as a number, and
-# hyphenates it as readily as it spaces it. The year is optional and must not
-# be followed by a colon or another digit, or the "10" of "10:30 am" would be
-# read as the year and date the line in 2010.
+# "11 Oct", "23-Oct-18", "23/Oct/2018", "2 Sept 2019", "11 Oct, 10:30 am",
+# "22-Oct-18 10:45 AM". Hospital software writes the month as a word about as
+# often as a number, and hyphenates it as readily as it spaces it.
+#
+# The year is optional, and the two lookaheads are what tell a year from a
+# time. `(?!\d)` stops it taking the front of a longer number. `(?!\s*:)`
+# stops "11 Oct, 10:30 am" reading its "10" as the year and dating the line in
+# 2010 -- a time is the number with a colon straight after it, which is why
+# the check cannot simply reject a year with digits following: "22-Oct-18
+# 10:45 AM" is a year and then a time, and is how bills date their lines.
 _DAY_MONTH = re.compile(
-    r"\b(\d{1,2})[\s./-]*([a-z]{3,9})\.?(?:[\s.,/-]*(\d{2,4})(?!\s*[:\d]))?",
+    r"\b(\d{1,2})[\s./-]*([a-z]{3,9})\.?(?:[\s.,/-]*(\d{2,4})(?!\d)(?!\s*:))?",
     re.IGNORECASE,
 )
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b")

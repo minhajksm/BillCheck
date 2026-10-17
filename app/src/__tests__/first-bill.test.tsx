@@ -151,23 +151,13 @@ describe('checking a bill from the home screen', () => {
 
   it('shows the reading animation while the bill is read', async () => {
     mockCamera.mockResolvedValue(PICKED);
-    // A read that never returns, so the waiting state is what is on screen.
-    global.fetch = jest.fn(async (input: unknown, init?: RequestInit) => {
-      if (String(input).endsWith('/bills') && init?.method === 'POST') {
-        return new Promise<Response>(() => {});
-      }
-      return new Response(
-        JSON.stringify({
-          id: 'u1',
-          phone: '+919876543210',
-          name: 'Rohan Sharma',
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-    }) as typeof fetch;
+    const server = installFakeApi();
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    // The pages land and the reading never comes back: the minute a family
+    // spends on this screen.
+    server.stallUpload = true;
 
     renderRouter(routes, { initialUrl: '/' });
     fireEvent.press(await screen.findByText('Photograph bill'));
@@ -176,22 +166,44 @@ describe('checking a bill from the home screen', () => {
     expect(await screen.findByText('Checking your bill')).toBeVisible();
     // It says which of the three it is on, rather than spinning: the read
     // takes most of a minute, and a spinner that long reads as a hung app.
-    expect(screen.getByText('Sending the pages')).toBeVisible();
     expect(screen.getByText('Reading every line of the bill')).toBeVisible();
     expect(screen.getByText('Checking the charges against price lists')).toBeVisible();
     // And it never promises how long: nothing here knows.
     expect(screen.getByText('This usually takes under a minute. Keep the app open.')).toBeVisible();
   });
 
+  it('counts the pages up while they are still going', async () => {
+    mockCamera.mockResolvedValue(PICKED);
+    const server = installFakeApi();
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    // Held at half sent, so the first step is the one on screen.
+    server.stallUpload = true;
+    global.XMLHttpRequest = class {
+      upload: { onprogress?: (event: ProgressEvent) => void } = {};
+      open() {}
+      setRequestHeader() {}
+      send() {
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 37, total: 100 } as ProgressEvent);
+      }
+    } as unknown as typeof XMLHttpRequest;
+
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Check bill'));
+
+    // The one figure on the screen that is measured rather than estimated.
+    expect(await screen.findByText('Sending the pages · 37%')).toBeVisible();
+  });
+
   it('keeps the pages when the read fails, so nothing is photographed twice', async () => {
     mockCamera.mockResolvedValue(PICKED);
-    const realFetch = global.fetch;
-    global.fetch = jest.fn(async (input: unknown, init?: RequestInit) => {
-      if (String(input).endsWith('/bills') && init?.method === 'POST') {
-        return new Response(JSON.stringify({ detail: { code: 'unreadable_bill' } }), { status: 422 });
-      }
-      return (realFetch as typeof fetch)(input as RequestInfo, init);
-    }) as typeof fetch;
+    const server = installFakeApi();
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    server.failUpload = 'unreadable_bill';
 
     renderRouter(routes, { initialUrl: '/' });
     fireEvent.press(await screen.findByText('Photograph bill'));
