@@ -16,9 +16,11 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { caseStatus } from '@/data/case-status';
-import { listCases } from '@/data/cases-api';
+import { listCases, type ScannedPage } from '@/data/cases-api';
+import { stagePages } from '@/data/page-inbox';
 import type { Case } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
+import { usePagePicker } from '@/hooks/use-page-picker';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth, formatMonthYear } from '@/i18n/dates';
 import { formatPhone } from '@/lib/phone';
@@ -80,6 +82,8 @@ export default function YourCasesScreen() {
       </Text>
       <Text color="ink2">{t('home.intro')}</Text>
 
+      <CheckABill />
+
       <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
         {t('home.yourCases')}
       </Text>
@@ -97,7 +101,10 @@ export default function YourCasesScreen() {
           onPress={() =>
             c.closedOn
               ? toast(t('home.closedCaseToast'))
-              : router.push({ pathname: '/cases/[caseId]', params: { caseId: c.id } })
+              : router.push({
+                  pathname: '/cases/[caseId]',
+                  params: { caseId: c.id },
+                })
           }
         />
       ))}
@@ -118,11 +125,65 @@ export default function YourCasesScreen() {
   );
 }
 
+/**
+ * The way in, first thing on the screen.
+ *
+ * A family arrives holding a bill, not wanting to fill in a form about an
+ * admission they are living through. Everything a case needs -- the hospital,
+ * the patient, the IP number, the admission date -- is printed on the page in
+ * their hand, so the bill opens the case and they correct it later if they
+ * like. Starting a case by hand is still there, below their cases, for anyone
+ * setting one up before the first bill arrives.
+ *
+ * The picker opens here, on the tap, so nothing stands between wanting a bill
+ * checked and photographing it. The pages go to the scan screen, where the
+ * rest of a multi-page bill is added.
+ */
+function CheckABill() {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const picker = usePagePicker();
+
+  const pick = async (choose: () => Promise<ScannedPage[]>) => {
+    const pages = await choose();
+    // Cancelled: they are still on their own cases, which is where they were.
+    if (pages.length === 0) return;
+    stagePages(pages);
+    router.push('/scan');
+  };
+
+  return (
+    <View style={[styles.checkBill, { backgroundColor: palette.indigoSoft, borderColor: palette.line }]}>
+      <Text weight="bold" style={styles.checkBillTitle}>
+        {t('home.checkBillTitle')}
+      </Text>
+      <Text color="ink2">{t('home.checkBillBody')}</Text>
+      <View style={styles.checkBillButtons}>
+        <Button
+          icon="camera"
+          label={t('home.photographBill')}
+          loading={picker.preparing}
+          onPress={() => void pick(picker.takePhoto)}
+        />
+        <Button
+          variant="secondary"
+          icon="upload"
+          label={t('home.uploadBill')}
+          onPress={() => void pick(picker.choosePages)}
+        />
+      </View>
+    </View>
+  );
+}
+
 function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
   const { t } = useTranslation();
   const when = item.closedOn
     ? t('home.closed', { date: formatMonthYear(t, item.closedOn) })
-    : t('home.admitted', { date: formatDayMonth(t, item.admittedOn), day: item.dayOfStay });
+    : t('home.admitted', {
+        date: formatDayMonth(t, item.admittedOn),
+        day: item.dayOfStay,
+      });
 
   return (
     <Card onPress={onPress} style={styles.case}>
@@ -130,7 +191,12 @@ function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
         <Text weight="bold" style={styles.caseTitle}>
           {item.title}
         </Text>
-        <Text color="ink2">{t('common.place', { name: item.hospital.name, area: item.hospital.area })}</Text>
+        <Text color="ink2">
+          {t('common.place', {
+            name: item.hospital.name,
+            area: item.hospital.area,
+          })}
+        </Text>
         <Text variant="faint">{when}</Text>
       </View>
       <CaseStatusChip status={caseStatus(item)} />
@@ -144,6 +210,16 @@ const styles = StyleSheet.create({
   account: { padding: 16, gap: 8, marginBottom: 8 },
   hello: { marginTop: 6, marginBottom: 2 },
   sectionTitle: { marginTop: 22, marginBottom: 8 },
+  checkBill: {
+    marginTop: 18,
+    borderWidth: 1,
+    borderRadius: Radius.card,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 6,
+  },
+  checkBillTitle: { fontSize: 16, lineHeight: 22 },
+  checkBillButtons: { marginTop: 10, gap: 10 },
   case: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -101,6 +101,8 @@ def analysis(
             stay_days=None,
             room_category="",
             total=float(sum(row.amount or 0 for row in rows)),
+            patient_name="Ramesh Sharma",
+            ip_number="IP/4417",
             pages_processed=1,
             extraction_confidence=0.9,
         ),

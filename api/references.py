@@ -151,7 +151,15 @@ _MONTH_NUMBER = {
     )
     for name in names
 }
-_DAY_MONTH = re.compile(r"\b(\d{1,2})\s*([a-z]{3,9})\b", re.IGNORECASE)
+# "11 Oct", "23-Oct-18", "23/Oct/2018", "2 Sept 2019", "11 Oct, 10:30 am".
+# Hospital software writes the month as a word about as often as a number, and
+# hyphenates it as readily as it spaces it. The year is optional and must not
+# be followed by a colon or another digit, or the "10" of "10:30 am" would be
+# read as the year and date the line in 2010.
+_DAY_MONTH = re.compile(
+    r"\b(\d{1,2})[\s./-]*([a-z]{3,9})\.?(?:[\s.,/-]*(\d{2,4})(?!\s*[:\d]))?",
+    re.IGNORECASE,
+)
 _NUMERIC_DATE = re.compile(r"\b(\d{1,2})\s*[/-]\s*(\d{1,2})(?:\s*[/-]\s*(\d{2,4}))?\b")
 # Year first, which is how a reader that tidies dates writes them. Without
 # this, "2026-10-15" reads as the 20th of the 26th month and comes back as no
@@ -185,9 +193,12 @@ def parse_bill_date(detail: str | None, year: int | None = None) -> date | None:
 
     worded = _DAY_MONTH.search(detail)
     if worded:
-        day, month_name = worded.groups()
+        day, month_name, maybe_year = worded.groups()
         month = _MONTH_NUMBER.get(month_name.lower())
         if month is not None:
+            if maybe_year:
+                on_year = int(maybe_year)
+                return _safe_date(on_year + 2000 if on_year < 100 else on_year, month, int(day))
             return _safe_date(year or date.today().year, month, int(day))
     return None
 

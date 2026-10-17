@@ -27,7 +27,11 @@
     "newCaseSoon": "Starting a new case is coming soon",
     "planningTitle": "Planning an admission?",
     "planningBody": "Get a cost estimate and compare package rates before you're admitted.",
-    "nextVersion": "In the next version"
+    "nextVersion": "In the next version",
+    "checkBillTitle": "Have a hospital bill?",
+    "checkBillBody": "Photograph the itemized bill. We'll read it and open a case from what it says.",
+    "photographBill": "Photograph bill",
+    "uploadBill": "Upload photo or PDF"
   },
   "caseStatus": {
     "addTodaysBill": "Add today's bill",
@@ -141,7 +145,16 @@
     "errorTooMany": "A bill can have up to {{max}} pages. Remove some and check them as a second bill.",
     "errorLimit": "You've checked a lot of bills today. Try again tomorrow.",
     "errorUnknown": "Something went wrong. Your pages are still here. Try again.",
-    "choosePdf": "Upload PDF"
+    "choosePdf": "Upload PDF",
+    "titleFirst": "Check a bill",
+    "hintFirstEmpty": "Fit one page inside the frame. We'll read the hospital, the patient and the dates off the bill itself."
+  },
+  "reading": {
+    "title": "Checking your bill",
+    "note": "This usually takes under a minute. Keep the app open.",
+    "step1": "Sending the pages",
+    "step2": "Reading every line of the bill",
+    "step3": "Checking the charges against price lists"
   },
   "flags": {
     "tagAboveMrp": "Above MRP",
@@ -251,7 +264,9 @@
     "toastExplained": "Marked as explained",
     "toastReopened": "Question reopened",
     "askBillingDesk": "Ask the billing desk",
-    "backToCase": "Back to case"
+    "backToCase": "Back to case",
+    "patientUnknown": "Patient details not filled in",
+    "whereItWent": "Where it went"
   },
   "ask": {
     "title": "Ask the billing desk",

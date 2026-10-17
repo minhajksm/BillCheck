@@ -219,6 +219,10 @@ class BillHeader(BaseModel):
     stay_days: Number = Field(description="Days of stay. Null when the dates don't give it.")
     room_category: Text = Field(description="As printed. Empty when not readable.")
     total: Number = Field(description="The grand total printed. Null when none is printed.")
+    patient_name: Text = Field(description="As printed. Empty when not readable.")
+    ip_number: Text = Field(
+        description="The IP, admission or registration number as printed. Empty when not readable."
+    )
     pages_processed: Count = Field(description="How many pages you read.")
     extraction_confidence: Number = Field(description="0.0-1.0 across the whole document.")
 

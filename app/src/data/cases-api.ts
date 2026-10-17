@@ -72,7 +72,11 @@ type ApiBill = {
   flags: ApiFlag[];
 };
 
-const toMember = (m: ApiMember): Member => ({ id: m.id, name: m.name, isYou: m.is_you });
+const toMember = (m: ApiMember): Member => ({
+  id: m.id,
+  name: m.name,
+  isYou: m.is_you,
+});
 
 const toDailyBill = (b: ApiDailyBill): DailyBill => ({
   id: b.id,
@@ -199,8 +203,15 @@ export async function deleteCase(token: string, caseId: string): Promise<void> {
 }
 
 /** A new invite code to share with family. Shown once; valid for 7 days. */
-export async function createInvite(token: string, caseId: string): Promise<{ code: string; expiresAt: string }> {
-  const invite = await apiFetch<{ id: string; code: string; expires_at: string }>(`/cases/${caseId}/invites`, {
+export async function createInvite(
+  token: string,
+  caseId: string,
+): Promise<{ code: string; expiresAt: string }> {
+  const invite = await apiFetch<{
+    id: string;
+    code: string;
+    expires_at: string;
+  }>(`/cases/${caseId}/invites`, {
     method: 'POST',
     token,
   });
@@ -209,7 +220,13 @@ export async function createInvite(token: string, caseId: string): Promise<{ cod
 
 /** Joins with a code from a family member. The code goes in the body, never the URL. */
 export async function joinCase(token: string, code: string): Promise<Case> {
-  return toCase(await apiFetch<ApiCase>('/cases/join', { method: 'POST', token, body: { code } }));
+  return toCase(
+    await apiFetch<ApiCase>('/cases/join', {
+      method: 'POST',
+      token,
+      body: { code },
+    }),
+  );
 }
 
 export async function readBill(token: string, billId: string): Promise<Bill> {
@@ -218,20 +235,20 @@ export async function readBill(token: string, billId: string): Promise<Bill> {
 
 export async function setFlagStatus(token: string, flagId: string, status: Flag['status']): Promise<Flag> {
   return toFlag(
-    await apiFetch<ApiFlag>(`/flags/${flagId}`, { method: 'PATCH', token, body: { status } }),
+    await apiFetch<ApiFlag>(`/flags/${flagId}`, {
+      method: 'PATCH',
+      token,
+      body: { status },
+    }),
   );
 }
 
 /** One page of a bill, ready to upload. */
 export type ScannedPage = { uri: string; name: string; type: string };
 
-/**
- * Uploads the photographed pages. Multipart, so it doesn't go through
- * `apiFetch`, which sends JSON.
- */
-export async function uploadBill(
+async function postPages(
   token: string,
-  caseId: string,
+  path: string,
   pages: ScannedPage[],
   billDate?: string,
 ): Promise<Bill> {
@@ -243,14 +260,18 @@ export async function uploadBill(
       form.append('pages', blob, page.name);
     } else {
       // React Native's FormData takes the file descriptor itself.
-      form.append('pages', { uri: page.uri, name: page.name, type: page.type } as unknown as Blob);
+      form.append('pages', {
+        uri: page.uri,
+        name: page.name,
+        type: page.type,
+      } as unknown as Blob);
     }
   }
   if (billDate) form.append('bill_date', billDate);
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/cases/${caseId}/bills`, {
+    response = await fetch(`${API_URL}${path}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: form,
@@ -266,4 +287,29 @@ export async function uploadBill(
     throw new ApiError(code as ApiErrorCode, response.status);
   }
   return toBill(data as ApiBill);
+}
+
+/**
+ * Uploads the photographed pages. Multipart, so it doesn't go through
+ * `apiFetch`, which sends JSON.
+ */
+export async function uploadBill(
+  token: string,
+  caseId: string,
+  pages: ScannedPage[],
+  billDate?: string,
+): Promise<Bill> {
+  return postPages(token, `/cases/${caseId}/bills`, pages, billDate);
+}
+
+/**
+ * Checks a bill with no case behind it, and opens one from what the bill says.
+ *
+ * The way in for someone holding a bill and nothing else: the hospital, the
+ * admission date, the patient and the IP number are all printed on it. The
+ * case comes back on `bill.caseId`, and the family can correct its details
+ * whenever they like.
+ */
+export async function checkFirstBill(token: string, pages: ScannedPage[], billDate?: string): Promise<Bill> {
+  return postPages(token, '/bills', pages, billDate);
 }

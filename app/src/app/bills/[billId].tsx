@@ -60,12 +60,7 @@ export default function BillReportScreen() {
   }
 
   return (
-    <Report
-      bill={loaded.value.bill}
-      item={loaded.value.item}
-      token={token ?? ''}
-      onChanged={loaded.reload}
-    />
+    <Report bill={loaded.value.bill} item={loaded.value.item} token={token ?? ''} onChanged={loaded.reload} />
   );
 }
 
@@ -81,7 +76,10 @@ function Report({
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
-  const [view, setView] = useState<'flags' | 'bill'>('flags');
+  // The marked bill opens first: what a family does with this screen is hold
+  // it up beside the hospital's own copy, and the flags are marked on it. The
+  // flag list is the worklist for afterwards.
+  const [view, setView] = useState<'bill' | 'flags'>('bill');
   const [openFlag, setOpenFlag] = useState<Flag | null>(null);
 
   const open = bill.flags.filter((flag) => flag.status === 'open');
@@ -93,13 +91,18 @@ function Report({
 
   return (
     <Screen header={<AppHeader title={t('report.title', { day: bill.day })} showBack />}>
-      <Summary open={open.length} total={bill.lineItems.length} overcharge={overcharge} recovered={recovered} />
+      <Summary
+        open={open.length}
+        total={bill.lineItems.length}
+        overcharge={overcharge}
+        recovered={recovered}
+      />
 
       {bill.flags.length > 0 ? (
         <Segmented
           options={[
-            { value: 'flags', label: t('report.tabFlags') },
             { value: 'bill', label: t('report.tabBill') },
+            { value: 'flags', label: t('report.tabFlags') },
           ]}
           value={view}
           onChange={setView}
@@ -107,11 +110,16 @@ function Report({
       ) : null}
 
       {bill.flags.length === 0 ? (
-        <Banner tone="green" icon="check" title={t('report.nothingFlagged')} body={t('report.nothingFlaggedBody')} />
-      ) : view === 'flags' ? (
-        <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
-      ) : (
+        <Banner
+          tone="green"
+          icon="check"
+          title={t('report.nothingFlagged')}
+          body={t('report.nothingFlaggedBody')}
+        />
+      ) : view === 'bill' ? (
         <MarkedBill bill={bill} item={item} onOpen={setOpenFlag} />
+      ) : (
+        <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
       )}
 
       <Text variant="faint" style={styles.fine}>
@@ -122,7 +130,12 @@ function Report({
         {open.length > 0 ? (
           <Button
             label={t('report.askBillingDesk')}
-            onPress={() => router.push({ pathname: '/bills/[billId]/ask', params: { billId: bill.id } })}
+            onPress={() =>
+              router.push({
+                pathname: '/bills/[billId]/ask',
+                params: { billId: bill.id },
+              })
+            }
           />
         ) : (
           <Button variant="secondary" label={t('report.backToCase')} onPress={() => router.back()} />
@@ -190,7 +203,13 @@ function Segmented<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, on && { backgroundColor: palette.card, borderColor: palette.line }]}>
+            style={[
+              styles.segment,
+              on && {
+                backgroundColor: palette.card,
+                borderColor: palette.line,
+              },
+            ]}>
             <Text weight="semibold" color={on ? 'ink' : 'ink2'}>
               {option.label}
             </Text>
@@ -254,8 +273,8 @@ function FlagList({
 }
 
 /**
- * The categories in the order the report shows them: where the money usually
- * goes first, the catch-all last. Mirrors `CATEGORY_ORDER` in
+ * The categories in the order the summary strip shows them: where the money
+ * usually goes first, the catch-all last. Mirrors `CATEGORY_ORDER` in
  * `api/analysis.py`, and `api/tests/test_categories.py` keeps the two in step.
  */
 const CATEGORY_ORDER: LineCategory[] = [
@@ -272,112 +291,114 @@ const CATEGORY_ORDER: LineCategory[] = [
 ];
 
 /**
- * The bill's rows under the kind of charge each one is, in the bill's own
- * order within each group.
+ * What each kind of charge came to, for the strip under the bill.
  *
- * Grouping is what makes a sixty-line bill answerable: a family can see that
- * the consumables came to more than the room, which is the question worth
- * asking even where no single line was flagged. Only groups with rows appear,
- * so a short bill still reads as a short bill.
+ * The rows themselves stay in the bill's own order, so this is where the
+ * shape of a bill shows: "the consumables came to more than the room" is a
+ * question worth asking at a billing desk even where no single line was
+ * flagged, and it is the same figure the reader's own structural check
+ * measures. Only categories the bill actually has appear.
  */
-function groupByCategory(rows: LineItem[]): { category: LineCategory; rows: LineItem[]; total: number }[] {
-  const groups = new Map<LineCategory, LineItem[]>();
+function categoryTotals(rows: LineItem[]): { category: LineCategory; total: number }[] {
+  const totals = new Map<LineCategory, number>();
   for (const row of rows) {
-    // A category this build doesn't know about falls in with the catch-all
-    // rather than out of the report. Grouping must never lose a row: this is
-    // the family's own bill, and a line that silently isn't there is worse
-    // than one filed under the wrong heading.
+    // A category this build doesn't know about counts under the catch-all
+    // rather than going missing: the strip has to add up to the bill.
     const category = CATEGORY_ORDER.includes(row.category) ? row.category : 'unclassified';
-    const existing = groups.get(category);
-    if (existing) existing.push(row);
-    else groups.set(category, [row]);
+    totals.set(category, (totals.get(category) ?? 0) + row.amount);
   }
-  return CATEGORY_ORDER.filter((category) => groups.has(category)).map((category) => {
-    const inGroup = (groups.get(category) ?? []).slice().sort((a, b) => a.position - b.position);
-    return {
-      category,
-      rows: inGroup,
-      total: inGroup.reduce((sum, row) => sum + row.amount, 0),
-    };
-  });
+  return CATEGORY_ORDER.filter((category) => totals.has(category)).map((category) => ({
+    category,
+    total: totals.get(category) ?? 0,
+  }));
 }
 
-function MarkedBill({
-  bill,
-  item,
-  onOpen,
-}: {
-  bill: Bill;
-  item: Case;
-  onOpen: (flag: Flag) => void;
-}) {
+function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (flag: Flag) => void }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const byItem = new Map(bill.flags.filter((f) => f.lineItemId).map((f) => [f.lineItemId as string, f]));
-  const groups = groupByCategory(bill.lineItems);
+  // The bill's own order, by the position the reader transcribed. A family
+  // reads down this beside the hospital's copy, so any order but the printed
+  // one makes them hunt for the line they are looking at.
+  const rows = [...bill.lineItems].sort((a, b) => a.position - b.position);
+  const totals = categoryTotals(bill.lineItems);
+  const patient = item.patient.name
+    ? t('report.patientLine', {
+        ip: item.patient.ipNumber,
+        patient: item.patient.name,
+      })
+    : t('report.patientUnknown');
 
   return (
     <Card style={styles.paper}>
       <View style={[styles.billHead, { borderBottomColor: palette.line }]}>
         <Text weight="bold">{item.hospital.name}</Text>
         <Text variant="faint">{t('report.billHeader', { date: formatDayMonth(t, bill.date) })}</Text>
-        <Text variant="faint">
-          {t('report.patientLine', { ip: item.patient.ipNumber, patient: item.patient.name })}
-        </Text>
+        <Text variant="faint">{patient}</Text>
       </View>
 
-      {groups.map((group) => (
-        <View key={group.category}>
-          <View style={[styles.groupHead, { borderBottomColor: palette.line }]}>
-            <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
-              {t(`report.categories.${group.category}`)}
+      {rows.map((row) => {
+        const flag = byItem.get(row.id);
+        const content = (
+          <>
+            <Text variant="faint" color="ink3" style={styles.billNumber}>
+              {row.position}
             </Text>
-            <Text variant="small" weight="semibold" color="ink2">
-              {formatINR(group.total)}
+            <View style={styles.billName}>
+              <Text variant="small">{row.name}</Text>
+              {row.detail ? <Text variant="faint">{row.detail}</Text> : null}
+            </View>
+            <Text variant="small" style={flag?.status === 'corrected' && styles.struck}>
+              {formatINR(row.amount)}
             </Text>
-          </View>
-
-          {group.rows.map((row) => {
-            const flag = byItem.get(row.id);
-            const content = (
-              <>
-                <View style={styles.billName}>
-                  <Text variant="small">{row.name}</Text>
-                  {row.detail ? <Text variant="faint">{row.detail}</Text> : null}
-                </View>
-                <Text variant="small" style={flag?.status === 'corrected' && styles.struck}>
-                  {formatINR(row.amount)}
-                </Text>
-              </>
-            );
-            if (!flag) {
-              return (
-                <View key={row.id} style={[styles.billRow, { borderBottomColor: palette.line }]}>
-                  {content}
-                </View>
-              );
-            }
-            return (
-              <Pressable
-                key={row.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${flag.position}: ${row.name}`}
-                onPress={() => onOpen(flag)}
-                style={[
-                  styles.billRow,
-                  { borderBottomColor: palette.line },
-                  flag.status === 'open' && { backgroundColor: palette.marigoldSoft },
-                ]}>
-                {content}
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
+          </>
+        );
+        if (!flag) {
+          return (
+            <View key={row.id} style={[styles.billRow, { borderBottomColor: palette.line }]}>
+              {content}
+            </View>
+          );
+        }
+        return (
+          <Pressable
+            key={row.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${flag.position}: ${row.name}`}
+            onPress={() => onOpen(flag)}
+            style={[
+              styles.billRow,
+              { borderBottomColor: palette.line },
+              flag.status === 'open' && {
+                backgroundColor: palette.marigoldSoft,
+              },
+            ]}>
+            {content}
+          </Pressable>
+        );
+      })}
 
       <View style={styles.billTotal}>
         <Text weight="bold">{t('report.billTotal')}</Text>
         <Text weight="bold">{formatINR(bill.total)}</Text>
+      </View>
+
+      <View style={[styles.whereItWent, { borderTopColor: palette.line }]}>
+        <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
+          {t('report.whereItWent')}
+        </Text>
+        <View style={styles.wentRows}>
+          {totals.map((group) => (
+            <View key={group.category} style={styles.wentRow}>
+              <Text variant="faint" color="ink2" style={styles.wentLabel}>
+                {t(`report.categories.${group.category}`)}
+              </Text>
+              <Text variant="faint" weight="semibold">
+                {formatINR(group.total)}
+              </Text>
+            </View>
+          ))}
+        </View>
       </View>
     </Card>
   );
@@ -490,7 +511,12 @@ function FlagSheet({
             <Text color="ink2">
               {flag.status === 'corrected' ? t('report.correctedNote') : t('report.explainedNote')}
             </Text>
-            <Button variant="secondary" label={t('report.reopen')} loading={saving} onPress={() => mark('open')} />
+            <Button
+              variant="secondary"
+              label={t('report.reopen')}
+              loading={saving}
+              onPress={() => mark('open')}
+            />
           </View>
         )}
       </View>
@@ -511,9 +537,27 @@ function Figure({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  summary: { borderWidth: 1, borderRadius: Radius.card, padding: 16, marginBottom: 14, alignItems: 'flex-start' },
-  segmented: { flexDirection: 'row', borderRadius: 12, padding: 3, gap: 3, marginBottom: 14 },
-  segment: { flex: 1, paddingVertical: 7, borderRadius: 9, alignItems: 'center', borderWidth: 0 },
+  summary: {
+    borderWidth: 1,
+    borderRadius: Radius.card,
+    padding: 16,
+    marginBottom: 14,
+    alignItems: 'flex-start',
+  },
+  segmented: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 3,
+    gap: 3,
+    marginBottom: 14,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 9,
+    alignItems: 'center',
+    borderWidth: 0,
+  },
   flag: {
     flexDirection: 'row',
     gap: 12,
@@ -534,7 +578,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 1,
   },
-  okRow: { flexDirection: 'row', gap: 10, alignItems: 'center', paddingVertical: 6 },
+  okRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
   paper: { padding: 14 },
   billHead: { borderBottomWidth: 1, paddingBottom: 10, marginBottom: 4 },
   billRow: {
@@ -547,22 +596,34 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderRadius: 2,
   },
-  groupHead: {
+  billNumber: { width: 20, textAlign: 'right' },
+  billName: { flex: 1 },
+  whereItWent: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
+  wentRows: { marginTop: 8, gap: 5 },
+  wentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
     gap: 10,
-    paddingTop: 14,
-    paddingBottom: 4,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
   },
-  billName: { flex: 1 },
+  wentLabel: { flex: 1 },
   struck: { textDecorationLine: 'line-through' },
-  billTotal: { flexDirection: 'row', justifyContent: 'space-between', paddingTop: 10, paddingHorizontal: 4 },
+  billTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    paddingHorizontal: 4,
+  },
   fine: { marginTop: 14, lineHeight: 18 },
   cta: { marginTop: 18, gap: 10 },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(14,16,32,0.45)' },
+  scrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(14,16,32,0.45)',
+  },
   sheet: {
     position: 'absolute',
     left: 0,
@@ -574,7 +635,11 @@ const styles = StyleSheet.create({
     padding: Gutter,
     paddingBottom: 24,
   },
-  sheetTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sheetTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   numbers: { flexDirection: 'row', gap: 8, marginVertical: 12 },
   figure: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 8 },
   sheetHeading: { marginTop: 14, marginBottom: 2 },

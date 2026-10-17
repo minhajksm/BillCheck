@@ -24,7 +24,7 @@ from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
 from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
-from references import ReferenceData, get_reference_data
+from references import ReferenceData, get_reference_data, parse_bill_date
 from review import flags_from_findings
 from settings import get_settings
 from tables import Bill, Case, CaseMember, Flag, LineItem, UploadAttempt
@@ -237,53 +237,101 @@ def load_bill(db: Session, bill_id: uuid.UUID, user_id: uuid.UUID) -> Bill:
     return bill
 
 
-@router.post(
-    "/cases/{case_id}/bills",
-    status_code=status.HTTP_201_CREATED,
-    response_model=BillOut,
-    summary="Add one day's bill",
-)
-async def upload_bill(
-    case_id: uuid.UUID,
-    db: Db,
-    user: CurrentUser,
-    ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
-    references: Annotated[ReferenceData, Depends(get_reference_data)],
-    pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
-    bill_date: Annotated[date | None, Form()] = None,
-) -> BillOut:
-    """Reads the pages into line items, checks them, and keeps the result.
+def _split_hospital(printed: str) -> tuple[str, str]:
+    """A hospital's name and where it is, from the one line a bill prints.
 
-    The photographs are dropped once read.
+    Bills print the lot together: "Sample Polyclinic, 12/4, Example Road,
+    Pune - 411023". The name comes first, so the first comma splits it well
+    enough for a family to recognise their own case in a list -- and the whole
+    thing is editable afterwards, which is what that screen is for.
     """
-    case = load_case(db, case_id, user)
+    name, _, area = printed.partition(",")
+    return name.strip()[:120], area.strip()[:120]
 
+
+def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
+    """A case opened from what the bill itself says.
+
+    Nothing here is invented. Every field is the reader's own transcription or
+    is left empty for the family to fill in, because a case is the record of a
+    real admission and a plausible-looking guess in it is worse than a blank.
+    """
+    header = analysis.bill
+    hospital_name, hospital_area = _split_hospital(header.hospital)
+
+    # The admission is what the stay is counted from, so a readable date on the
+    # bill beats the bill's own date, which beats today.
+    admitted_on = parse_bill_date(header.admission_date) or parse_bill_date(header.bill_date) or india_today()
+
+    # The bill's own words for a label, so nothing of ours needs translating
+    # into a case title. Blank where the bill says neither, and the app shows
+    # its own placeholder.
+    patient_name = header.patient_name.strip()[:80]
+    title = patient_name or hospital_name
+
+    case = Case(
+        title=title,
+        hospital_name=hospital_name,
+        hospital_area=hospital_area,
+        patient_name=patient_name,
+        ip_number=header.ip_number.strip()[:40],
+        bed=None,
+        admitted_on=admitted_on,
+        created_by=user_id,
+    )
+    case.members.append(CaseMember(user_id=user_id))
+    return case
+
+
+async def read_pages(
+    pages: list[UploadFile],
+    db: Session,
+    user_id: uuid.UUID,
+    ocr: OcrProvider,
+    case_id: uuid.UUID | None = None,
+) -> BillAnalysis:
+    """The pages, read. Raises the one error a family can act on.
+
+    The photographs are held in memory, read, and dropped: nothing is written
+    to disk and nothing but the structured bill is kept.
+    """
     if not pages:
         raise bill_error(status.HTTP_400_BAD_REQUEST, "no_pages")
     if len(pages) > MAX_PAGES:
         raise bill_error(status.HTTP_400_BAD_REQUEST, "too_many_pages")
 
     images = [await read_page(page, index) for index, page in enumerate(pages, start=1)]
-    check_upload_limit(db, user.id)
+    check_upload_limit(db, user_id)
 
     try:
         # Reading a bill can take most of a minute, and the reader is a plain
         # blocking call. Run on the event loop, it would stall every other
         # request (sign-ins, other families' cases) until it finished.
-        analysis = await run_in_threadpool(ocr.read_bill, images)
+        return await run_in_threadpool(ocr.read_bill, images)
     except OcrError as exc:
         # The family is told one thing -- try again in better light -- because
         # there is nothing useful they can do with the rest. Whoever is running
         # this needs the rest: a refusal, a truncated answer and a dead API key
         # all look identical from outside, and the chained exception never
         # prints because the HTTPException is handled.
-        logger.warning("Couldn't read a bill for case %s: %s", case_id, exc)
+        logger.warning("Couldn't read a bill for case %s: %s", case_id or "(new)", exc)
         # Nothing is kept from a bill we couldn't read.
         raise bill_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "unreadable_bill") from exc
     finally:
         del images
 
-    on = bill_date or india_today()
+
+def check_and_store(
+    db: Session,
+    case: Case,
+    analysis: BillAnalysis,
+    references: ReferenceData,
+    *,
+    on: date,
+    page_count: int,
+    uploaded_by: uuid.UUID,
+) -> Bill:
+    """Prices the lines against the published lists, then keeps the result."""
     # The prompt refuses to price anything and hands the lines over instead.
     # This is the pricing system it means: the published lists in references.py.
     rows = [
@@ -309,14 +357,89 @@ async def upload_bill(
         case_id=case.id,
         bill_date=on,
         day=max(1, (on - case.admitted_on).days + 1),
-        page_count=len(pages),
-        uploaded_by=user.id,
+        page_count=page_count,
+        uploaded_by=uploaded_by,
     )
     db.add(bill)
     db.flush()
     store_bill(db, case, analysis, flags, bill)
     db.commit()
+    return bill
 
+
+@router.post(
+    "/bills",
+    status_code=status.HTTP_201_CREATED,
+    response_model=BillOut,
+    summary="Check a bill, opening a case for it",
+)
+async def upload_first_bill(
+    db: Db,
+    user: CurrentUser,
+    ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
+    references: Annotated[ReferenceData, Depends(get_reference_data)],
+    pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
+    bill_date: Annotated[date | None, Form()] = None,
+) -> BillOut:
+    """Reads a bill with no case behind it, and opens one from what it says.
+
+    The way in for a family with a bill in their hand and nothing set up: the
+    hospital, the admission date, the patient and the IP number are all printed
+    on the bill, so asking them to type it first is asking twice. The case is
+    theirs to correct afterwards.
+
+    The case is written only once the bill reads. A bill that can't be read
+    leaves nothing behind -- no empty case in the family's list to explain.
+    """
+    analysis = await read_pages(pages, db, user.id, ocr)
+
+    case = case_from_analysis(analysis, user.id)
+    db.add(case)
+    db.flush()
+    logger.info("Opened case %s from a bill at %s", case.id, case.hospital_name or "(unnamed)")
+
+    bill = check_and_store(
+        db,
+        case,
+        analysis,
+        references,
+        on=bill_date or india_today(),
+        page_count=len(pages),
+        uploaded_by=user.id,
+    )
+    return bill_out(load_bill(db, bill.id, user.id))
+
+
+@router.post(
+    "/cases/{case_id}/bills",
+    status_code=status.HTTP_201_CREATED,
+    response_model=BillOut,
+    summary="Add one day's bill",
+)
+async def upload_bill(
+    case_id: uuid.UUID,
+    db: Db,
+    user: CurrentUser,
+    ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
+    references: Annotated[ReferenceData, Depends(get_reference_data)],
+    pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
+    bill_date: Annotated[date | None, Form()] = None,
+) -> BillOut:
+    """Reads the pages into line items, checks them, and keeps the result.
+
+    The photographs are dropped once read.
+    """
+    case = load_case(db, case_id, user)
+    analysis = await read_pages(pages, db, user.id, ocr, case_id)
+    bill = check_and_store(
+        db,
+        case,
+        analysis,
+        references,
+        on=bill_date or india_today(),
+        page_count=len(pages),
+        uploaded_by=user.id,
+    )
     return bill_out(load_bill(db, bill.id, user.id))
 
 
