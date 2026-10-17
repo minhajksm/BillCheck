@@ -1,0 +1,51 @@
+{
+  "bill": {
+    "hospital": "Sample Polyclinic, 12/4, Example Road, Pune - 411023",
+    "bill_no": "2018/10/T729861",
+    "bill_date": "23-Oct-18",
+    "admission_date": "22-Oct-18 10:45 AM",
+    "discharge_date": "23-Oct-18 6:30 PM",
+    "stay_days": 1.32,
+    "stay_days_note": "Elapsed time is about 31 h 45 min, spanning 2 calendar dates.",
+    "room_category": "PRIVATE (PRI001) then ICU (ICU001)",
+    "total": 5150.00,
+    "pages_processed": 1,
+    "extraction_confidence": 0.88,
+    "printed_summary": [
+      {"sr_no": "1", "code": "100000", "particulars": "Room & Nursing Charges", "amount": 2350.00},
+      {"sr_no": "3", "code": "500000", "particulars": "Professional Fees", "amount": 1200.00}
+    ],
+    "printed_totals": {"total_bill_amount": 5150.00, "amount_payable": 5150.00, "gst_lines": null},
+    "payment": {"receipt_no": "2018/10/745015", "amount": "Rs. 5150.00", "status": "PAID"},
+    "consulting_doctors": ["Dr. A. Example (Plastic Surgeon)", "Dr. B. Sample (Infectious Diseases)"]
+  },
+  "lines": [
+    {"line_id": "L1", "page": 1, "section": "Detailed Breakup / 100000", "description_verbatim": "Bed Charges - PRIVATE (PRI001)", "item_name_plain": "Private room bed charge", "category": "room_and_nursing", "attributes": {"room": "PRI001"}, "quantity": "1 1/4", "unit": null, "rate": 1000.00, "amount": 1250.00, "date": "22-10-18 10:20 AM", "mrp_printed": null, "confidence": 0.93, "ambiguous": true, "ambiguity_reason": "Unit basis for the fractional quantity (day, 24-hour block, etc.) is not printed."},
+    {"line_id": "L2", "page": 1, "section": "Detailed Breakup / 100000", "description_verbatim": "Bed Charges - ICU (ICU001)", "item_name_plain": "ICU bed charge", "category": "room_and_nursing", "attributes": {"room": "ICU001"}, "quantity": "1/4", "unit": null, "rate": 2000.00, "amount": 500.00, "date": "23-10-18 1:30 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": true, "ambiguity_reason": "Unit basis for the fractional quantity is not printed."},
+    {"line_id": "L3", "page": 1, "section": "Detailed Breakup / 500000", "description_verbatim": "Dr. A. Example (EMERGENCY)", "item_name_plain": "Doctor emergency consultation fee", "category": "professional_fees", "attributes": {"doctor": "Dr. A. Example"}, "quantity": 1, "unit": null, "rate": 100.00, "amount": 100.00, "date": "22-10-18 11:30 AM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L4", "page": 1, "section": "Detailed Breakup / 500000", "description_verbatim": "Dr. A. Example", "item_name_plain": "Doctor visit/consultation fee", "category": "professional_fees", "attributes": {"doctor": "Dr. A. Example"}, "quantity": 1, "unit": null, "rate": 500.00, "amount": 500.00, "date": "22-10-18 7:30 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L5", "page": 1, "section": "Detailed Breakup / 500000", "description_verbatim": "Dr. A. Example (EMERGENCY)", "item_name_plain": "Doctor emergency consultation fee", "category": "professional_fees", "attributes": {"doctor": "Dr. A. Example"}, "quantity": 1, "unit": null, "rate": 100.00, "amount": 100.00, "date": "23-10-18 12:30 PM", "mrp_printed": null, "confidence": 0.9, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L6", "page": 1, "section": "Detailed Breakup / 500000", "description_verbatim": "Dr. B. Sample", "item_name_plain": "Doctor visit/consultation fee", "category": "professional_fees", "attributes": {"doctor": "Dr. B. Sample"}, "quantity": 1, "unit": null, "rate": 500.00, "amount": 500.00, "date": "23-10-18 1:15 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L7", "page": 1, "section": "Detailed Breakup / 102001", "description_verbatim": "Nursing Fees", "item_name_plain": "Nursing fee", "category": "room_and_nursing", "attributes": {}, "quantity": 2, "unit": null, "rate": 120.00, "amount": 240.00, "date": null, "mrp_printed": null, "confidence": 0.9, "ambiguous": true, "ambiguity_reason": "Date printed as '---'. Unit of the quantity (per shift, per day) is not stated."},
+    {"line_id": "L8", "page": 1, "section": "Detailed Breakup / 102002", "description_verbatim": "Dressing", "item_name_plain": "Dressing procedure charge", "category": "procedure_or_ot", "attributes": {}, "quantity": 2, "unit": null, "rate": 80.00, "amount": 160.00, "date": "23-10-18 2:30 PM", "mrp_printed": null, "confidence": 0.9, "ambiguous": true, "ambiguity_reason": "Site, type and whether materials are included are not stated."},
+    {"line_id": "L9", "page": 1, "section": "Detailed Breakup / 102003", "description_verbatim": "Nebulization", "item_name_plain": "Nebulisation procedure charge", "category": "procedure_or_ot", "attributes": {}, "quantity": 1, "unit": null, "rate": 100.00, "amount": 100.00, "date": "23-10-18 1:10 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": true, "ambiguity_reason": "Drug used and whether it is included are not stated."},
+    {"line_id": "L10", "page": 1, "section": "Detailed Breakup / 102004", "description_verbatim": "Injection Charges", "item_name_plain": "Injection administration charge", "category": "procedure_or_ot", "attributes": {}, "quantity": 2, "unit": null, "rate": 50.00, "amount": 100.00, "date": "23-10-18 2:30 PM", "mrp_printed": null, "confidence": 0.9, "ambiguous": true, "ambiguity_reason": "Injected drug, route and whether the drug is billed elsewhere are not stated."},
+    {"line_id": "L11", "page": 1, "section": "Detailed Breakup / 401001", "description_verbatim": "Ward Medicines", "item_name_plain": "Unspecified ward medicines (lump sum)", "category": "pharmacy_drug", "attributes": {}, "quantity": 1, "unit": null, "rate": 450.00, "amount": 450.00, "date": "23-10-18 1:10 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": true, "ambiguity_reason": "No drug names, quantities or strengths."},
+    {"line_id": "L12", "page": 1, "section": "Detailed Breakup / 607000", "description_verbatim": "Pathology Services", "item_name_plain": "Unspecified pathology tests (lump sum)", "category": "investigation", "attributes": {}, "quantity": 1, "unit": null, "rate": 430.00, "amount": 430.00, "date": "22-10-18 10:29 AM", "mrp_printed": null, "confidence": 0.93, "ambiguous": true, "ambiguity_reason": "No individual tests listed."},
+    {"line_id": "L13", "page": 1, "section": "Detailed Breakup / 801000", "description_verbatim": "Admission Charges", "item_name_plain": "Admission/registration charge", "category": "non_medical", "attributes": {}, "quantity": 1, "unit": null, "rate": 500.00, "amount": 500.00, "date": "22-10-18 10:29 AM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L14", "page": 1, "section": "Detailed Breakup / 802000", "description_verbatim": "Attendant Food Charges", "item_name_plain": "Attendant food", "category": "non_medical", "attributes": {}, "quantity": 1, "unit": null, "rate": 100.00, "amount": 100.00, "date": "23-10-18 1:10 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null},
+    {"line_id": "L15", "page": 1, "section": "Detailed Breakup / 803000", "description_verbatim": "Patient Food Charges", "item_name_plain": "Patient food", "category": "non_medical", "attributes": {}, "quantity": 1, "unit": null, "rate": 120.00, "amount": 120.00, "date": "23-10-18 1:10 PM", "mrp_printed": null, "confidence": 0.93, "ambiguous": false, "ambiguity_reason": null}
+  ],
+  "findings": [
+    {"finding_id": "F1", "rule": "E - items dated before admission", "severity": "medium", "line_ids": ["L1", "L12", "L13"], "evidence_quoted": "Admission Date: 22-Oct-18, 10:45 AM; 'Bed Charges - PRIVATE (PRI001)' 22-10-18 10:20 AM", "statement": "Three lines carry timestamps 16 to 25 minutes before the printed admission time.", "confirmation_required": "Check whether 10:45 AM is the admission time or the bed-allotment time."},
+    {"finding_id": "F4", "rule": "D - unitemised catch-all line (medicines)", "severity": "high", "line_ids": ["L11"], "evidence_quoted": "'Ward Medicines' qty 1, rate 450.00, amount 450.00", "statement": "A single lump-sum line stands for all medicines and consumables, with no drug names, quantities or strengths.", "confirmation_required": "An itemised pharmacy record."},
+    {"finding_id": "F9", "rule": "A - summary numbering gap", "severity": "low", "line_ids": [], "evidence_quoted": "Bill Summary Sr.No. runs 1, 3, 4, 5, 6 (no Sr.No. 2).", "statement": "Sr.No. 2 is absent from the summary.", "confirmation_required": "Confirm with the hospital whether a section was removed."}
+  ],
+  "requires_reference_price": ["L11"],
+  "structural": {"consumable_share_pct": 8.74, "unitemised_share_pct": 17.09, "unreadable_line_count": 0},
+  "needs_human_review": true,
+  "review_reasons": [
+    "Footer 'Net Amount' last digit is poorly legible. It was read as 5150.00.",
+    "Billing unit for fractional bed quantities (1 1/4 and 1/4) is not printed."
+  ]
+}

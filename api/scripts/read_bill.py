@@ -56,6 +56,11 @@ def rupees(value: Decimal | float) -> str:
     return f"{Decimal(str(value)):,.2f}".rstrip("0").rstrip(".")
 
 
+def _figure(value: float | None, spec: str) -> str:
+    """A number the reader may not have stated. "-" reads as "it didn't say"."""
+    return "-" if value is None else format(value, spec)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pages", nargs="+", type=Path, help="Pages of one bill, in order.")
@@ -110,7 +115,7 @@ def main() -> int:
     print(
         f"stay {header.admission_date or '-'} to {header.discharge_date or '-'}"
         f"  room {header.room_category or '-'}"
-        f"  confidence {header.extraction_confidence:.2f}"
+        f"  confidence {_figure(header.extraction_confidence, '.2f')}"
     )
 
     print(f"\n{len(analysis.lines)} line(s):\n")
@@ -135,8 +140,8 @@ def main() -> int:
         print(f"      {'bill states':<64} {rupees(header.total):>12}")
 
     print(
-        f"\nStructural: consumables {analysis.structural.consumable_share_pct:.1f}%  "
-        f"unitemised {analysis.structural.unitemised_share_pct:.1f}%  "
+        f"\nStructural: consumables {_figure(analysis.structural.consumable_share_pct, '.1f')}%  "
+        f"unitemised {_figure(analysis.structural.unitemised_share_pct, '.1f')}%  "
         f"unreadable lines {analysis.structural.unreadable_line_count}"
     )
     if analysis.requires_reference_price:

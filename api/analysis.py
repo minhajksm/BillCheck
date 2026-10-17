@@ -1,26 +1,109 @@
-"""The shape the reader returns, matching PHASE 4 of the prompt.
+"""The shape the reader returns: PHASE 4 of the prompt, field for field.
 
-One deviation, forced by structured outputs: the prompt's two shapes -- the
-analysis, or `{"error": ..., "needs_human_review": true}` -- are one object
-here with an `error` field, empty when the document read. A schema can't be
-"either of these two things" without a union that costs more than it buys, and
-an error response is simply this object with `error` set and nothing in
-`lines`.
+Nothing is sent to constrain the answer, so this is the whole of what holds
+the reader to its format -- and it has to be as forgiving as the prompt is,
+or a perfectly good answer is thrown away. Two of the prompt's own
+instructions decide that:
 
-Every field is required. An optional field on a list element compiles to a
-grammar that must accept any subset of the fields in any order, and the API
-rejects the request outright once that grows too large -- which is exactly
-what happened to the schema this replaces. So "not applicable" is an empty
-string, and null is kept only where it means something a blank cannot: a
-quantity that is not stated is not a quantity of zero.
+- ABSOLUTE CONSTRAINT 3 says to output null where a field is unreadable. So
+  every text field here accepts null and keeps it as "", because a bill that
+  prints no unit has no unit rather than an unreadable one, and nothing
+  downstream should have to tell those apart.
+- PHASE 1 says to transcribe verbatim. So a quantity arrives as the bill
+  prints it, and a bed billed as "1 1/4" is a string, not a number. The
+  numbers here are read through that: "1 1/4" is 1.25, "5,150.00" is 5150.0,
+  and anything that is not a number at all is null rather than a refusal.
+
+What stays strict is `Finding.severity`, which decides whether a family is
+shown a red flag or an amber question. There is no safe guess between
+overstating what a bill proves and understating it, so an unrecognised
+severity refuses the bill.
 """
 
 import logging
-from typing import Any, Literal
+import re
+from fractions import Fraction
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 logger = logging.getLogger("billcheck.analysis")
+
+
+def _as_text(value: Any) -> Any:
+    """Null becomes "", per ABSOLUTE CONSTRAINT 3.
+
+    The reader is told to send null where a field is unreadable, and it does
+    -- 15 of the 15 lines on one real bill had `"unit": null`. Downstream,
+    "no unit printed" and "unit unreadable" are the same thing: nothing to
+    show. Keeping both as "" means no caller has to check for None.
+    """
+    return "" if value is None else value
+
+
+# "1 1/4", "1/4", "2", "5,150.00", "Rs. 450", "₹1,250.50", "12.5%".
+_MIXED = re.compile(r"^(\d+)\s+(\d+)\s*/\s*(\d+)$")
+_FRACTION = re.compile(r"^(\d+)\s*/\s*(\d+)$")
+_STRIP = re.compile(r"[₹,\s]|(?i:rs\.?)|%")
+
+
+def _as_number(value: Any) -> Any:
+    """A figure as the bill prints it, read as a number where it is one.
+
+    PHASE 1 asks for verbatim transcription, so a quantity comes back the way
+    the bill writes it. A bed billed "1 1/4" is a real thing on a real bill
+    and it is not a number to `float()`; it is 1.25 here. Anything that is
+    not a figure at all becomes null, which is what the format uses for "the
+    bill does not say" -- never a refusal, and never zero, because a quantity
+    that is not stated is not a quantity of none.
+    """
+    if value is None or isinstance(value, (int, float)):
+        return value
+    if not isinstance(value, str):
+        return value
+
+    text = value.strip()
+    if not text:
+        return None
+
+    mixed = _MIXED.match(text)
+    if mixed:
+        whole, numerator, denominator = (int(part) for part in mixed.groups())
+        if denominator:
+            return whole + numerator / denominator
+        return float(whole)
+
+    fraction = _FRACTION.match(text)
+    if fraction:
+        numerator, denominator = (int(part) for part in fraction.groups())
+        return float(Fraction(numerator, denominator)) if denominator else None
+
+    try:
+        return float(_STRIP.sub("", text))
+    except ValueError:
+        logger.warning("Reader sent %r where a figure was asked for; keeping it as null", value)
+        return None
+
+
+def _as_count(value: Any) -> Any:
+    """A whole number, rounded from whatever arrived.
+
+    `stay_days` came back as 1.32 on a stay of 31 hours, which is the reader
+    answering honestly; page and line counts can arrive as "1". Neither is
+    worth refusing a bill over.
+    """
+    number = _as_number(value)
+    return number if number is None else round(number)
+
+
+Text = Annotated[str, BeforeValidator(_as_text)]
+"""A string field that takes the reader's null and keeps it as ""."""
+
+Number = Annotated[float | None, BeforeValidator(_as_number)]
+"""A figure, null where the bill does not state one."""
+
+Count = Annotated[int | None, BeforeValidator(_as_count)]
+"""A whole number, null where the bill does not state one."""
 
 Category = Literal[
     "room_and_nursing",
@@ -57,11 +140,11 @@ Severity = Literal["high", "medium", "low"]
 class AnalysedLine(BaseModel):
     """One line of the bill, transcribed verbatim and then normalised."""
 
-    line_id: str = Field(description="Your own id for this line, unique within the bill.")
-    page: int = Field(description="1-based page the line appears on.")
-    section: str = Field(description="The section heading above it, as printed. Empty if none.")
-    description_verbatim: str = Field(description="Exactly as printed. Not cleaned or translated.")
-    item_name_plain: str = Field(description="The same item in plain English.")
+    line_id: Text = Field(description="Your own id for this line, unique within the bill.")
+    page: Count = Field(description="1-based page the line appears on.")
+    section: Text = Field(description="The section heading above it, as printed. Empty if none.")
+    description_verbatim: Text = Field(description="Exactly as printed. Not cleaned or translated.")
+    item_name_plain: Text = Field(description="The same item in plain English.")
     category: Category
     attributes: dict[str, str] = Field(
         default_factory=dict,
@@ -71,15 +154,15 @@ class AnalysedLine(BaseModel):
             "set of keys, because a bill prints what it prints."
         ),
     )
-    quantity: float | None = Field(description="As printed. Null when the bill states none.")
-    unit: str = Field(description="As printed, e.g. 'vial'. Empty when the bill states none.")
-    rate: float | None = Field(description="Rate per unit as printed. Null when none is printed.")
-    amount: float | None = Field(description="The line's amount. Null when it cannot be read.")
-    date: str = Field(description="The line's date as printed. Empty when it carries none.")
-    mrp_printed: float | None = Field(description="MRP, only where the bill prints one. Else null.")
-    confidence: float = Field(description="0.0-1.0, how sure you are this line was read correctly.")
+    quantity: Number = Field(description="As printed. Null when the bill states none.")
+    unit: Text = Field(description="As printed, e.g. 'vial'. Empty when the bill states none.")
+    rate: Number = Field(description="Rate per unit as printed. Null when none is printed.")
+    amount: Number = Field(description="The line's amount. Null when it cannot be read.")
+    date: Text = Field(description="The line's date as printed. Empty when it carries none.")
+    mrp_printed: Number = Field(description="MRP, only where the bill prints one. Else null.")
+    confidence: Number = Field(description="0.0-1.0, how sure you are this line was read correctly.")
     ambiguous: bool = Field(description="True where the line cannot be resolved without asking.")
-    ambiguity_reason: str = Field(description="What is ambiguous. Empty when it isn't.")
+    ambiguity_reason: Text = Field(description="What is ambiguous. Empty when it isn't.")
 
     @field_validator("category", mode="before")
     @classmethod
@@ -105,13 +188,13 @@ class AnalysedLine(BaseModel):
 class Finding(BaseModel):
     """One thing PHASE 3 detected, with the evidence that fired it."""
 
-    finding_id: str = Field(description="Your own id for this finding.")
-    rule: str = Field(description="The check that fired, e.g. 'A. quantity x rate != amount'.")
+    finding_id: Text = Field(description="Your own id for this finding.")
+    rule: Text = Field(description="The check that fired, e.g. 'A. quantity x rate != amount'.")
     severity: Severity
     line_ids: list[str] = Field(description="`line_id`s this is about. Empty for a whole-bill finding.")
-    evidence_quoted: str = Field(description="Quoted from the bill. Never paraphrased.")
-    statement: str = Field(description="What the bill shows, in one or two sentences.")
-    confirmation_required: str = Field(description="What would be needed to confirm it.")
+    evidence_quoted: Text = Field(description="Quoted from the bill. Never paraphrased.")
+    statement: Text = Field(description="What the bill shows, in one or two sentences.")
+    confirmation_required: Text = Field(description="What would be needed to confirm it.")
 
     @field_validator("severity", mode="before")
     @classmethod
@@ -128,24 +211,24 @@ class Finding(BaseModel):
 
 
 class BillHeader(BaseModel):
-    hospital: str = Field(description="As printed. Empty when not readable.")
-    bill_no: str = Field(description="As printed. Empty when not readable.")
-    bill_date: str = Field(description="As printed, YYYY-MM-DD where it can be read. Else empty.")
-    admission_date: str = Field(description="YYYY-MM-DD where readable or supplied. Else empty.")
-    discharge_date: str = Field(description="YYYY-MM-DD where readable or supplied. Else empty.")
-    stay_days: int | None = Field(description="Days of stay. Null when the dates don't give it.")
-    room_category: str = Field(description="As printed. Empty when not readable.")
-    total: float | None = Field(description="The grand total printed. Null when none is printed.")
-    pages_processed: int = Field(description="How many pages you read.")
-    extraction_confidence: float = Field(description="0.0-1.0 across the whole document.")
+    hospital: Text = Field(description="As printed. Empty when not readable.")
+    bill_no: Text = Field(description="As printed. Empty when not readable.")
+    bill_date: Text = Field(description="As printed. Empty when not readable.")
+    admission_date: Text = Field(description="As printed or supplied. Empty when neither.")
+    discharge_date: Text = Field(description="As printed or supplied. Empty when neither.")
+    stay_days: Number = Field(description="Days of stay. Null when the dates don't give it.")
+    room_category: Text = Field(description="As printed. Empty when not readable.")
+    total: Number = Field(description="The grand total printed. Null when none is printed.")
+    pages_processed: Count = Field(description="How many pages you read.")
+    extraction_confidence: Number = Field(description="0.0-1.0 across the whole document.")
 
 
 class Structural(BaseModel):
     """PHASE 3 H: what the bill looks like as a whole."""
 
-    consumable_share_pct: float = Field(description="Consumables and disposables as a % of the total.")
-    unitemised_share_pct: float = Field(description="Catch-all and unitemised lines as a % of the total.")
-    unreadable_line_count: int = Field(description="Lines that could not be read.")
+    consumable_share_pct: Number = Field(description="Consumables and disposables as a % of the total.")
+    unitemised_share_pct: Number = Field(description="Catch-all and unitemised lines as a % of the total.")
+    unreadable_line_count: Count = Field(description="Lines that could not be read.")
 
 
 class BillAnalysis(BaseModel):
@@ -184,7 +267,10 @@ class BillAnalysis(BaseModel):
         if not self.lines:
             reasons = "; ".join(self.review_reasons)
             return f"No itemized lines were found on these pages. {reasons}".strip()
-        if self.needs_human_review and not self.findings and self.bill.extraction_confidence < 0.5:
+        # A reader that states no confidence is not a reader stating none: an
+        # absent figure says nothing either way, so it does not condemn a read.
+        confidence = self.bill.extraction_confidence
+        if self.needs_human_review and not self.findings and confidence is not None and confidence < 0.5:
             # Read badly enough that the reader itself asked for a human, with
             # nothing to show for the read. Not a report to put in front of a
             # family as though the bill were clean.
