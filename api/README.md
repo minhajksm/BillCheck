@@ -4,19 +4,35 @@ FastAPI backend with PostgreSQL, managed with [uv](https://docs.astral.sh/uv/).
 
 ## First-time setup
 
-```sh
-# 1. Database (once). Afterwards, just: docker start billcheck-db
-docker run -d --name billcheck-db -p 5432:5432 \
-  -e POSTGRES_USER=billcheck -e POSTGRES_PASSWORD=billcheck -e POSTGRES_DB=billcheck \
-  postgres:16
+The database is hosted on Supabase, so there is nothing to install or start
+for it.
 
-# 2. Settings
-cp .env.example .env
+1. **Make the project.** In Supabase, *New project*. Pick a region close to
+   the families — Mumbai (`ap-south-1`) or Singapore — and save the database
+   password it asks for.
+2. **Get the connection string.** *Connect* → **Session pooler** → copy the
+   URI. Session mode is the one for a long-running server; see
+   [Where the database lives](#where-the-database-lives).
+3. **Put it in `.env`:**
 
-# 3. Dependencies and tables
-uv sync
-uv run alembic upgrade head
-```
+   ```sh
+   cp .env.example .env
+   ```
+
+   Paste the URI as `DATABASE_URL` and change its scheme from
+   `postgresql://` to `postgresql+psycopg://` — that is the driver we use.
+   Percent-encode the password if it contains `@ : / ? #` or `%`.
+4. **Create the tables and check it:**
+
+   ```sh
+   uv sync
+   uv run alembic upgrade head
+   uv run python scripts/db_check.py
+   ```
+
+   `db_check.py` is the "did that work?" command. It says who it connected
+   as, whether the connection is encrypted, which migration the database is
+   at, and whether row level security is on. It writes nothing.
 
 ## Run
 
@@ -27,6 +43,72 @@ uv run uvicorn main:app --reload   # http://localhost:8000/docs
 From the Android emulator, the API is at `http://10.0.2.2:8000`.
 
 **Sign-in codes during development:** with `OTP_DELIVERY=console`, codes aren't sent by SMS. They're printed in this terminal, like `OTP for +91******3210 is 482913`. Settings refuse console delivery when `ENVIRONMENT=production`.
+
+## Where the database lives
+
+Supabase offers the same database at three addresses, and the difference
+matters:
+
+| How to connect | Port | Use it |
+| --- | --- | --- |
+| **Session pooler** | 5432 | **This API.** One server connection per client, IPv4, prepared statements work. |
+| Transaction pooler | 6543 | Serverless, where connections are many and short. `db.py` turns off prepared statements on this port, because a pooled transaction may land on a different server connection than the one that prepared the statement. |
+| Direct connection | 5432 | `db.<ref>.supabase.co`. IPv6-only unless the project has the IPv4 add-on, so it usually can't be reached from a home network. |
+
+A project on Supabase's free plan **pauses after a week with no queries** and
+has to be restored from the dashboard; `db_check.py` will say it can't be
+reached. The free plan is also capped at 500 MB, which is a great many bills
+given that the photographs are never stored.
+
+`db.py` also requires TLS for any host that isn't this machine. libpq's own
+default, `sslmode=prefer`, falls back to clear text without saying so, and
+these rows are health data. Set `sslmode` in the URL yourself to ask for
+something stricter, e.g. `?sslmode=verify-full`.
+
+### Row level security
+
+Supabase does not only serve Postgres. It also publishes every table in the
+`public` schema over HTTP, read with a key that client apps are meant to carry
+in the open. BillCheck does not use that API at all — the app talks to this
+service — so migration `c1d4a7f20b63` turns row level security on for all ten
+tables and writes no policies. The role that owns the tables is outside row
+level security, so this API reads and writes as before; a request arriving over
+HTTP with the anon key gets no rows. `db_check.py` reports it, and
+`tests/test_db_connection.py` fails if a new table is added without it.
+
+### Running Postgres locally instead
+
+For working offline, or to keep a throwaway database for experiments:
+
+```sh
+docker run -d --name billcheck-db -p 5432:5432 \
+  -e POSTGRES_USER=billcheck -e POSTGRES_PASSWORD=billcheck -e POSTGRES_DB=billcheck \
+  postgres:16                       # afterwards: docker start billcheck-db
+```
+
+Then point `DATABASE_URL` at
+`postgresql+psycopg://billcheck:billcheck@localhost:5432/billcheck` and run
+`uv run alembic upgrade head` again. The commented line in `.env.example` is
+this one.
+
+### Moving an existing local database to Supabase
+
+Only worth doing if there is something in the local one you want to keep.
+Bill photographs are never stored, so this is cases, line items and flags.
+
+```sh
+docker exec billcheck-db pg_dump -U billcheck --data-only --no-owner \
+  --no-privileges billcheck > /tmp/billcheck-data.sql
+
+# With DATABASE_URL already pointing at Supabase:
+uv run alembic upgrade head            # tables first
+psql "$SUPABASE_URI" -f /tmp/billcheck-data.sql   # then the rows
+rm /tmp/billcheck-data.sql
+```
+
+`$SUPABASE_URI` is the connection string **without** the `+psycopg`, which
+only SQLAlchemy understands. Delete the dump afterwards: even test data in
+this shape is the shape of a patient's bill.
 
 ## Three ways to test sign-in
 
@@ -79,7 +161,8 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Tests use an in-memory SQLite database, so they don't need Postgres running.
+Tests use an in-memory SQLite database, so they need no database at all:
+not Supabase, not Docker.
 
 ## Endpoints
 
@@ -144,5 +227,17 @@ Edit `tables.py`, then:
 uv run alembic revision --autogenerate -m "what changed"
 uv run alembic upgrade head
 ```
+
+Autogenerate does not know about row level security, so a **new table needs it
+turned on by hand** in the generated migration:
+
+```python
+op.execute('ALTER TABLE "your_table" ENABLE ROW LEVEL SECURITY')
+```
+
+and its name added to a `TABLES` tuple in that migration, which is how
+`tests/test_db_connection.py` finds it. Until then that test fails, which is
+the point: an unprotected table in `public` is readable by anyone holding the
+project's anon key.
 
 Secrets (Claude API, OCR, SMS keys) go in `api/.env`, which is gitignored. `api/.env.example` lists every setting.

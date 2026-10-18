@@ -11,11 +11,13 @@ A mobile app that helps Indian families check hospital bills during and after an
 
 ## Run it
 
-The app needs the API running so you can sign in. See [api/README.md](api/README.md) for the one-time database setup.
+The app needs the API running so you can sign in. The database is hosted on
+Supabase; see [api/README.md](api/README.md) for the one-time setup, which is
+a connection string in `api/.env`.
 
 ```sh
 # API, docs at http://localhost:8000/docs
-cd api && docker start billcheck-db && uv run uvicorn main:app --reload
+cd api && uv run uvicorn main:app --reload
 
 # App, in a second terminal (development build; Expo Go doesn't support SDK 57)
 cd app && npm install && npx expo run:android
