@@ -33,10 +33,17 @@ class Settings(BaseSettings):
     # bill and needs no key; "claude" reads the real pages.
     ocr_provider: Literal["stub", "claude"] = "stub"
     anthropic_api_key: str = ""
-    ocr_model: str = "claude-sonnet-5-5"
-    # How hard the reader thinks. Higher costs more per bill and reads more
-    # carefully; "medium" is the starting point for this kind of extraction.
-    ocr_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    # A family waits for every token of the answer, and the answer is thousands
+    # of them, so the reading is paced by how fast the model writes. Haiku is
+    # the fastest of the current models and this is transcription against an
+    # explicit checklist rather than open reasoning. Set OCR_MODEL to compare:
+    # the bills in tests/data are what to compare on.
+    ocr_model: str = "claude-haiku-5-5"
+    # How hard the reader thinks. On one real bill the thinking was 4,194 of
+    # 11,377 output tokens -- over a third of the wait -- and the four phases
+    # already say what to do, step by step. Raise it if findings start being
+    # missed; that is the trade this setting makes.
+    ocr_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     # Keeps every observation the reader makes, including the ones review.py
     # would drop: a claim the rows contradict, one the reader itself called
     # low confidence, one a price list already covers. For looking at what the

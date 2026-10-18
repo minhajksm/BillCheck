@@ -38,13 +38,15 @@ printed, bill total, every subtotal, GST lines, discounts, advance paid, amount
 payable.
 
 PHASE 2 — NORMALISATION
-For each line, add: a plain-English item name; a category from
+For each line, decide a category from
 {room_and_nursing, professional_fees, procedure_or_ot, investigation,
 pharmacy_drug, consumable_disposable, implant_device, equipment_charge,
-non_medical, unclassified}; and the specification attributes you can read
+non_medical, unclassified}, and read the specification the line states
 (size, gauge, French, volume, strength, pack size, material, brand).
+Read the specification for your own use in PHASE 3. Do not write it out.
 Flag ambiguity rather than resolving it. "SET IV" with no further detail is
-ambiguous — say so. Never upgrade a guess into a fact.
+ambiguous — raise it as a finding in PHASE 3 rather than deciding what it
+means. Never upgrade a guess into a fact.
 
 PHASE 3 — DETECTION
 Apply every check below. For each finding give: the line(s) involved, the rule
@@ -111,11 +113,9 @@ Return a single JSON object and nothing else:
             "discharge_date", "stay_days", "room_category", "total",
             "patient_name", "ip_number",
             "pages_processed", "extraction_confidence": 0.0-1.0 },
-  "lines": [ { "line_id", "page", "section", "description_verbatim",
-               "item_name_plain", "category", "attributes": {},
+  "lines": [ { "line_id", "description_verbatim", "category",
                "quantity", "unit", "rate", "amount", "date",
-               "mrp_printed", "confidence": 0.0-1.0,
-               "ambiguous": true|false, "ambiguity_reason" } ],
+               "mrp_printed" } ],
   "findings": [ { "finding_id", "rule", "severity", "line_ids": [],
                   "evidence_quoted", "statement",
                   "confirmation_required" } ],
@@ -129,6 +129,16 @@ Return a single JSON object and nothing else:
 "requires_reference_price" lists every consumable, disposable and device line
 whose rate cannot be assessed from the bill alone. That list is the handoff to
 the pricing system. Do not populate a price for any of them.
+
+Write exactly the keys listed above and no others. A key that is not in that
+list is discarded unread at the other end, and the output it cost you is
+output you did not spend on the analysis.
+
+Report a finding only where something needs checking. A line whose arithmetic
+reconciles, a total that adds up, a check that fired on nothing: say nothing
+about them. An empty "findings" list is the right answer for a clean bill,
+and a finding that reports no discrepancy is worse than no finding at all --
+a family reads it as something to ask about.
 
 If the document is not a hospital bill, or is too degraded to read, return
 {"error": "...", "needs_human_review": true} and stop.
