@@ -7,7 +7,8 @@ A mobile app that helps Indian families check hospital bills during and after an
 | `app/` | React Native app: Expo SDK 57, TypeScript, Expo Router. Android first. |
 | `api/` | Python 3.12+ backend: FastAPI, managed with uv. |
 | `data/` | Reference price lists and anonymized sample bills. `data/private/` is gitignored. |
-| `docs/` | Prototype and design notes. |
+| `docs/` | Prototype, design notes, and [how the API is deployed](docs/deploy.md). |
+| `hosting/` | The one static page Firebase Hosting serves; everything else is rewritten to Cloud Run. |
 
 ## Run it
 
@@ -28,6 +29,13 @@ cd app && npx expo start --web
 To sign in while developing, use any Indian mobile number. The 6-digit code is printed in the API's terminal instead of being sent by SMS.
 
 The app calls the API at `http://10.0.2.2:8000` on the Android emulator and `http://localhost:8000` on web. On a real phone, set `EXPO_PUBLIC_API_URL` to your computer's address on the same Wi-Fi, e.g. `EXPO_PUBLIC_API_URL=http://192.168.1.20:8000 npx expo run:android`.
+
+## Deploying
+
+The API runs on Cloud Run behind a Firebase Hosting domain, against the same
+Supabase database. `Dockerfile` and `firebase.json` are in the repository;
+[docs/deploy.md](docs/deploy.md) is the runbook, and names the one limit worth
+knowing about before you point the app at a hosted API.
 
 ## Checks
 

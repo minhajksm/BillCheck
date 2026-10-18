@@ -1,0 +1,32 @@
+# What never belongs in the image. Read from the repository root, which is the
+# build context the Dockerfile expects.
+
+# Secrets. On Cloud Run these arrive as Secret Manager secrets at runtime.
+.env
+.env.*
+!api/.env.example
+
+# Real bills and patient data never leave the machine.
+data/private/
+
+# The app is built and shipped by Expo, not served by the API.
+app/
+
+# Not needed to serve requests, and tests carry fixtures of their own.
+api/tests/
+api/scripts/
+docs/
+.git/
+.github/
+
+# Built on the machine, and wrong for the image's platform.
+.venv/
+api/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+
+.DS_Store
+*.swp
