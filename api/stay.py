@@ -105,6 +105,7 @@ def recheck_stay(db: Session, case: Case) -> int:
                         **date_detail(on, case.admitted_on, case.closed_on),
                         "confidence": "high",
                         "rows": str(position),
+                        "line_numbers": str(position),
                     },
                     excess=item.amount,
                 )

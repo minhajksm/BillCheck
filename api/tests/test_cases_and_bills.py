@@ -273,6 +273,33 @@ def test_the_kind_of_charge_survives_reading_the_bill_back(client: TestClient, a
     assert [row["category"] for row in again["line_items"]] == [row["category"] for row in bill["line_items"]]
 
 
+def test_every_flag_says_which_lines_of_the_bill_it_is_about(client: TestClient, auth_headers: dict):
+    """A family reads the question with their own bill in front of them, so
+    "Lines 2 and 4" is the difference between an answerable question and a
+    hunt. Every producer of a flag has to supply it: the price lists, the
+    reader's findings, and the stay check."""
+    case = new_case(client, auth_headers)
+    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
+    positions = {row["id"]: row["position"] for row in bill["line_items"]}
+
+    for flag in bill["flags"]:
+        numbers = flag["reference_detail"].get("line_numbers")
+        assert numbers, f"{flag['kind']} does not say which line it is about"
+        assert all(part.isdigit() for part in numbers.split(",")), numbers
+        if flag["line_item_id"]:
+            assert str(positions[flag["line_item_id"]]) in numbers.split(",")
+
+
+def test_a_duplicate_names_both_of_its_lines(client: TestClient, auth_headers: dict):
+    """The one kind where a single number is useless: the family is being told
+    two entries are the same, so they need to find both."""
+    case = new_case(client, auth_headers)
+    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
+
+    duplicate = next(flag for flag in bill["flags"] if flag["kind"] == "duplicate")
+    assert duplicate["reference_detail"]["line_numbers"] == "3,4", "the two consultant visits"
+
+
 def test_every_flag_carries_its_reasoning_and_reference(client: TestClient, auth_headers: dict):
     """CLAUDE.md: a flag must show what it was checked against."""
     case = new_case(client, auth_headers)

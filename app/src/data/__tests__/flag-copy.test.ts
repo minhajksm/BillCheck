@@ -84,3 +84,45 @@ describe("the reader's own explanation", () => {
     expect(copy.ask).toBe('Ask the billing desk what this charge is for.');
   });
 });
+
+describe('the lines a flag is about', () => {
+  const onLines = (line_numbers: string): Flag =>
+    ({
+      ...readerFlag('duplicate_line'),
+      referenceDetail: { confidence: 'medium', why_en: 'The same room charge appears twice.', line_numbers },
+    }) as never as Flag;
+
+  it('names a single line', () => {
+    expect(flagCopy(i18n.getFixedT('en'), onLines('7')).why).toBe(
+      'The same room charge appears twice. (Line 7)',
+    );
+  });
+
+  it('names every line a duplicate is spread across', () => {
+    expect(flagCopy(i18n.getFixedT('en'), onLines('2,4')).why).toBe(
+      'The same room charge appears twice. (Lines 2 and 4)',
+    );
+    expect(flagCopy(i18n.getFixedT('en'), onLines('2,4,6')).why).toBe(
+      'The same room charge appears twice. (Lines 2, 4 and 6)',
+    );
+  });
+
+  it('says it in the language the family is using', () => {
+    // A family holds the bill up beside this, so the line numbers have to
+    // read as part of the sentence, not as an English aside.
+    const written = 'The same room charge appears twice.';
+    for (const language of ['hi', 'mr']) {
+      const tail = flagCopy(i18n.getFixedT(language), onLines('2,4')).why.slice(written.length);
+      expect(tail).toMatch(/2/);
+      expect(tail).toMatch(/4/);
+      expect(tail.replace(/[\d\s(),.]/g, '')).not.toMatch(/[a-z]/i);
+    }
+  });
+
+  it('says nothing at all when the flag carries no lines', () => {
+    // A flag without them is a flag we could not place on the page. Inventing
+    // a line number would send a family to the wrong row at the counter.
+    const copy = flagCopy(i18n.getFixedT('en'), onLines(''));
+    expect(copy.why).toBe('The same room charge appears twice.');
+  });
+});

@@ -113,6 +113,7 @@ def _above_mrp(row: BillRow, references: ReferenceData) -> Flag | None:
         reference_source=source,
         excess=_money(row.amount - allowed),
         reference_detail={
+            "line_numbers": str(row.position),
             "reference_name": price.name,
             "unit": price.unit,
             "unit_price_billed": str(_money(unit_price)),
@@ -152,6 +153,9 @@ def _duplicates(rows: list[BillRow]) -> list[Flag]:
                 reference_source="duplicate",
                 excess=_money(row.amount),
                 reference_detail={
+                    # Both of them: a family looking for a duplicate has to be
+                    # told where the other one is, or they are hunting.
+                    "line_numbers": f"{first.position},{row.position}",
                     "first_row_position": first.position,
                     "repeated_detail": row.detail,
                 },
@@ -185,6 +189,7 @@ def _unusual_quantity(row: BillRow, references: ReferenceData) -> Flag | None:
         reference_source="quantity_norm",
         excess=_money(row.amount - usual_cost),
         reference_detail={
+            "line_numbers": str(row.position),
             "reference_name": norm.name,
             "unit": norm.unit,
             "quantity": _count(count),

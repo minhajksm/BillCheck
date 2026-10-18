@@ -75,6 +75,17 @@ describe('Your cases', () => {
     expect(screen.getByText('10 Oct, 37 items, ₹31,400')).toBeVisible();
   });
 
+  it('opens a closed case, so its reports and its delete button stay reachable', async () => {
+    const router = await render('/', 'Closed March 2026');
+    fireEvent.press(screen.getByText("Mummy's cataract surgery"));
+
+    // A closed admission is done, not archived: the bills stay readable, and
+    // deleting the case is only possible from inside it.
+    expect(router.getPathname()).toBe('/cases/mummy-cataract');
+    expect(await screen.findByText('Lotus Eye Clinic, Thane')).toBeVisible();
+    expect(screen.getByLabelText('Case details')).toBeVisible();
+  });
+
   it('shows a message for an unknown case', async () => {
     await render('/cases/nope', "We couldn't find this case.");
     expect(screen.getByText("We couldn't find this case.")).toBeVisible();
@@ -83,7 +94,9 @@ describe('Your cases', () => {
   it.each(SUPPORTED_LANGUAGES)('renders both screens in %s without raw keys', async (lng) => {
     await i18n.changeLanguage(lng);
     await render('/cases/papa-admission', '₹73,890');
-    expect(screen.queryByText(/^(case|home|common|caseStatus|dates|auth|report|ask|flags|scan|newCase|message)\./)).toBeNull();
+    expect(
+      screen.queryByText(/^(case|home|common|caseStatus|dates|auth|report|ask|flags|scan|newCase|message)\./),
+    ).toBeNull();
     expect(screen.getByText('₹73,890')).toBeVisible();
   });
 
