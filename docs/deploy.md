@@ -22,6 +22,13 @@ the ceiling goes away by taking Hosting out of the path.
 
 ## Before you start
 
+You need a Supabase account, a Google Cloud project with billing enabled, and
+`uv` on your machine — migrations and the tests still run locally, and that is
+the one thing hosting does not take away. Docker you do not need, here or
+anywhere else.
+
+Step 1 needs no gcloud. Everything after it does:
+
 ```sh
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
@@ -39,10 +46,61 @@ of regions that custom domains can be mapped to. The 40-odd milliseconds
 Singapore costs an Indian user is nothing beside the time the reader itself
 takes.
 
-## 1. Secrets
+## 1. The database
 
-They go in Secret Manager, never in `--set-env-vars` and never in the image.
+Supabase hosts it. Nothing below depends on Cloud Run, so this is worth doing
+first and on its own: once `db_check.py` is happy, the API already runs
+locally against the hosted database, and everything after this is only about
+where the API itself runs.
+
+1. **Create the project.** In Supabase, *New project*. **Singapore**, to match
+   the Cloud Run region above. Save the database password it asks for.
+2. **Copy the connection string.** *Connect* → **Session pooler** → the URI.
+   Session mode is the one for a long-running server; `api/README.md` has the
+   three addresses Supabase offers and why this is the right one.
+3. **Put it in `api/.env`**, as `DATABASE_URL`, with two edits:
+   - change the scheme from `postgresql://` to **`postgresql+psycopg://`**,
+     which names the driver we use;
+   - percent-encode the password if it contains `@ : / ? #` or `%`. Resetting
+     it to something alphanumeric in *Database → Settings* is easier.
+
+   ```sh
+   cd api && cp .env.example .env     # if you haven't already
+   ```
+
+   You also want `ANTHROPIC_API_KEY` and `OCR_PROVIDER=claude` in there to read
+   real bills; `OCR_PROVIDER` defaults to a stub that returns one fixed sample.
+
+4. **Create the tables and check it.** Migrations run from your machine, not
+   from the container: Cloud Run starts a web server, and a migration is not
+   one.
+
+   ```sh
+   uv sync
+   uv run alembic upgrade head
+   uv run python scripts/db_check.py
+   ```
+
+   `db_check.py` writes nothing. It should say it reached Postgres, that the
+   connection is encrypted, that migrations are up to date, and that row level
+   security is on for all ten tables. **Row level security matters here**:
+   Supabase also serves the `public` schema over HTTP with a key that client
+   apps carry in the open, and the migration that turns it on is what keeps a
+   family's bill from being readable by anyone who asks. `api/README.md` has
+   the detail.
+
+At this point `cd api && uv run uvicorn main:app --reload` works against
+Supabase, with no Docker anywhere. The rest of this page moves that last
+command off your machine.
+
+## 2. Secrets
+
+The deployed service gets the same settings from Secret Manager rather than
+from `api/.env` — never from `--set-env-vars`, and never baked into the image.
 `.dockerignore` keeps `api/.env` out of the build.
+
+Use the **same `DATABASE_URL` you just put in `api/.env`**, the one
+`db_check.py` approved:
 
 ```sh
 printf '%s' 'postgresql+psycopg://postgres.REF:PASSWORD@POOLER_HOST:5432/postgres' \
@@ -63,16 +121,6 @@ for secret in billcheck-database-url billcheck-secret-key billcheck-anthropic-ke
     --member="serviceAccount:$NUMBER-compute@developer.gserviceaccount.com" \
     --role=roles/secretmanager.secretAccessor
 done
-```
-
-## 2. Create the tables
-
-Migrations run from your machine, not from the container: Cloud Run starts a
-web server, and a migration is not one. `api/.env` already points at Supabase,
-so this is the same command as always.
-
-```sh
-cd api && uv run alembic upgrade head && uv run python scripts/db_check.py
 ```
 
 ## 3. Deploy to Cloud Run
@@ -214,6 +262,16 @@ defaults to 60 seconds per request, so a long bill will need
 `request.timeout` and an `ontimeout` handler before there is an iOS build. As
 it stands a platform timeout would arrive as `onerror`, which the app shows
 as a network error — the right message, at least.
+
+## When you change something
+
+| What changed | What to run |
+| --- | --- |
+| API code | `gcloud run deploy billcheck-api --source . --region asia-southeast1` from the repository root. The flags from step 3 stick to the service; you only repeat one you are changing. |
+| `api/tables.py` | `cd api && uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`, from your machine, **before** deploying the code that needs the new column. A new table also needs row level security turned on by hand; `api/README.md` says how. |
+| A secret | `printf '%s' 'new value' \| gcloud secrets versions add billcheck-database-url --data-file=-`, then redeploy so the service picks up `:latest`. |
+| The price lists in `data/samples/` | Redeploy. They are baked into the image. |
+| App code | Nothing here — Expo builds and ships the app. |
 
 ## Going to actual production
 
