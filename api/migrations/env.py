@@ -4,7 +4,7 @@ from alembic import context
 from sqlalchemy import DateTime, engine_from_config, pool
 
 import tables  # noqa: F401  (registers the tables on Base.metadata)
-from db import Base, UTCDateTime
+from db import Base, UTCDateTime, engine_options
 from settings import get_settings
 
 config = context.config
@@ -40,7 +40,12 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+        # A migration reaches a hosted database the same way the app does:
+        # over TLS, and without prepared statements through a pooler.
+        connect_args=engine_options(config.get_main_option("sqlalchemy.url", "")).get("connect_args", {}),
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata, render_item=render_item)
