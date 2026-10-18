@@ -194,7 +194,7 @@ describe('checking a bill from the home screen', () => {
     fireEvent.press(await screen.findByText('Check bill'));
 
     // The one figure on the screen that is measured rather than estimated.
-    expect(await screen.findByText('Sending the pages · 37%')).toBeVisible();
+    expect(await screen.findByText('Sending 1 page · 37%')).toBeVisible();
   });
 
   it('keeps the pages when the read fails, so nothing is photographed twice', async () => {

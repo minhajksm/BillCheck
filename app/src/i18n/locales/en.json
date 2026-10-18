@@ -153,9 +153,12 @@
     "title": "Checking your bill",
     "note": "This usually takes under a minute. Keep the app open.",
     "step1": "Sending the pages",
-    "step1Sending": "Sending the pages · {{percent}}%",
+    "step1Sending": "Sending {{pages}} · {{percent}}%",
     "step2": "Reading every line of the bill",
-    "step3": "Checking the charges against price lists"
+    "step2Pages": "Reading every line of {{pages}}",
+    "step3": "Checking the charges against price lists",
+    "pages_one": "{{count}} page",
+    "pages_other": "{{count}} pages"
   },
   "flags": {
     "tagAboveMrp": "Above MRP",
