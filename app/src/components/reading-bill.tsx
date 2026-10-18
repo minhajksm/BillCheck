@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, View, useWindowDimensions } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Platform,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '@/components/icon';
@@ -39,6 +47,16 @@ const READING_DWELL = 17000;
 
 const SWEEP = 2600;
 const PULSE = 1700;
+
+/**
+ * Whether the animation runs on the native driver.
+ *
+ * Off on web, where there is no native animated module: the driver is missing,
+ * and an animation handed to it runs once and stops. Everything animated here
+ * is opacity and transform, so the JS driver renders it the same, just on the
+ * JS thread.
+ */
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 /** The three things the reading does, in the order it does them. */
 const STEPS = ['reading.step1', 'reading.step2', 'reading.step3'] as const;
@@ -95,25 +113,40 @@ export function ReadingBill({
 
   useEffect(() => {
     if (still) return;
-    const scanning = Animated.loop(
+    // Each pass restarts the next itself rather than running under
+    // `Animated.loop`. Two reasons, and the second is why this is written out
+    // by hand: a loop that reports itself finished -- which the web driver
+    // does -- would leave the page frozen mid-scan for the rest of a
+    // minute-long wait, and that is the one thing this screen must not do.
+    let live = true;
+
+    const scan = () => {
+      sweep.setValue(0);
       Animated.timing(sweep, {
         toValue: 1,
         duration: SWEEP,
         easing: Easing.inOut(Easing.quad),
-        useNativeDriver: true,
-      }),
-    );
-    const breathing = Animated.loop(
+        useNativeDriver: NATIVE_DRIVER,
+      }).start(({ finished }) => {
+        if (finished && live) scan();
+      });
+    };
+
+    const breathe = () => {
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: PULSE, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: PULSE, useNativeDriver: true }),
-      ]),
-    );
-    scanning.start();
-    breathing.start();
+        Animated.timing(pulse, { toValue: 1, duration: PULSE, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(pulse, { toValue: 0, duration: PULSE, useNativeDriver: NATIVE_DRIVER }),
+      ]).start(({ finished }) => {
+        if (finished && live) breathe();
+      });
+    };
+
+    scan();
+    breathe();
     return () => {
-      scanning.stop();
-      breathing.stop();
+      live = false;
+      sweep.stopAnimation();
+      pulse.stopAnimation();
       sweep.setValue(0);
       pulse.setValue(0);
     };
