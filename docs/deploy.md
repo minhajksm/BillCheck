@@ -4,8 +4,6 @@
 Android app
    |  HTTPS, api.<your-domain>
    v
-Firebase Hosting            custom domain and TLS, rewrites everything to ->
-   v
 Cloud Run (billcheck-api)   the FastAPI container, scaled to zero when idle
    v
 Supabase                    managed Postgres, session pooler
@@ -14,21 +12,21 @@ Supabase                    managed Postgres, session pooler
 The app itself is not served here — Expo builds and ships that. This is the
 API and nothing else.
 
-> **Read [The sixty-second limit](#the-sixty-second-limit) before you point the
-> app at the Hosting domain.** Firebase Hosting gives up on a request after 60
-> seconds and cannot be configured otherwise, and reading a bill takes a large
-> fraction of that.
+**The domain points at Cloud Run itself, not at Firebase Hosting.** Hosting
+answers `504` once the origin takes more than 60 seconds and will not be
+configured otherwise. Reading a bill is one Claude call that writes thousands
+of tokens: a one-page bill lands inside 60 seconds, a long multi-page one
+does not, and the family would be told we couldn't read a bill that was read
+perfectly well. Cloud Run's own timeout is ours to set, up to 60 minutes, so
+the ceiling goes away by taking Hosting out of the path.
 
 ## Before you start
 
 ```sh
-# Google Cloud and Firebase are the same project; create it in either console.
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com
-
-npm install -g firebase-tools && firebase login
 ```
 
 ### Which region
@@ -36,11 +34,10 @@ npm install -g firebase-tools && firebase login
 Use **`asia-southeast1`** (Singapore) for Cloud Run, and put the Supabase
 project in Singapore too, so the API's queries don't cross a region.
 
-Mumbai (`asia-south1`) is the tempting choice and does not work here: it is
-absent from Firebase Hosting's list of regions it will rewrite to, and from
-Cloud Run's custom-domain mapping regions. Singapore is in both, and the
-40-odd milliseconds it costs an Indian user is nothing beside the time the
-reader itself takes.
+Mumbai (`asia-south1`) is the tempting choice and is not in Cloud Run's list
+of regions that custom domains can be mapped to. The 40-odd milliseconds
+Singapore costs an Indian user is nothing beside the time the reader itself
+takes.
 
 ## 1. Secrets
 
@@ -89,7 +86,7 @@ gcloud run deploy billcheck-api \
   --region asia-southeast1 \
   --allow-unauthenticated \
   --memory 1Gi \
-  --timeout 300 \
+  --timeout 600 \
   --concurrency 20 \
   --max-instances 4 \
   --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' \
@@ -99,9 +96,13 @@ gcloud run deploy billcheck-api \
 `--allow-unauthenticated` is right here: the API does its own sign-in with
 phone and OTP, and Cloud Run's IAM would be a second, unrelated door.
 
-**`ENVIRONMENT=development` is deliberate.** `api/settings.py` refuses to start
-in production while OTP codes are printed instead of sent, and real SMS needs
-a DLT-approved MSG91 template, which takes weeks. See
+`--timeout 600` is the point of this whole arrangement — ten minutes, where
+Hosting allowed one. It is an upper bound, not a target: a request that
+actually took ten minutes would be a bug. Cloud Run's maximum is 3600.
+
+**`ENVIRONMENT=development` is deliberate.** `api/settings.py` refuses to
+start in production while OTP codes are printed instead of sent, and real SMS
+needs a DLT-approved MSG91 template, which takes weeks. See
 [Going to actual production](#going-to-actual-production).
 
 `--max-instances 4` with `--concurrency 20` caps what this can do to the
@@ -116,23 +117,81 @@ URL=$(gcloud run services describe billcheck-api --region asia-southeast1 --form
 curl -s "$URL/health"     # {"status":"ok"}
 ```
 
-## 4. Firebase Hosting and the custom domain
+That `*.run.app` URL already works over HTTPS with no cap but Cloud Run's own.
+Everything below is to put a name you own in front of it.
 
-`firebase.json` is already in the repository: it rewrites every path to the
-Cloud Run service and serves one static page at `/` so the bare domain isn't a
-404.
+## 4. Point your domain at the service
+
+Two ways. Start with the mapping, move to the load balancer before real
+families use this — Google's own docs say the mapping is preview and
+[not recommended for production](https://docs.cloud.google.com/run/docs/mapping-custom-domains).
+
+### A. Domain mapping — free, about fifteen minutes
 
 ```sh
-firebase use --add                  # pick the same project
-firebase deploy --only hosting
+# Once per domain: prove you own it. Opens Search Console.
+gcloud domains verify your-domain.example
+
+gcloud beta run domain-mappings create \
+  --service billcheck-api \
+  --domain api.your-domain.example \
+  --region asia-southeast1
 ```
 
-Then Firebase console → Hosting → **Add custom domain** →
-`api.<your-domain>`, and add the DNS records it shows you. The certificate
-takes a few minutes to an hour.
+It prints the DNS record to add — a `CNAME` to `ghs.googlehosted.com` for a
+subdomain. Add it at your registrar. Google issues and renews the certificate
+itself; it usually takes about fifteen minutes and can take up to 24 hours.
 
-If you renamed the service or chose another region, change `serviceId` and
-`region` in `firebase.json` to match.
+What you are accepting with it:
+
+- It is a **preview** feature, which Google says is not production-ready,
+  because of latency: a known issue reports very high latency from some
+  locations for services reached this way.
+- **TLS 1.0 and 1.1 cannot be turned off.** A load balancer or Hosting is the
+  only way to refuse them.
+- No wildcard certificates, and you cannot supply your own.
+
+### B. Global external Application Load Balancer — the production answer
+
+This is what Google recommends, and with a serverless NEG backend the
+timeout is 60 minutes and not configurable, so Cloud Run's own `--timeout`
+stays the only limit. It also brings Cloud CDN, Cloud Armor and your own
+certificate. It costs: a global forwarding rule is billed by the hour whether
+or not anyone uses it, so this is the step that turns a free deployment into a
+monthly bill.
+
+```sh
+gcloud compute network-endpoint-groups create billcheck-neg \
+  --region=asia-southeast1 --network-endpoint-type=serverless \
+  --cloud-run-service=billcheck-api
+
+gcloud compute backend-services create billcheck-backend \
+  --global --load-balancing-scheme=EXTERNAL_MANAGED
+
+gcloud compute backend-services add-backend billcheck-backend --global \
+  --network-endpoint-group=billcheck-neg \
+  --network-endpoint-group-region=asia-southeast1
+
+gcloud compute url-maps create billcheck-lb --default-service billcheck-backend
+
+gcloud compute ssl-certificates create billcheck-cert \
+  --domains=api.your-domain.example --global
+
+gcloud compute target-https-proxies create billcheck-https-proxy \
+  --ssl-certificates=billcheck-cert --url-map=billcheck-lb
+
+gcloud compute addresses create billcheck-ip --global
+gcloud compute forwarding-rules create billcheck-fr --global \
+  --target-https-proxy=billcheck-https-proxy --ports=443 --address=billcheck-ip
+```
+
+Then point an `A` record at the address `gcloud compute addresses describe
+billcheck-ip --global --format='value(address)'` prints. Do not set
+`timeoutSec` on the backend service: with a serverless NEG the API rejects it.
+
+Load balancer flags move around more than most. If gcloud refuses one, follow
+[Serverless network endpoint groups](https://docs.cloud.google.com/load-balancing/docs/negs/serverless-neg-concepts)
+rather than arguing with it.
 
 ## 5. Point the app at it
 
@@ -145,31 +204,16 @@ For Expo web, the API has to allow the browser origin as well — redeploy with
 `CORS_ORIGINS=["https://your-web-origin"]` in `--set-env-vars`. The Android
 app doesn't need it.
 
-## The sixty-second limit
+### How long the app itself will wait
 
-Firebase Hosting answers `504` if the origin takes more than **60 seconds**,
-and unlike Cloud Run's own timeout this is not configurable. Reading a bill is
-one Claude call that writes thousands of tokens: a one-page bill lands well
-inside 60 seconds, a long multi-page one will not, and when it goes over, the
-family sees "we couldn't read this bill" for a bill that was read perfectly
-well.
-
-Nothing else the API does comes close — sign-in, cases and flags are all
-milliseconds — so this is about `POST /bills` and `POST /cases/{id}/bills`
-alone. Three ways out, in the order I'd try them:
-
-1. **Give Cloud Run the domain instead of Hosting.** Map
-   `api.<your-domain>` straight to the service (`gcloud beta run
-   domain-mappings create`, or a global external load balancer, whose backend
-   timeout you set yourself). Hosting keeps the project's static site, and the
-   API stops having a 60-second ceiling. Cheapest fix, no code.
-2. **Make the upload asynchronous.** `POST /bills` answers `202` with a job
-   id and the app polls for the result. This is better regardless of hosting —
-   the wait already has a screen of its own, and a poll survives the app being
-   backgrounded, which an open request does not — but it changes the app and
-   the API together, so it is a decision, not a patch.
-3. **Leave it.** Short bills work; long ones fail with a misleading message.
-   Fine for a demo, not for a family.
+Nothing in the app sets a timeout: `apiFetch` uses `fetch` with none, and the
+upload's `XMLHttpRequest` leaves `timeout` at its default of 0, which means
+never. So the wait is whatever the platform's own socket timeout allows —
+effectively unbounded on Android, which is what this is built for first. iOS
+defaults to 60 seconds per request, so a long bill will need
+`request.timeout` and an `ontimeout` handler before there is an iOS build. As
+it stands a platform timeout would arrive as `onerror`, which the app shows
+as a network error — the right message, at least.
 
 ## Going to actual production
 
@@ -183,8 +227,10 @@ these hold, and each one is deliberate:
 | `OCR_PROVIDER` | `claude` | nothing |
 | `REVIEW_KEEP_ALL` | `false` | nothing |
 
-Two more things to settle before real families use this:
+Three more things to settle before real families use this:
 
+- **Move to the load balancer** (B above), which is the supported path and the
+  only one that can refuse TLS 1.0 and 1.1.
 - **The price lists are illustrative.** `data/samples/reference-prices.json`
   is not the real NPPA and CGHS data, and it ships inside the image. Replace
   it before any flag is shown to anyone.

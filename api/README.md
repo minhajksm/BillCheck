@@ -43,8 +43,8 @@ uv run uvicorn main:app --reload   # http://localhost:8000/docs
 From the Android emulator, the API is at `http://10.0.2.2:8000`.
 
 To run it somewhere other than this machine, see
-[docs/deploy.md](../docs/deploy.md): Cloud Run behind a Firebase Hosting
-domain, talking to the same Supabase database.
+[docs/deploy.md](../docs/deploy.md): a container on Cloud Run with your domain
+mapped to it, talking to the same Supabase database.
 
 **Sign-in codes during development:** with `OTP_DELIVERY=console`, codes aren't sent by SMS. They're printed in this terminal, like `OTP for +91******3210 is 482913`. Settings refuse console delivery when `ENVIRONMENT=production`.
 

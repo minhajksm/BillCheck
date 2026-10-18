@@ -7,7 +7,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 ## Stack
 
 - `app/`: React Native with Expo (SDK 57), TypeScript, Expo Router. Android first.
-- `api/`: Python 3.12+, FastAPI, managed with uv. Deployed as a container on Google Cloud Run, reached through a Firebase Hosting custom domain.
+- `api/`: Python 3.12+, FastAPI, managed with uv. Deployed as a container on Google Cloud Run, with the custom domain mapped straight to the service.
 - Database: PostgreSQL, hosted on Supabase. Every table has row level security on with no policies, because Supabase also serves the `public` schema over HTTP; nothing in BillCheck uses that API.
 - `data/`: reference price lists (NPPA ceiling prices, CGHS rates). Anonymized samples only.
 
@@ -17,7 +17,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 - API: `cd api && uv run uvicorn main:app --reload` (docs at http://localhost:8000/docs)
 - DB: hosted on Supabase, reached through `DATABASE_URL` in `api/.env` (setup in `api/README.md`). Schema changes: `cd api && uv run alembic upgrade head`. `uv run python scripts/db_check.py` says whether it is reachable, encrypted and migrated.
 - From the Android emulator, the API is at `http://10.0.2.2:8000`. Against a deployed API, set `EXPO_PUBLIC_API_URL`.
-- Deploy: `gcloud run deploy billcheck-api --source .` from the repository root, then `firebase deploy --only hosting`. Runbook and caveats in `docs/deploy.md`.
+- Deploy: `gcloud run deploy billcheck-api --source .` from the repository root. Runbook and caveats in `docs/deploy.md`. Not Firebase Hosting: it caps every request at 60s, and reading a long bill takes more.
 - Sign-in is phone number + OTP. In development, codes print in the API's terminal (`OTP_DELIVERY=console`).
 
 ## MVP scope

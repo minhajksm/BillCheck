@@ -8,7 +8,6 @@ A mobile app that helps Indian families check hospital bills during and after an
 | `api/` | Python 3.12+ backend: FastAPI, managed with uv. |
 | `data/` | Reference price lists and anonymized sample bills. `data/private/` is gitignored. |
 | `docs/` | Prototype, design notes, and [how the API is deployed](docs/deploy.md). |
-| `hosting/` | The one static page Firebase Hosting serves; everything else is rewritten to Cloud Run. |
 
 ## Run it
 
@@ -32,10 +31,9 @@ The app calls the API at `http://10.0.2.2:8000` on the Android emulator and `htt
 
 ## Deploying
 
-The API runs on Cloud Run behind a Firebase Hosting domain, against the same
-Supabase database. `Dockerfile` and `firebase.json` are in the repository;
-[docs/deploy.md](docs/deploy.md) is the runbook, and names the one limit worth
-knowing about before you point the app at a hosted API.
+The API runs on Cloud Run, with the domain mapped straight to the service,
+against the same Supabase database. The `Dockerfile` is in the repository and
+[docs/deploy.md](docs/deploy.md) is the runbook.
 
 ## Checks
 
