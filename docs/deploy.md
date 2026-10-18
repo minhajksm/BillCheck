@@ -55,9 +55,22 @@ where the API itself runs.
 
 1. **Create the project.** In Supabase, *New project*. **Singapore**, to match
    the Cloud Run region above. Save the database password it asks for.
-2. **Copy the connection string.** *Connect* → **Session pooler** → the URI.
-   Session mode is the one for a long-running server; `api/README.md` has the
-   three addresses Supabase offers and why this is the right one.
+2. **Copy the connection string.** *Connect*, in the top bar, → any of the
+   **pooler** strings → then **make the port `5432`**.
+
+   Go by the port, not by the label: Supabase renames these blocks, but the
+   shared pooler has served session mode on **5432** and transaction mode on
+   **6543** since it stopped offering session mode on 6543 in February 2025.
+   Both are the same host and the same `postgres.<project-ref>` username, so
+   if the dialog only offers you the transaction pooler, change the `:6543`
+   to `:5432` and you have the session string. Avoid the **direct**
+   connection (`db.<ref>.supabase.co`): it is IPv6-only on most projects, and
+   Cloud Run calls out over IPv4.
+
+   Transaction mode works too if you would rather not touch the port —
+   `api/db.py` turns off prepared statements on 6543, so nothing breaks. You
+   give up a little speed and some Postgres features. `api/README.md` compares
+   the three.
 3. **Put it in `api/.env`**, as `DATABASE_URL`, with two edits:
    - change the scheme from `postgresql://` to **`postgresql+psycopg://`**,
      which names the driver we use;

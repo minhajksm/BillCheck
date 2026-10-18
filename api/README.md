@@ -10,9 +10,11 @@ for it.
 1. **Make the project.** In Supabase, *New project*. Pick a region close to
    the families — Mumbai (`ap-south-1`) or Singapore — and save the database
    password it asks for.
-2. **Get the connection string.** *Connect* → **Session pooler** → copy the
-   URI. Session mode is the one for a long-running server; see
-   [Where the database lives](#where-the-database-lives).
+2. **Get the connection string.** *Connect*, in the top bar, → one of the
+   **pooler** strings → then make sure the port reads **`5432`**. Go by the
+   port rather than the label, which Supabase has renamed more than once:
+   session mode is 5432, transaction mode is 6543, same host and username
+   either way. See [Where the database lives](#where-the-database-lives).
 3. **Put it in `.env`:**
 
    ```sh
@@ -53,11 +55,17 @@ mapped to it, talking to the same Supabase database.
 Supabase offers the same database at three addresses, and the difference
 matters:
 
-| How to connect | Port | Use it |
+| How to connect | Host and port | Use it |
 | --- | --- | --- |
-| **Session pooler** | 5432 | **This API.** One server connection per client, IPv4, prepared statements work. |
-| Transaction pooler | 6543 | Serverless, where connections are many and short. `db.py` turns off prepared statements on this port, because a pooled transaction may land on a different server connection than the one that prepared the statement. |
-| Direct connection | 5432 | `db.<ref>.supabase.co`. IPv6-only unless the project has the IPv4 add-on, so it usually can't be reached from a home network. |
+| **Session pooler** | the pooler host, **5432** | **This API.** One server connection per client, IPv4, prepared statements work. |
+| Transaction pooler | the same pooler host, **6543** | Serverless, where connections are many and short. Works here too: `db.py` turns off prepared statements on this port, because a pooled transaction may land on a different server connection than the one that prepared the statement. |
+| Direct connection | `db.<ref>.supabase.co`, 5432 | IPv6-only unless the project has the IPv4 add-on, so it usually can't be reached from a home network, and not from Cloud Run. |
+
+The two pooler rows are one endpoint with two ports, so the dashboard's
+labels don't matter much: whatever pooler string it gives you, `:5432` is
+session mode and `:6543` is transaction mode. Session mode used to be offered
+on 6543 as well and was withdrawn in February 2025, which is why older
+write-ups disagree.
 
 A project on Supabase's free plan **pauses after a week with no queries** and
 has to be restored from the dashboard; `db_check.py` will say it can't be
