@@ -18,6 +18,14 @@ What stays strict is `Finding.severity`, which decides whether a family is
 shown a red flag or an amber question. There is no safe guess between
 overstating what a bill proves and understating it, so an unrecognised
 severity refuses the bill.
+
+A line carries only what something downstream reads. The reading is paid for
+by the second -- a bill's answer is thousands of output tokens and a family
+waits for every one of them -- so a field written out and then discarded is
+time taken from someone sitting in a hospital corridor. `rate` is the one
+exception: nothing reads it, but "quantity x rate != amount" is the whole of
+check A, and taking the operand out of the answer takes away the reader's own
+working.
 """
 
 import logging
@@ -141,28 +149,14 @@ class AnalysedLine(BaseModel):
     """One line of the bill, transcribed verbatim and then normalised."""
 
     line_id: Text = Field(description="Your own id for this line, unique within the bill.")
-    page: Count = Field(description="1-based page the line appears on.")
-    section: Text = Field(description="The section heading above it, as printed. Empty if none.")
     description_verbatim: Text = Field(description="Exactly as printed. Not cleaned or translated.")
-    item_name_plain: Text = Field(description="The same item in plain English.")
     category: Category
-    attributes: dict[str, str] = Field(
-        default_factory=dict,
-        description=(
-            "PHASE 2's specification attributes, whichever the bill prints: size, gauge, "
-            "French, volume, strength, pack size, material, brand. Open rather than a fixed "
-            "set of keys, because a bill prints what it prints."
-        ),
-    )
     quantity: Number = Field(description="As printed. Null when the bill states none.")
     unit: Text = Field(description="As printed, e.g. 'vial'. Empty when the bill states none.")
     rate: Number = Field(description="Rate per unit as printed. Null when none is printed.")
     amount: Number = Field(description="The line's amount. Null when it cannot be read.")
     date: Text = Field(description="The line's date as printed. Empty when it carries none.")
     mrp_printed: Number = Field(description="MRP, only where the bill prints one. Else null.")
-    confidence: Number = Field(description="0.0-1.0, how sure you are this line was read correctly.")
-    ambiguous: bool = Field(description="True where the line cannot be resolved without asking.")
-    ambiguity_reason: Text = Field(description="What is ambiguous. Empty when it isn't.")
 
     @field_validator("category", mode="before")
     @classmethod

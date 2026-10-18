@@ -36,21 +36,14 @@ def line(
 ) -> AnalysedLine:
     return AnalysedLine(
         line_id=line_id,
-        page=1,
-        section="",
         description_verbatim=name,
-        item_name_plain=name,
         category="unclassified",
-        attributes={},
         quantity=quantity,
         unit=unit,
         rate=None,
         amount=amount,
         date=on,
         mrp_printed=None,
-        confidence=0.9,
-        ambiguous=False,
-        ambiguity_reason="",
     )
 
 

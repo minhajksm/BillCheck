@@ -66,104 +66,24 @@ class OcrProvider(Protocol):
 
 
 # The prototype's day 3 bill. Sample data, not a real patient or hospital.
-# (section, verbatim, plain, category, quantity, unit, rate, amount, mrp)
+# (verbatim, category, quantity, unit, rate, amount, mrp)
 #
 # The dated lines are dated today, read from the clock rather than written in.
 # A date written in would sit inside the stay the day it was typed and drift
 # outside it a week later, so every test that turns on the stay check would
 # start failing on a date nobody chose.
 STUB_LINES = [
-    (
-        "Room",
-        "Room rent, twin sharing",
-        "Room rent, twin sharing",
-        "room_and_nursing",
-        1,
-        "day",
-        6500,
-        6500,
-        None,
-    ),
-    ("Room", "Nursing charges", "Nursing charges", "room_and_nursing", 1, "day", 2200, 2200, None),
-    (
-        "Doctor",
-        "Consultant visit, Dr. A. Mehta",
-        "Consultant visit",
-        "professional_fees",
-        1,
-        "visit",
-        2500,
-        2500,
-        None,
-    ),
-    (
-        "Doctor",
-        "Consultant visit, Dr. A. Mehta",
-        "Consultant visit",
-        "professional_fees",
-        1,
-        "visit",
-        2500,
-        2500,
-        None,
-    ),
-    (
-        "Pharmacy",
-        "Inj. Meropenem 1g",
-        "Meropenem injection 1g",
-        "pharmacy_drug",
-        6,
-        "vial",
-        2950,
-        17700,
-        1840,
-    ),
-    (
-        "Pharmacy",
-        "Inj. Pantoprazole 40mg",
-        "Pantoprazole injection",
-        "pharmacy_drug",
-        2,
-        "vial",
-        60,
-        120,
-        None,
-    ),
-    (
-        "Pharmacy",
-        "IV fluid, Ringer lactate 500ml",
-        "Ringer lactate IV fluid",
-        "pharmacy_drug",
-        4,
-        "bottle",
-        130,
-        520,
-        None,
-    ),
-    ("Lab", "CBC and CRP tests", "Blood count and CRP", "investigation", 1, "set", 1450, 1450, None),
-    ("Imaging", "Chest X-ray", "Chest X-ray", "investigation", 1, "view", 950, 950, None),
-    (
-        "Consumables",
-        "Surgical gloves",
-        "Surgical gloves",
-        "consumable_disposable",
-        80,
-        "pair",
-        85,
-        6800,
-        None,
-    ),
-    (
-        "Consumables",
-        "Syringes and IV cannula",
-        "Syringes and IV cannula",
-        "consumable_disposable",
-        1,
-        "set",
-        1250,
-        1250,
-        None,
-    ),
+    ("Room rent, twin sharing", "room_and_nursing", 1, "day", 6500, 6500, None),
+    ("Nursing charges", "room_and_nursing", 1, "day", 2200, 2200, None),
+    ("Consultant visit, Dr. A. Mehta", "professional_fees", 1, "visit", 2500, 2500, None),
+    ("Consultant visit, Dr. A. Mehta", "professional_fees", 1, "visit", 2500, 2500, None),
+    ("Inj. Meropenem 1g", "pharmacy_drug", 6, "vial", 2950, 17700, 1840),
+    ("Inj. Pantoprazole 40mg", "pharmacy_drug", 2, "vial", 60, 120, None),
+    ("IV fluid, Ringer lactate 500ml", "pharmacy_drug", 4, "bottle", 130, 520, None),
+    ("CBC and CRP tests", "investigation", 1, "set", 1450, 1450, None),
+    ("Chest X-ray", "investigation", 1, "view", 950, 950, None),
+    ("Surgical gloves", "consumable_disposable", 80, "pair", 85, 6800, None),
+    ("Syringes and IV cannula", "consumable_disposable", 1, "set", 1250, 1250, None),
 ]
 
 # One finding the stub always makes, so the whole path is exercised in
@@ -198,15 +118,6 @@ STUB_FINDINGS = [
 # instead, which is how most of a bill reads.
 STUB_DATED = frozenset({"Consultant visit, Dr. A. Mehta"})
 
-# PHASE 2's attributes, on the lines of the sample bill that print any. Open
-# keys, as the prompt has them: a bill states what it states, and these are
-# what these lines state. Lines not named here print none.
-STUB_ATTRIBUTES: dict[str, dict[str, str]] = {
-    "Inj. Meropenem 1g": {"strength": "1g"},
-    "Inj. Pantoprazole 40mg": {"strength": "40mg"},
-    "IV fluid, Ringer lactate 500ml": {"volume": "500ml"},
-}
-
 
 class StubOcr:
     """Development and tests: returns one fixed sample analysis, whatever is sent.
@@ -224,23 +135,16 @@ class StubOcr:
         lines = [
             AnalysedLine(
                 line_id=f"L{number}",
-                page=1,
-                section=section,
                 description_verbatim=verbatim,
-                item_name_plain=plain,
                 category=category,  # type: ignore[arg-type]
-                attributes=dict(STUB_ATTRIBUTES.get(verbatim, {})),
                 quantity=float(quantity),
                 unit=unit,
                 rate=float(rate),
                 amount=float(amount),
                 date=today if verbatim in STUB_DATED else "",
                 mrp_printed=None if mrp is None else float(mrp),
-                confidence=0.9,
-                ambiguous=False,
-                ambiguity_reason="",
             )
-            for number, (section, verbatim, plain, category, quantity, unit, rate, amount, mrp) in enumerate(
+            for number, (verbatim, category, quantity, unit, rate, amount, mrp) in enumerate(
                 STUB_LINES, start=1
             )
         ]

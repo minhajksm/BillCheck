@@ -33,10 +33,8 @@ def test_the_answer_that_broke_the_parser_now_parses(analysis):
 
 def test_a_null_the_prompt_asks_for_is_not_a_failure(analysis):
     """ABSOLUTE CONSTRAINT 3: "If a field is unreadable, output null". Every
-    one of the 15 lines sent `"unit": null`, and seven sent no ambiguity
-    reason. That was 22 of the 26 errors."""
+    one of the 15 lines sent `"unit": null`. That was 15 of the 26 errors."""
     assert all(line.unit == "" for line in analysis.lines)
-    assert analysis.lines[2].ambiguity_reason == ""
     assert analysis.lines[6].date == "", "the bill printed '---' here"
 
 
@@ -54,11 +52,16 @@ def test_a_stay_of_part_days_is_not_a_whole_number(analysis):
     assert analysis.bill.stay_days == 1.32
 
 
-def test_attributes_arrive_with_the_keys_the_bill_used(analysis):
-    """Not one of PHASE 2's eight: this bill states a room, so the reader
-    sent a room. An open map is the only way that survives."""
-    assert analysis.lines[0].attributes == {"room": "PRI001"}
-    assert analysis.lines[2].attributes == {"doctor": "Dr. A. Example"}
+def test_what_the_prompt_no_longer_asks_for_is_dropped_quietly(analysis):
+    """This answer predates the trim, so every line of it still carries a
+    section, a plain name, attributes, a confidence and an ambiguity reason.
+    None is read now, and an answer carrying them is still a good answer --
+    an old reply, or a reader being generous, must not cost a family a bill."""
+    raw = json.loads(ANSWER.read_text(encoding="utf-8"))
+    for dropped in ("section", "item_name_plain", "attributes", "confidence", "ambiguity_reason"):
+        assert dropped in raw["lines"][0], "the fixture still has it"
+        assert not hasattr(analysis.lines[0], dropped), "and the model does not"
+    assert len(analysis.lines) == 15
 
 
 def test_fields_the_reader_added_are_ignored_not_fatal(analysis):

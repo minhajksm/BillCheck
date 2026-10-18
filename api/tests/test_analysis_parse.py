@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from analysis import BillAnalysis
+from analysis import AnalysedLine, BillAnalysis
 from ocr import ClaudeOcr, OcrError, _json_object, _parse
 
 GOOD = {
@@ -35,21 +35,14 @@ GOOD = {
     "lines": [
         {
             "line_id": "L1",
-            "page": 1,
-            "section": "Room",
             "description_verbatim": "Room rent, twin sharing",
-            "item_name_plain": "Room rent, twin sharing",
             "category": "room_and_nursing",
-            "attributes": {},
             "quantity": 1.0,
             "unit": "day",
             "rate": 6500.0,
             "amount": 6500.0,
             "date": "11 Oct",
             "mrp_printed": None,
-            "confidence": 0.95,
-            "ambiguous": False,
-            "ambiguity_reason": "",
         }
     ],
     "findings": [
@@ -105,12 +98,21 @@ def test_the_model_carries_exactly_the_prompt_s_fields():
     ]
 
 
-def test_attributes_take_whatever_the_bill_printed():
-    """PHASE 2 names eight attributes; a bill prints the ones it prints. The
-    field is an open map, so a gauge arrives as a gauge."""
-    lines = [{**GOOD["lines"][0], "attributes": {"gauge": "18G", "volume": "500ml"}}]
-    analysis = _parse(answer(lines=lines))
-    assert analysis.lines[0].attributes == {"gauge": "18G", "volume": "500ml"}
+def test_a_line_carries_only_what_something_reads():
+    """Every field here is read by the pipeline, bar `rate`, which is the
+    operand of check A. A field written and then discarded is a second of a
+    family's wait spent on nothing."""
+    assert list(AnalysedLine.model_fields) == [
+        "line_id",
+        "description_verbatim",
+        "category",
+        "quantity",
+        "unit",
+        "rate",
+        "amount",
+        "date",
+        "mrp_printed",
+    ]
 
 
 # --- an answer that arrives wrapped ----------------------------------------
@@ -139,8 +141,8 @@ def test_keeps_braces_inside_the_transcription():
 
 
 def test_an_escaped_quote_does_not_end_the_string():
-    lines = [{**GOOD["lines"][0], "ambiguity_reason": 'reads \\"SET IV\\" and nothing more'}]
-    assert _parse(answer(lines=lines)).lines[0].ambiguity_reason.startswith("reads")
+    lines = [{**GOOD["lines"][0], "description_verbatim": 'Inj. \\"SET IV\\" 500ml'}]
+    assert _parse(answer(lines=lines)).lines[0].description_verbatim.startswith("Inj.")
 
 
 # --- an answer that cannot be used -----------------------------------------
@@ -403,7 +405,7 @@ def test_a_refusal_is_not_read_again():
 # the reader to do something the model refused to accept.
 
 
-@pytest.mark.parametrize("field", ["unit", "date", "ambiguity_reason", "section", "item_name_plain"])
+@pytest.mark.parametrize("field", ["unit", "date", "description_verbatim", "line_id"])
 def test_a_null_text_field_reads_as_nothing_printed(field: str):
     """ABSOLUTE CONSTRAINT 3 tells the reader to output null where a field is
     unreadable. "Not printed" and "unreadable" are the same to everything
@@ -446,8 +448,7 @@ def test_a_part_day_stay_is_not_rounded_away():
 
 
 def test_a_count_arriving_as_text_is_still_a_count():
-    lines = [{**GOOD["lines"][0], "page": "1"}]
-    assert _parse(answer(lines=lines)).lines[0].page == 1
+    assert _parse(answer(bill={**GOOD["bill"], "pages_processed": "2"})).bill.pages_processed == 2
 
 
 def test_fields_the_reader_invents_are_ignored():
