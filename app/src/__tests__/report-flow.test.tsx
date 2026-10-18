@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Stack } from 'expo-router';
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import type { ReactTestInstance } from 'react-test-renderer';
+import { fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 
 import AskScreen from '@/app/bills/[billId]/ask';
 import BillReportScreen from '@/app/bills/[billId]';
@@ -48,9 +49,22 @@ beforeEach(() => {
   resetTokenStore('saved-token');
 });
 
-/** The report opens on the marked bill, so the flag list is a tab away. */
+/**
+ * The element a node sits inside, skipping the component wrappers.
+ *
+ * `.parent` walks the React tree, so from the sheet's own heading it lands on
+ * our `Text` component before the view that heading is laid out in.
+ */
+function hostParent(node: ReactTestInstance): ReactTestInstance {
+  let found = node.parent;
+  while (found && typeof found.type !== 'string') found = found.parent;
+  if (!found) throw new Error('no element around this node');
+  return found;
+}
+
+/** The report opens on the marked bill, so the summary is a tab away. */
 async function openFlags() {
-  fireEvent.press(await screen.findByText('Flags'));
+  fireEvent.press(await screen.findByText('Bill summary'));
 }
 
 describe('the bill report', () => {
@@ -70,7 +84,7 @@ describe('the bill report', () => {
 
     expect(tabs).toHaveLength(2);
     expect(tabs[0]).toHaveTextContent('Marked bill');
-    expect(tabs[1]).toHaveTextContent('Flags');
+    expect(tabs[1]).toHaveTextContent('Bill summary');
   });
 
   it('shows what was flagged, with the reference each was checked against', async () => {
@@ -113,10 +127,23 @@ describe('the bill report', () => {
     expect(
       screen.getByText(/Ask the hospital pharmacy to show you the MRP and batch details printed on the pack/),
     ).toBeVisible();
-    // Billed, reference and difference, side by side.
-    expect(screen.getByText('₹17,700')).toBeVisible();
-    expect(screen.getByText('₹11,040')).toBeVisible();
-    expect(screen.getByText('₹6,660')).toBeVisible();
+    // The item and what it was billed for it, and nothing more: a tile
+    // reading "At MRP ₹11,040" beside it read as our own figure for the
+    // line, which is not what a reference price is.
+    const sheet = within(hostParent(screen.getByRole('header', { name: 'Inj. Meropenem 1g' })));
+    expect(sheet.getByText('₹17,700')).toBeVisible();
+    expect(sheet.queryByText('₹11,040')).toBeNull();
+    expect(sheet.queryByText('At MRP')).toBeNull();
+  });
+
+  it('says which line of the bill a flag is about', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await openFlags();
+    fireEvent.press(await screen.findByText('Inj. Meropenem 1g'));
+
+    // A family reads this with the hospital's own copy in front of them, so
+    // the explanation names the line as the bill numbers it.
+    expect(await screen.findByText(/Legal Metrology rules. \(Line 5\)/)).toBeVisible();
   });
 
   it('records that the hospital corrected a charge', async () => {
@@ -167,9 +194,12 @@ describe('the bill report', () => {
 
   it('says what each kind of charge came to', async () => {
     renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await screen.findByText('City Care Hospital');
 
-    // Under the bill, not instead of it: "the medicines came to more than the
-    // room" is worth asking even where no single line was flagged.
+    // Over on the summary tab with the questions, not under the bill: the
+    // marked bill is the family's own copy, line for line, and nothing else.
+    expect(screen.queryByText('Where it went')).toBeNull();
+    await openFlags();
     expect(await screen.findByText('Where it went')).toBeVisible();
     expect(screen.getByText('Room and nursing')).toBeVisible();
     expect(screen.getByText('Medicines')).toBeVisible();

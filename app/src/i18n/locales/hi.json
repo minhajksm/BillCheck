@@ -22,7 +22,6 @@
     "yourCases": "आपके केस",
     "admitted": "{{date}} को भर्ती, दिन {{day}}",
     "closed": "{{date}} में बंद",
-    "closedCaseToast": "यह केस बंद हो चुका है। इसकी रिपोर्ट यहाँ सेव रहेंगी।",
     "startNewCase": "नया केस शुरू करें",
     "newCaseSoon": "नया केस शुरू करने की सुविधा जल्द आ रही है",
     "planningTitle": "भर्ती की योजना बना रहे हैं?",
@@ -181,8 +180,6 @@
     "referenceAtCeiling": "अधिकतम कीमत पर",
     "referenceOneEntry": "एक एंट्री",
     "referenceForUsual": "{{usual}} {{unit}} के लिए",
-    "billed": "बिल में",
-    "difference": "अंतर",
     "overReference": "संदर्भ से {{amount}} ज़्यादा",
     "recovered": "{{amount}} वापस मिले",
     "explainedByHospital": "{{amount}}, अस्पताल ने समझाया",
@@ -225,7 +222,10 @@
     "askServiceCharge": "बिलिंग डेस्क से पूछें कि यह शुल्क किसलिए है, और उसे कमरे के किराए के साथ दिखाएँ।",
     "shortSameTestTwoNames": "यह शायद एक ही जाँच है जो दो नामों से लगी है।",
     "whySameTestTwoNames": "जाँचों के अक्सर एक छोटा और एक पूरा नाम होता है। एक ही बिल पर दोनों होने का मतलब दो बार एंट्री भी हो सकता है।",
-    "askSameTestTwoNames": "बिलिंग डेस्क से पूछें कि ये दो जाँचें हैं या एक।"
+    "askSameTestTwoNames": "बिलिंग डेस्क से पूछें कि ये दो जाँचें हैं या एक।",
+    "onLine_one": "(पंक्ति {{lines}})",
+    "onLine_other": "(पंक्तियाँ {{lines}})",
+    "lineAnd": "और"
   },
   "report": {
     "title": "दिन {{day}} की बिल रिपोर्ट",
@@ -236,7 +236,6 @@
     "recoveredOnBill": "इस बिल पर वापस मिले",
     "nothingFlagged": "पूछने लायक कुछ नहीं",
     "nothingFlaggedBody": "इस बिल का हर आइटम सही दायरे में है।",
-    "tabFlags": "सवाल",
     "tabBill": "निशान लगा बिल",
     "othersInRange_one": "{{count}} और आइटम सही दायरे में है",
     "othersInRange_other": "{{count}} और आइटम सही दायरे में हैं",
@@ -270,7 +269,8 @@
     "askBillingDesk": "बिलिंग डेस्क से पूछें",
     "backToCase": "केस पर वापस",
     "patientUnknown": "मरीज़ का विवरण भरा नहीं गया",
-    "whereItWent": "कहाँ कितना लगा"
+    "whereItWent": "कहाँ कितना लगा",
+    "tabSummary": "बिल सारांश"
   },
   "ask": {
     "title": "बिलिंग डेस्क से पूछें",

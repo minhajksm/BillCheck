@@ -22,7 +22,6 @@
     "yourCases": "Your cases",
     "admitted": "Admitted {{date}}, day {{day}}",
     "closed": "Closed {{date}}",
-    "closedCaseToast": "This case is closed. Its reports stay saved here.",
     "startNewCase": "Start a new case",
     "newCaseSoon": "Starting a new case is coming soon",
     "planningTitle": "Planning an admission?",
@@ -181,8 +180,6 @@
     "referenceAtCeiling": "At ceiling price",
     "referenceOneEntry": "One entry",
     "referenceForUsual": "For {{usual}} {{unit}}",
-    "billed": "Billed",
-    "difference": "Difference",
     "overReference": "{{amount}} over reference",
     "recovered": "{{amount}} recovered",
     "explainedByHospital": "{{amount}}, explained by the hospital",
@@ -225,7 +222,10 @@
     "askServiceCharge": "Ask the billing desk what this charge is for, and show it beside the room rent.",
     "shortSameTestTwoNames": "This may be the same test billed under two names.",
     "whySameTestTwoNames": "Tests often have a short name and a full name. Both on one bill can mean it was entered twice.",
-    "askSameTestTwoNames": "Ask the billing desk whether these are two tests or one."
+    "askSameTestTwoNames": "Ask the billing desk whether these are two tests or one.",
+    "onLine_one": "(Line {{lines}})",
+    "onLine_other": "(Lines {{lines}})",
+    "lineAnd": "and"
   },
   "report": {
     "title": "Day {{day}} bill report",
@@ -236,7 +236,6 @@
     "recoveredOnBill": "recovered on this bill",
     "nothingFlagged": "Nothing to ask about",
     "nothingFlaggedBody": "Every item on this bill is within range.",
-    "tabFlags": "Flags",
     "tabBill": "Marked bill",
     "othersInRange_one": "{{count}} other item is within range",
     "othersInRange_other": "{{count}} other items are within range",
@@ -270,7 +269,8 @@
     "askBillingDesk": "Ask the billing desk",
     "backToCase": "Back to case",
     "patientUnknown": "Patient details not filled in",
-    "whereItWent": "Where it went"
+    "whereItWent": "Where it went",
+    "tabSummary": "Bill summary"
   },
   "ask": {
     "title": "Ask the billing desk",

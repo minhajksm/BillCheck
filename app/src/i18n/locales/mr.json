@@ -22,7 +22,6 @@
     "yourCases": "तुमच्या केसेस",
     "admitted": "{{date}} रोजी दाखल, दिवस {{day}}",
     "closed": "{{date}} मध्ये बंद",
-    "closedCaseToast": "ही केस बंद झाली आहे. तिचे रिपोर्ट इथे जतन राहतील.",
     "startNewCase": "नवीन केस सुरू करा",
     "newCaseSoon": "नवीन केस सुरू करण्याची सुविधा लवकरच येत आहे",
     "planningTitle": "दाखल होण्याचे नियोजन करत आहात?",
@@ -181,8 +180,6 @@
     "referenceAtCeiling": "कमाल किमतीनुसार",
     "referenceOneEntry": "एक नोंद",
     "referenceForUsual": "{{usual}} {{unit}} साठी",
-    "billed": "बिलात",
-    "difference": "फरक",
     "overReference": "संदर्भापेक्षा {{amount}} जास्त",
     "recovered": "{{amount}} परत मिळाले",
     "explainedByHospital": "{{amount}}, रुग्णालयाने स्पष्ट केले",
@@ -225,7 +222,10 @@
     "askServiceCharge": "बिलिंग डेस्कला विचारा की हे शुल्क कशासाठी आहे, आणि ते खोलीच्या भाड्यासोबत दाखवा.",
     "shortSameTestTwoNames": "ही कदाचित एकच तपासणी आहे जी दोन नावांनी लावली आहे.",
     "whySameTestTwoNames": "तपासण्यांना अनेकदा एक लहान आणि एक पूर्ण नाव असते. एकाच बिलावर दोन्ही असणे म्हणजे दोनदा नोंद झाली असू शकते.",
-    "askSameTestTwoNames": "बिलिंग डेस्कला विचारा की या दोन तपासण्या आहेत की एक."
+    "askSameTestTwoNames": "बिलिंग डेस्कला विचारा की या दोन तपासण्या आहेत की एक.",
+    "onLine_one": "(ओळ {{lines}})",
+    "onLine_other": "(ओळी {{lines}})",
+    "lineAnd": "आणि"
   },
   "report": {
     "title": "दिवस {{day}} चा बिल अहवाल",
@@ -236,7 +236,6 @@
     "recoveredOnBill": "या बिलावर परत मिळाले",
     "nothingFlagged": "विचारण्यासारखे काही नाही",
     "nothingFlaggedBody": "या बिलातील प्रत्येक आयटम योग्य मर्यादेत आहे.",
-    "tabFlags": "प्रश्न",
     "tabBill": "खूण केलेले बिल",
     "othersInRange_one": "{{count}} आणखी आयटम योग्य मर्यादेत आहे",
     "othersInRange_other": "{{count}} आणखी आयटम योग्य मर्यादेत आहेत",
@@ -270,7 +269,8 @@
     "askBillingDesk": "बिलिंग डेस्कला विचारा",
     "backToCase": "केसकडे परत",
     "patientUnknown": "रुग्णाचा तपशील भरलेला नाही",
-    "whereItWent": "कुठे किती"
+    "whereItWent": "कुठे किती",
+    "tabSummary": "बिल सारांश"
   },
   "ask": {
     "title": "बिलिंग डेस्कला विचारा",

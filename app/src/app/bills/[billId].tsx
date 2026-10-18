@@ -102,7 +102,7 @@ function Report({
         <Segmented
           options={[
             { value: 'bill', label: t('report.tabBill') },
-            { value: 'flags', label: t('report.tabFlags') },
+            { value: 'flags', label: t('report.tabSummary') },
           ]}
           value={view}
           onChange={setView}
@@ -119,7 +119,10 @@ function Report({
       ) : view === 'bill' ? (
         <MarkedBill bill={bill} item={item} onOpen={setOpenFlag} />
       ) : (
-        <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
+        <>
+          <WhereItWent rows={bill.lineItems} total={bill.total} />
+          <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
+        </>
       )}
 
       <Text variant="faint" style={styles.fine}>
@@ -321,7 +324,6 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
   // reads down this beside the hospital's copy, so any order but the printed
   // one makes them hunt for the line they are looking at.
   const rows = [...bill.lineItems].sort((a, b) => a.position - b.position);
-  const totals = categoryTotals(bill.lineItems);
   const patient = item.patient.name
     ? t('report.patientLine', {
         ip: item.patient.ipNumber,
@@ -382,23 +384,40 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
         <Text weight="bold">{t('report.billTotal')}</Text>
         <Text weight="bold">{formatINR(bill.total)}</Text>
       </View>
+    </Card>
+  );
+}
 
-      <View style={[styles.whereItWent, { borderTopColor: palette.line }]}>
-        <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
-          {t('report.whereItWent')}
-        </Text>
-        <View style={styles.wentRows}>
-          {totals.map((group) => (
-            <View key={group.category} style={styles.wentRow}>
-              <Text variant="faint" color="ink2" style={styles.wentLabel}>
-                {t(`report.categories.${group.category}`)}
-              </Text>
-              <Text variant="faint" weight="semibold">
-                {formatINR(group.total)}
-              </Text>
-            </View>
-          ))}
-        </View>
+/**
+ * What each kind of charge came to.
+ *
+ * Above the questions rather than under the bill: it is the shape of the
+ * bill, and "the medicines came to more than the room" is worth asking even
+ * where no single line was flagged.
+ */
+function WhereItWent({ rows, total }: { rows: LineItem[]; total: number }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const totals = categoryTotals(rows);
+
+  return (
+    <Card style={styles.whereItWent}>
+      <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
+        {t('report.whereItWent')}
+      </Text>
+      <View style={styles.wentRows}>
+        {totals.map((group) => (
+          <View key={group.category} style={styles.wentRow}>
+            <Text color="ink2" style={styles.wentLabel}>
+              {t(`report.categories.${group.category}`)}
+            </Text>
+            <Text weight="semibold">{formatINR(group.total)}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={[styles.wentTotal, { borderTopColor: palette.line }]}>
+        <Text weight="bold">{t('report.billTotal')}</Text>
+        <Text weight="bold">{formatINR(total)}</Text>
       </View>
     </Card>
   );
@@ -476,12 +495,9 @@ function FlagSheet({
         <Text variant="title" weight="bold" accessibilityRole="header">
           {item?.name ?? ''}
         </Text>
-
-        <View style={styles.numbers}>
-          <Figure label={t('flags.billed')} value={formatINR(flag.billed)} />
-          <Figure label={copy.referenceLabel} value={formatINR(flag.referenceAmount)} />
-          <Figure label={t('flags.difference')} value={formatINR(flag.excess)} />
-        </View>
+        <Text variant="big" weight="bold" style={styles.sheetBilled}>
+          {formatINR(flag.billed)}
+        </Text>
 
         <Text weight="semibold" style={styles.sheetHeading}>
           {t('report.whyFlagged')}
@@ -521,18 +537,6 @@ function FlagSheet({
         )}
       </View>
     </Modal>
-  );
-}
-
-function Figure({ label, value }: { label: string; value: string }) {
-  const palette = usePalette();
-  return (
-    <View style={[styles.figure, { backgroundColor: palette.card, borderColor: palette.line }]}>
-      <Text variant="faint" color="ink2">
-        {label}
-      </Text>
-      <Text weight="bold">{value}</Text>
-    </View>
   );
 }
 
@@ -598,8 +602,15 @@ const styles = StyleSheet.create({
   },
   billNumber: { width: 20, textAlign: 'right' },
   billName: { flex: 1 },
-  whereItWent: { marginTop: 14, paddingTop: 12, borderTopWidth: 1 },
+  whereItWent: { padding: 14, marginBottom: 14 },
   wentRows: { marginTop: 8, gap: 5 },
+  wentTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
   wentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -640,8 +651,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  numbers: { flexDirection: 'row', gap: 8, marginVertical: 12 },
-  figure: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 8 },
+  sheetBilled: { marginTop: 2, marginBottom: 6 },
   sheetHeading: { marginTop: 14, marginBottom: 2 },
   sheetButtons: { gap: 8, marginTop: 8 },
 });

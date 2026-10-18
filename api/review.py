@@ -114,7 +114,11 @@ def _to_flag(analysis: BillAnalysis, finding: Finding, positions: list[int]) -> 
             "severity": finding.severity,
             "evidence": finding.evidence_quoted,
             "confirm": finding.confirmation_required,
+            # The reader's own ids, and the same lines as the family sees them
+            # numbered on their bill. The ids are for reading the logs back;
+            # the numbers are what goes on screen.
             "lines": ",".join(finding.line_ids),
+            "line_numbers": ",".join(str(position) for position in positions),
             "why_en": finding.statement,
         },
     )
@@ -131,7 +135,12 @@ def _stay_flag(analysis: BillAnalysis, position: int, detail: dict[str, str]) ->
         reference_amount=Decimal("0"),
         reference_source="reader",
         excess=billed,
-        reference_detail={**detail, "confidence": "high", "rows": str(position)},
+        reference_detail={
+            **detail,
+            "confidence": "high",
+            "rows": str(position),
+            "line_numbers": str(position),
+        },
     )
 
 

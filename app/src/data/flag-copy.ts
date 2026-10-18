@@ -56,7 +56,40 @@ export function flagTag(t: TFunction, flag: Flag): string {
   }
 }
 
+/**
+ * Which lines of the bill a flag is about, as the bill numbers them.
+ *
+ * A family reads the question with their own copy in front of them, so
+ * "Lines 2 and 4" is the difference between an answerable question and a
+ * hunt. Every flag carries them: the price lists set them, so does the
+ * reader's finding, so does the stay check.
+ */
+function onLines(t: TFunction, flag: Flag): string {
+  const numbers = str(flag, 'line_numbers')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (numbers.length === 0) return '';
+
+  // "2", "2 and 4", "2, 4 and 6" — joined in the family's own language.
+  const listed =
+    numbers.length === 1
+      ? numbers[0]
+      : `${numbers.slice(0, -1).join(', ')} ${t('flags.lineAnd')} ${numbers[numbers.length - 1]}`;
+  return t('flags.onLine', { count: numbers.length, lines: listed });
+}
+
+/** The explanation, with the lines it is about named at the end of it. */
+function withLines(t: TFunction, flag: Flag, copy: FlagCopy): FlagCopy {
+  const lines = onLines(t, flag);
+  return lines ? { ...copy, why: `${copy.why} ${lines}` } : copy;
+}
+
 export function flagCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
+  return withLines(t, flag, writtenCopy(t, flag, item));
+}
+
+function writtenCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
   const tag = flagTag(t, flag);
   if (isReaderFlag(flag)) return readerCopy(t, flag, tag, item);
 

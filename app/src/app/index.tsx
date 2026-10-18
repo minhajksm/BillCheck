@@ -13,7 +13,6 @@ import { Chip } from '@/components/chip';
 import { Logo } from '@/components/logo';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { caseStatus } from '@/data/case-status';
 import { listCases, type ScannedPage } from '@/data/cases-api';
@@ -28,7 +27,6 @@ import { formatPhone } from '@/lib/phone';
 export default function YourCasesScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
-  const toast = useToast();
   const { state, logout } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   const token = state.status === 'signedIn' ? state.token : null;
@@ -98,14 +96,9 @@ export default function YourCasesScreen() {
         <CaseCard
           key={c.id}
           item={c}
-          onPress={() =>
-            c.closedOn
-              ? toast(t('home.closedCaseToast'))
-              : router.push({
-                  pathname: '/cases/[caseId]',
-                  params: { caseId: c.id },
-                })
-          }
+          // A closed admission opens like any other: its reports stay
+          // readable, and the only way to delete it is from inside it.
+          onPress={() => router.push({ pathname: '/cases/[caseId]', params: { caseId: c.id } })}
         />
       ))}
 
