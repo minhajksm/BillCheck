@@ -197,3 +197,124 @@ def test_no_bed_is_claimed(analysis):
     """A bill prints a bed number, but the patient moves. It is left for the
     family, who know where they are."""
     assert case_from_analysis(analysis, uuid.uuid4()).bed is None
+
+
+# --- a bill from a stay that is already over --------------------------------
+#
+# Families go through a shoebox of old bills. Dating those from the clock put
+# a 2018 admission on "day 2,913" and left the patient apparently still in
+# hospital, eight years on.
+
+
+def past(analysis: BillAnalysis) -> BillAnalysis:
+    """The Pune bill's own dates: admitted the 22nd, discharged the 23rd."""
+    return header(
+        analysis,
+        admission_date="22-Oct-18 10:45 AM",
+        discharge_date="23-Oct-18 6:30 PM",
+        bill_date="23-Oct-18",
+    )
+
+
+def test_the_stay_ends_where_the_bill_says_it_ended(analysis):
+    case = case_from_analysis(past(analysis), uuid.uuid4())
+
+    assert case.admitted_on == date(2018, 10, 22)
+    assert case.closed_on == date(2018, 10, 23)
+
+
+def test_a_past_stay_is_two_days_long_not_eight_years(analysis):
+    from cases import day_of_stay
+    from db import india_today
+
+    case = case_from_analysis(past(analysis), uuid.uuid4())
+
+    assert day_of_stay(case.admitted_on, case.closed_on, india_today()) == 2
+    assert case.closed_on is not None, "nobody is still admitted in 2018"
+
+
+def test_a_bill_is_dated_from_the_bill(analysis):
+    """Not from the day it was photographed."""
+    from bills import bill_day
+
+    assert bill_day(past(analysis), None) == date(2018, 10, 23)
+
+
+def test_a_date_the_uploader_gives_still_wins(analysis):
+    """The form field is the override for a bill whose own date can't be read."""
+    from bills import bill_day
+
+    assert bill_day(past(analysis), date(2018, 10, 22)) == date(2018, 10, 22)
+
+
+def test_an_undated_bill_falls_back_to_today(analysis):
+    from bills import bill_day
+    from db import india_today
+
+    assert bill_day(header(analysis, bill_date=""), None) == india_today()
+
+
+# --- deciding whether the stay is still going -------------------------------
+
+
+def test_a_discharge_date_settles_it(analysis):
+    case = case_from_analysis(
+        header(analysis, admission_date="22-Oct-18", discharge_date="25-Oct-18", bill_date="23-Oct-18"),
+        uuid.uuid4(),
+    )
+    assert case.closed_on == date(2018, 10, 25), "the discharge, even past the bill's own date"
+
+
+def test_an_old_bill_with_no_discharge_date_closes_on_its_own_date(analysis):
+    """The last day the stay is known to have reached. Anything after it would
+    be an assumption, and the assumption that cost a family "day 2,913" was
+    that the patient never left."""
+    case = case_from_analysis(
+        header(analysis, admission_date="22-Oct-18", discharge_date="", bill_date="23-Oct-18"),
+        uuid.uuid4(),
+    )
+    assert case.closed_on == date(2018, 10, 23)
+
+
+def test_a_bill_from_today_leaves_the_stay_open(analysis):
+    """Someone at a counter during an admission, which is what the daily-bill
+    flow is for. This is the one case where the patient really is still in."""
+    from db import india_today
+
+    today = india_today().strftime("%d-%b-%y")
+    case = case_from_analysis(
+        header(analysis, admission_date="", discharge_date="", bill_date=today), uuid.uuid4()
+    )
+    assert case.closed_on is None
+
+
+def test_a_bill_with_no_dates_at_all_leaves_the_stay_open(analysis):
+    """Nothing read means nothing known, and closing a live admission is the
+    worse of the two mistakes: it takes the family out of the daily flow."""
+    case = case_from_analysis(
+        header(analysis, admission_date="", discharge_date="", bill_date=""), uuid.uuid4()
+    )
+    assert case.closed_on is None
+
+
+def test_a_stay_never_ends_before_it_starts(analysis):
+    """A misread discharge date must not make the arithmetic negative."""
+    case = case_from_analysis(
+        header(analysis, admission_date="23-Oct-18", discharge_date="22-Oct-18", bill_date="23-Oct-18"),
+        uuid.uuid4(),
+    )
+    assert case.closed_on == date(2018, 10, 23)
+
+
+def test_a_family_can_say_the_patient_is_still_in(client: TestClient, auth_headers: dict):
+    """Closing the case from the bill is a reading, not a verdict. Before this
+    there was no way back: `close` only closed."""
+    bill = check_first_bill(client, auth_headers)
+    case_id = bill["case_id"]
+    client.patch(f"/cases/{case_id}", json={"closed_on": "2026-10-11"}, headers=auth_headers)
+    assert client.get(f"/cases/{case_id}", headers=auth_headers).json()["closed_on"] == "2026-10-11"
+
+    reopened = client.patch(f"/cases/{case_id}", json={"closed_on": None}, headers=auth_headers)
+
+    assert reopened.status_code == 200
+    assert reopened.json()["closed_on"] is None

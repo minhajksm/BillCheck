@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 import audit
-from analysis import AnalysedLine, BillAnalysis
+from analysis import AnalysedLine, BillAnalysis, BillHeader
 from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
@@ -249,6 +249,39 @@ def _split_hospital(printed: str) -> tuple[str, str]:
     return name.strip()[:120], area.strip()[:120]
 
 
+def bill_day(analysis: BillAnalysis, supplied: date | None) -> date:
+    """The date this bill covers.
+
+    The bill's own date, not the day it was photographed. Families go through
+    a shoebox of old bills, and dating a 2018 bill today would put it on day
+    2,913 of a stay that ended years ago.
+    """
+    return supplied or parse_bill_date(analysis.bill.bill_date) or india_today()
+
+
+def closed_on(header: BillHeader, admitted_on: date) -> date | None:
+    """When the stay ended, or None while it is still going.
+
+    A bill that prints a discharge date settles it. Where it prints none, the
+    bill's own date is the last day the stay is known to have reached, and
+    anything after that is an assumption -- so a bill from before today closes
+    the case there rather than leaving a family on "day 2,913".
+
+    The one case left open is a bill dated today: someone at a counter during
+    an admission, which is what the daily-bill flow is for. A family can
+    correct either way on the case screen; this is a reading of the bill, not
+    a claim about where the patient is now.
+    """
+    discharged = parse_bill_date(header.discharge_date)
+    if discharged is not None:
+        return max(discharged, admitted_on)
+
+    billed = parse_bill_date(header.bill_date)
+    if billed is not None and billed < india_today():
+        return max(billed, admitted_on)
+    return None
+
+
 def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
     """A case opened from what the bill itself says.
 
@@ -277,6 +310,7 @@ def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
         ip_number=header.ip_number.strip()[:40],
         bed=None,
         admitted_on=admitted_on,
+        closed_on=closed_on(header, admitted_on),
         created_by=user_id,
     )
     case.members.append(CaseMember(user_id=user_id))
@@ -403,7 +437,7 @@ async def upload_first_bill(
         case,
         analysis,
         references,
-        on=bill_date or india_today(),
+        on=bill_day(analysis, bill_date),
         page_count=len(pages),
         uploaded_by=user.id,
     )
@@ -436,7 +470,7 @@ async def upload_bill(
         case,
         analysis,
         references,
-        on=bill_date or india_today(),
+        on=bill_day(analysis, bill_date),
         page_count=len(pages),
         uploaded_by=user.id,
     )

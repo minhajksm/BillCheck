@@ -159,6 +159,10 @@ export function installFakeApi() {
     calls: [] as string[],
     cases: [structuredClone(SAMPLE_CASE), structuredClone(CLOSED_CASE)],
     bills: [structuredClone(SAMPLE_BILL)],
+    /** Set to an error code to make the next bill upload fail with it. */
+    failUpload: null as string | null,
+    /** Set to hold an upload open, for testing what is shown while waiting. */
+    stallUpload: false,
   };
 
   const json = (status: number, body?: unknown) =>
@@ -307,5 +311,66 @@ export function installFakeApi() {
   });
 
   global.fetch = fetchMock as typeof fetch;
+
+  /**
+   * The bill uploads go through XMLHttpRequest, not fetch, because that is
+   * the only way to see the upload's own progress. This routes them through
+   * the same handler, and reports the progress a real upload would.
+   */
+  class FakeXhr {
+    status = 0;
+    responseText = '';
+    upload: { onprogress?: (event: ProgressEvent) => void; onload?: () => void } = {};
+    onload?: () => void;
+    onerror?: () => void;
+    onabort?: () => void;
+    private method = 'GET';
+    private url = '';
+    private headers: Record<string, string> = {};
+
+    open(method: string, url: string) {
+      this.method = method;
+      this.url = url;
+    }
+
+    setRequestHeader(name: string, value: string) {
+      this.headers[name] = value;
+    }
+
+    send(body: unknown) {
+      void (async () => {
+        // Halfway, then done: enough for a screen that shows a percentage.
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 } as ProgressEvent);
+
+        if (server.stallUpload) {
+          // The pages land and the reading never comes back, which is the
+          // minute a family spends on the waiting screen.
+          this.upload.onprogress?.({ lengthComputable: true, loaded: 100, total: 100 } as ProgressEvent);
+          this.upload.onload?.();
+          return;
+        }
+        if (server.failUpload) {
+          this.upload.onload?.();
+          this.status = 422;
+          this.responseText = JSON.stringify({ detail: { code: server.failUpload } });
+          this.onload?.();
+          return;
+        }
+
+        const response = await fetchMock(this.url, {
+          method: this.method,
+          headers: this.headers,
+          body: body as BodyInit,
+        });
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 100, total: 100 } as ProgressEvent);
+        this.upload.onload?.();
+        this.status = response.status;
+        this.responseText = await response.text();
+        this.onload?.();
+      })();
+    }
+  }
+
+  global.XMLHttpRequest = FakeXhr as unknown as typeof XMLHttpRequest;
   return server;
 }

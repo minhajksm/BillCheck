@@ -41,6 +41,9 @@ export default function ScanScreen() {
   // screen's starting state rather than set after it has drawn empty.
   const picker = usePagePicker(takeStagedPages);
   const [checking, setChecking] = useState(false);
+  // How much of the upload has gone. The waiting screen's first step is the
+  // one thing on it that is measured rather than estimated.
+  const [sent, setSent] = useState(0);
 
   if (state.status !== 'signedIn') return null;
   const token = state.token;
@@ -51,9 +54,12 @@ export default function ScanScreen() {
       toast(t('scan.needPage'));
       return;
     }
+    setSent(0);
     setChecking(true);
     try {
-      const bill = caseId ? await uploadBill(token, caseId, pages) : await checkFirstBill(token, pages);
+      const bill = caseId
+        ? await uploadBill(token, caseId, pages, undefined, setSent)
+        : await checkFirstBill(token, pages, undefined, setSent);
       router.replace({
         pathname: '/bills/[billId]',
         params: { billId: bill.id },
@@ -68,7 +74,7 @@ export default function ScanScreen() {
   if (checking) {
     return (
       <SafeAreaView style={[styles.fill, { backgroundColor: palette.app }]} edges={['top', 'left', 'right']}>
-        <ReadingBill />
+        <ReadingBill sent={sent} />
       </SafeAreaView>
     );
   }

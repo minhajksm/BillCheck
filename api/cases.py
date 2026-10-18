@@ -203,16 +203,19 @@ def update_case(case_id: uuid.UUID, body: CaseUpdate, db: Db, user: CurrentUser)
     whoever is at the hospital that day is best placed to fix, and a wrong bed
     number shouldn't wait for whoever started the case.
 
-    Changing the admission date moves what was derived from it, so the bills
-    are re-checked against the new stay. See stay.py for what that does and
-    does not touch.
+    Changing either end of the stay moves what was derived from it, so the
+    bills are re-checked against the new dates. See stay.py for what that does
+    and does not touch.
     """
     case = load_case(db, case_id, user)
     changes = body.model_dump(exclude_unset=True)
     if not changes:
         return case_out(db, case, user)
 
-    moved = "admitted_on" in changes and changes["admitted_on"] != case.admitted_on
+    # Either end of the stay moving changes which rows fall outside it.
+    moved = any(
+        field in changes and changes[field] != getattr(case, field) for field in ("admitted_on", "closed_on")
+    )
     for field, value in changes.items():
         setattr(case, field, value)
 

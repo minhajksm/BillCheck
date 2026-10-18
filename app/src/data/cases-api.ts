@@ -246,11 +246,15 @@ export async function setFlagStatus(token: string, flagId: string, status: Flag[
 /** One page of a bill, ready to upload. */
 export type ScannedPage = { uri: string; name: string; type: string };
 
+/** Told how much of the upload has gone, from 0 to 1. */
+export type OnProgress = (sent: number) => void;
+
 async function postPages(
   token: string,
   path: string,
   pages: ScannedPage[],
   billDate?: string,
+  onProgress?: OnProgress,
 ): Promise<Bill> {
   const form = new FormData();
   for (const page of pages) {
@@ -260,33 +264,49 @@ async function postPages(
       form.append('pages', blob, page.name);
     } else {
       // React Native's FormData takes the file descriptor itself.
-      form.append('pages', {
-        uri: page.uri,
-        name: page.name,
-        type: page.type,
-      } as unknown as Blob);
+      form.append('pages', { uri: page.uri, name: page.name, type: page.type } as unknown as Blob);
     }
   }
   if (billDate) form.append('bill_date', billDate);
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-  } catch {
-    throw new ApiError('network', 0);
-  }
+  // XHR rather than fetch, for one reason: `upload.onprogress`. Reading a bill
+  // takes most of a minute and the screen says which part it is on, so the one
+  // part that can be measured -- the pages going up -- is measured rather than
+  // guessed at. fetch reports nothing until the whole response is back.
+  return new Promise<Bill>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `${API_URL}${path}`);
+    request.setRequestHeader('Authorization', `Bearer ${token}`);
 
-  const data: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const detail = (data as { detail?: { code?: unknown } } | null)?.detail;
-    const code = typeof detail?.code === 'string' ? detail.code : 'unknown';
-    throw new ApiError(code as ApiErrorCode, response.status);
-  }
-  return toBill(data as ApiBill);
+    request.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable && event.total > 0) {
+        onProgress(Math.min(1, event.loaded / event.total));
+      }
+    };
+    // The last few bytes may not arrive as a progress event, and the reading
+    // starts the moment they land.
+    request.upload.onload = () => onProgress?.(1);
+
+    request.onload = () => {
+      let data: unknown = null;
+      try {
+        data = JSON.parse(request.responseText) as unknown;
+      } catch {
+        data = null;
+      }
+      if (request.status < 200 || request.status >= 300) {
+        const detail = (data as { detail?: { code?: unknown } } | null)?.detail;
+        const code = typeof detail?.code === 'string' ? detail.code : 'unknown';
+        reject(new ApiError(code as ApiErrorCode, request.status));
+        return;
+      }
+      resolve(toBill(data as ApiBill));
+    };
+    request.onerror = () => reject(new ApiError('network', 0));
+    request.onabort = () => reject(new ApiError('network', 0));
+
+    request.send(form);
+  });
 }
 
 /**
@@ -298,8 +318,9 @@ export async function uploadBill(
   caseId: string,
   pages: ScannedPage[],
   billDate?: string,
+  onProgress?: OnProgress,
 ): Promise<Bill> {
-  return postPages(token, `/cases/${caseId}/bills`, pages, billDate);
+  return postPages(token, `/cases/${caseId}/bills`, pages, billDate, onProgress);
 }
 
 /**
@@ -310,6 +331,11 @@ export async function uploadBill(
  * case comes back on `bill.caseId`, and the family can correct its details
  * whenever they like.
  */
-export async function checkFirstBill(token: string, pages: ScannedPage[], billDate?: string): Promise<Bill> {
-  return postPages(token, '/bills', pages, billDate);
+export async function checkFirstBill(
+  token: string,
+  pages: ScannedPage[],
+  billDate?: string,
+  onProgress?: OnProgress,
+): Promise<Bill> {
+  return postPages(token, '/bills', pages, billDate, onProgress);
 }

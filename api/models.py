@@ -130,6 +130,9 @@ class CaseUpdate(BaseModel):
     ) = None
     bed: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
     admitted_on: date | None = None
+    # Sent as null to reopen a stay. A bill with a discharge date on it closes
+    # the case, and a family who is still in hospital has to be able to say so.
+    closed_on: date | None = None
 
 
 class MemberOut(BaseModel):
