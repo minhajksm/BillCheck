@@ -27,6 +27,11 @@ import { usePalette } from '@/hooks/use-palette';
  *   after the read, and nothing reports it back, so it lights after a dwell
  *   drawn from what the reading usually costs. It is the one step on this
  *   screen that is a guess, and it never claims to have finished.
+ *
+ * The page count is the family's own: it is what they photographed. What it
+ * deliberately does not say is which page is being read. The pages go up in
+ * one request and the reader takes them together, so there is no second page
+ * to be on, and "page 2 of 3" would be a number made up to look busy.
  */
 
 /** How long the reading usually runs before the pricing starts, in ms. */
@@ -41,7 +46,16 @@ const STEPS = ['reading.step1', 'reading.step2', 'reading.step3'] as const;
 /** The widths of the lines on the drawn page, as percentages. */
 const RULES = [88, 54, 96, 72, 90, 46, 94, 80, 62, 92, 70];
 
-export function ReadingBill({ sent = 0, title }: { sent?: number; title?: string }) {
+export function ReadingBill({
+  sent = 0,
+  pages = 1,
+  title,
+}: {
+  sent?: number;
+  /** How many pages went up. Known from what the family photographed. */
+  pages?: number;
+  title?: string;
+}) {
   const { t } = useTranslation();
   const palette = usePalette();
   const { width, height } = useWindowDimensions();
@@ -113,9 +127,33 @@ export function ReadingBill({ sent = 0, title }: { sent?: number; title?: string
 
   const head = sweep.interpolate({ inputRange: [0, 1], outputRange: [0, tall] });
 
+  // "3 pages", declined in the family's own language.
+  const counted = t('reading.pages', { count: pages });
+  // Sheets drawn behind the top one, so a thick bill looks like one. Capped:
+  // past three the stack stops meaning anything and starts being clutter.
+  const behind = Math.min(Math.max(pages - 1, 0), 3);
+
   return (
     <View style={styles.wrap} accessibilityRole="progressbar" accessibilityLabel={t(STEPS[step])}>
       <View style={{ width: paper, height: tall }}>
+        {Array.from({ length: behind }, (_, index) => (
+          <View
+            key={index}
+            pointerEvents="none"
+            style={[
+              styles.sheet,
+              {
+                borderColor: palette.line,
+                backgroundColor: palette.card,
+                top: (index + 1) * 4,
+                left: (index + 1) * 4,
+                right: -(index + 1) * 4,
+                bottom: -(index + 1) * 4,
+                opacity: 1 - (index + 1) * 0.22,
+              },
+            ]}
+          />
+        ))}
         <View style={[styles.paper, { borderColor: palette.line, backgroundColor: palette.card }]}>
           {/* The bill itself, as rules of text, each lighting as the head
               passes it. Decoration, so hidden from the screen reader, which
@@ -194,11 +232,17 @@ export function ReadingBill({ sent = 0, title }: { sent?: number; title?: string
         {STEPS.map((key, index) => {
           const done = index < step;
           const now = index === step;
-          // The one figure on this screen that is known rather than guessed.
+          // Both figures here are known: the page count is what the family
+          // photographed, and the percentage is the upload's own. Neither
+          // says *which* page is being read -- the pages go up in one
+          // request and are read together, so "page 2 of 3" would be
+          // invented.
           const label =
             now && index === 0 && sent > 0
-              ? t('reading.step1Sending', { percent: Math.round(sent * 100) })
-              : t(key);
+              ? t('reading.step1Sending', { pages: counted, percent: Math.round(sent * 100) })
+              : index === 1 && pages > 1
+                ? t('reading.step2Pages', { pages: counted })
+                : t(key);
           return (
             <View key={key} style={styles.step}>
               <View
@@ -253,6 +297,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'center',
   },
+  sheet: { position: 'absolute', borderWidth: 1, borderRadius: Radius.card },
   head: { position: 'absolute', left: 0, right: 0, top: 0 },
   glow: { height: 26, marginTop: -26, opacity: 0.14 },
   edge: { height: 2, opacity: 0.95 },

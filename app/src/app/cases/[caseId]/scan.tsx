@@ -74,7 +74,7 @@ export default function ScanScreen() {
   if (checking) {
     return (
       <SafeAreaView style={[styles.fill, { backgroundColor: palette.app }]} edges={['top', 'left', 'right']}>
-        <ReadingBill sent={sent} />
+        <ReadingBill sent={sent} pages={pages.length} />
       </SafeAreaView>
     );
   }
