@@ -42,6 +42,30 @@ _LOCAL_HOSTS = frozenset({"", "localhost", "127.0.0.1", "::1"})
 _TRANSACTION_POOLER_PORT = 6543
 
 
+def effective_sslmode(database_url: str) -> str | None:
+    """The sslmode this connection will actually use, or None where we ask
+    for nothing and libpq's own default stands.
+
+    Worth being able to read back, because it is the whole proof that a
+    connection is encrypted: libpq refuses to connect at all under "require"
+    if the server will not do TLS, so a connection that exists under it is a
+    connection that is encrypted. Asking the server afterwards is the thing
+    that cannot be trusted -- through a pooler, `pg_stat_ssl` describes the
+    pooler's own link to Postgres rather than ours to the pooler.
+    """
+    url = make_url(database_url)
+    in_url = url.query.get("sslmode")
+    if in_url:
+        return str(in_url)
+    chosen = engine_options(database_url).get("connect_args", {})
+    mode = chosen.get("sslmode") if isinstance(chosen, dict) else None
+    return str(mode) if mode else None
+
+
+# The modes under which libpq will not fall back to clear text.
+ENCRYPTED_SSLMODES = frozenset({"require", "verify-ca", "verify-full"})
+
+
 def engine_options(database_url: str) -> dict[str, Any]:
     """How to connect, given where the database is.
 

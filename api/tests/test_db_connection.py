@@ -13,7 +13,7 @@ from urllib.parse import quote
 from sqlalchemy import make_url
 
 import tables
-from db import Base, engine_options
+from db import ENCRYPTED_SSLMODES, Base, effective_sslmode, engine_options
 
 LOCAL = "postgresql+psycopg://billcheck:billcheck@localhost:5432/billcheck"
 SESSION_POOLER = (
@@ -112,3 +112,32 @@ def test_a_password_is_read_whole_whatever_is_in_it():
     # Unescaped, these two are read as the URL's own punctuation.
     assert make_url("postgresql+psycopg://u:ab@cd@host:5432/db").password == "ab"
     assert make_url("postgresql+psycopg://u:ab%41cd@host:5432/db").password == "abAcd"
+
+
+def test_the_sslmode_a_connection_will_actually_use_can_be_read_back():
+    """How db_check.py knows a connection is encrypted. Under these modes
+    libpq refuses a server that will not do TLS, so a connection that exists
+    is an encrypted one -- which is the only trustworthy answer through a
+    pooler, where asking the server describes its own link to Postgres."""
+    assert effective_sslmode(SESSION_POOLER) == "require"
+    assert effective_sslmode(SESSION_POOLER) in ENCRYPTED_SSLMODES
+    assert effective_sslmode(TRANSACTION_POOLER) in ENCRYPTED_SSLMODES
+    assert effective_sslmode(DIRECT) in ENCRYPTED_SSLMODES
+
+
+def test_a_stricter_sslmode_in_the_url_is_what_gets_reported():
+    assert effective_sslmode(f"{DIRECT}?sslmode=verify-full") == "verify-full"
+    assert effective_sslmode(f"{DIRECT}?sslmode=verify-full") in ENCRYPTED_SSLMODES
+
+
+def test_nothing_is_required_of_a_database_on_this_machine():
+    """So db_check.py can say "fine on this machine" instead of crying wolf
+    about a Docker container that was never going to have a certificate."""
+    assert effective_sslmode(LOCAL) is None
+    assert effective_sslmode("sqlite://") is None
+
+
+def test_sslmode_disable_is_not_mistaken_for_encryption():
+    """Someone who turned it off should be told, not reassured."""
+    assert effective_sslmode(f"{SESSION_POOLER}?sslmode=disable") == "disable"
+    assert effective_sslmode(f"{SESSION_POOLER}?sslmode=disable") not in ENCRYPTED_SSLMODES
