@@ -135,6 +135,14 @@ The deployed service gets the same settings from Secret Manager rather than
 from `api/.env` — never from `--set-env-vars`, and never baked into the image.
 `.dockerignore` keeps `api/.env` out of the build.
 
+They live in the Google Cloud project, not on your machine and not in this
+repository: `gcloud secrets list`, or
+`console.cloud.google.com/security/secret-manager?project=<id>`. Your
+`api/.env` keeps its own copies for running locally, which is why the same
+`DATABASE_URL` is in both. Each secret is a container of versions, and the
+deploy below asks for `:latest`, so a new version needs a redeploy before the
+service sees it.
+
 Use the **same `DATABASE_URL` you just put in `api/.env`**, the one
 `db_check.py` approved.
 
