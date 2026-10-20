@@ -137,6 +137,12 @@ The deployed service gets the same settings from Secret Manager rather than
 from `api/.env` — never from `--set-env-vars`, and never baked into the image.
 `.dockerignore` keeps `api/.env` out of the build.
 
+These can also be created by hand in the console, which on Windows is the
+easier path — no quoting, and no shell appending a newline to a value that
+then fails hours later. See
+[deploying from GitHub](#or-deploy-from-github-with-no-local-commands-at-all),
+which does the whole of steps 2 and 3 without a shell.
+
 They live in the Google Cloud project, not on your machine and not in this
 repository: `gcloud secrets list`, or
 `console.cloud.google.com/security/secret-manager?project=<id>`. Your
@@ -266,25 +272,66 @@ start in production while OTP codes are printed instead of sent, and real SMS
 needs a DLT-approved MSG91 template, which takes weeks. See
 [Going to actual production](#going-to-actual-production).
 
-### Or let a push deploy it
+### Or deploy from GitHub, with no local commands at all
 
-Instead of running the command above each time, Cloud Run can watch the
-repository and build on every push. In the console: the service → **Edit &
-deploy new revision**, or on a new service the create flow → *Continuously
-deploy from a repository* → **Set up with Cloud Build** → GitHub → the repo
-and the branch → **Build type: Dockerfile**, location `/Dockerfile`.
+Cloud Run can watch the repository and build on every push, and the secrets
+and settings can be filled in from the console, so the only thing you run
+locally is `git push`. Same image, same Dockerfile — Cloud Run runs container
+images and nothing else, so something has to build one; this only moves the
+build off your machine and onto a push.
 
-That location is also the build context, and `/Dockerfile` gives it the
-repository root, which is what this image needs.
+**1. The three secrets, in the console.** *Security → Secret Manager →
+Create secret*, three times: `billcheck-database-url`,
+`billcheck-secret-key`, `billcheck-anthropic-key`. Paste each value into the
+*Secret value* box. This is worth preferring over the command line on
+Windows: there is no quoting to get wrong, and no shell appending a newline
+to a value that then fails hours later.
 
-Two things to know before switching it on:
+For `billcheck-secret-key`, paste 40-odd random characters. Any password
+generator will do; nothing reads it but the API.
 
-- **Deploy by hand once first.** A build that fails is far easier to read when
-  you started it, and the environment variables and secrets are set on the
-  service, not in the trigger — so do step 2 and one `gcloud run deploy`
-  anyway. Repository deploys inherit them from then on.
-- **Every push to that branch deploys.** Point it at a branch you merge into
-  deliberately, not one you work on.
+**2. Create the service.** *Cloud Run → Deploy container → Service*, then:
+
+| Field | Value |
+| --- | --- |
+| Source | **Continuously deploy from a repository** → *Set up with Cloud Build* |
+| Repository provider | GitHub, then authorise and pick this repository |
+| Branch | one you merge into deliberately — not a branch you are working on, since every push to it deploys |
+| Build type | **Dockerfile**, location `/Dockerfile` |
+| Region | `asia-southeast1`, or whichever matches your Supabase project |
+| Authentication | allow unauthenticated invocations — the API does its own sign-in, and Cloud Run's IAM would be a second, unrelated door |
+
+The Dockerfile's location is also the build context, and `/Dockerfile` makes
+that the repository root, which this image needs: it copies `data/samples` as
+well as `api/`.
+
+**3. Under *Containers → Settings*:** memory 1 GiB, request timeout **600**,
+maximum concurrent requests 20. Under *Revision autoscaling*, maximum
+instances 4. (Why those numbers: see the notes under the command above.)
+
+**4. Under *Containers → Variables & Secrets*:** four plain variables —
+`ENVIRONMENT=development`, `OCR_PROVIDER=claude`, `OTP_DELIVERY=console`,
+`REVIEW_KEEP_ALL=false` — then *Reference a secret* three times, each exposed
+**as an environment variable**:
+
+| Variable | Secret | Version |
+| --- | --- | --- |
+| `DATABASE_URL` | `billcheck-database-url` | latest |
+| `SECRET_KEY` | `billcheck-secret-key` | latest |
+| `ANTHROPIC_API_KEY` | `billcheck-anthropic-key` | latest |
+
+The console offers to grant the service account access to each secret as you
+add it. Accept, and step 2's IAM commands are unnecessary.
+
+**5. Create.** The first build takes a few minutes; the service page tracks
+it, and *Build history* has the log if it fails.
+
+Afterwards, a push to that branch builds and deploys on its own. The
+environment variables and secrets live on the service, not in the trigger, so
+they survive every later deploy and are only edited when you mean to.
+
+What this does **not** remove: the migration in step 1 still runs from your
+machine, because Cloud Run starts a web server and a migration is not one.
 
 ### If the build fails
 
@@ -426,10 +473,10 @@ as a network error — the right message, at least.
 
 | What changed | What to run |
 | --- | --- |
-| API code | `gcloud run deploy billcheck-api --source . --region asia-southeast1` from the repository root. The flags from step 3 stick to the service; you only repeat one you are changing. |
+| API code | Nothing, if the service deploys from GitHub: push the branch. Otherwise `gcloud run deploy billcheck-api --source . --region asia-southeast1` from the repository root. The flags from step 3 stick to the service; you only repeat one you are changing. |
 | `api/tables.py` | `cd api && uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`, from your machine, **before** deploying the code that needs the new column. A new table also needs row level security turned on by hand; `api/README.md` says how. |
 | A secret | `printf '%s' 'new value' \| gcloud secrets versions add billcheck-database-url --data-file=-`, then redeploy so the service picks up `:latest`. |
-| The price lists in `data/samples/` | Redeploy. They are baked into the image. |
+| The price lists in `data/samples/` | Redeploy, or push. They are baked into the image. |
 | App code | Nothing here — Expo builds and ships the app. |
 
 ## Going to actual production
