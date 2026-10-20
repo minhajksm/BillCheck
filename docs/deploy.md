@@ -36,6 +36,27 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com secretmanager.googleapis.com
 ```
 
+### On Windows PowerShell
+
+The commands on this page are written for a POSIX shell. `gcloud` itself is
+the same everywhere; the shell around it is not. Three differences, and they
+all bite silently:
+
+- **Line continuation is a backtick,** `` ` ``, not `\`. A `\` at the end of a
+  line in PowerShell does not continue it, so the rest of the command is lost
+  and gcloud runs with whatever it got. Safest is to put long commands on one
+  line.
+- **`printf` does not exist, and piping a string adds a newline.** A
+  `DATABASE_URL` secret with a trailing newline fails later with "database
+  \"postgres\n\" does not exist", which reads like a Supabase problem and
+  isn't. Write the value with `[IO.File]::WriteAllText`, which writes exactly
+  the string and no byte-order mark on both PowerShell 5 and 7 — unlike `>`
+  or `Set-Content -Encoding utf8`, which add one or the other.
+- **`$(...)` and `for x in` are different.** Assign with `$NUMBER = gcloud ...`
+  and loop with `foreach ($s in 'a','b') { ... }`.
+
+Every command below that needs a different form has it.
+
 ### Which region
 
 Use **`asia-southeast1`** (Singapore) for Cloud Run, and put the Supabase
@@ -125,6 +146,21 @@ python -c "import secrets; print(secrets.token_urlsafe(48), end='')" \
 printf '%s' 'sk-ant-...' | gcloud secrets create billcheck-anthropic-key --data-file=-
 ```
 
+In PowerShell, through a temp file so no newline is appended:
+
+```powershell
+function New-Secret($name, $value) {
+  $file = Join-Path $env:TEMP "$name.txt"
+  [IO.File]::WriteAllText($file, $value)
+  gcloud secrets create $name --data-file=$file
+  Remove-Item $file
+}
+
+New-Secret billcheck-database-url 'postgresql+psycopg://postgres.REF:PASSWORD@POOLER_HOST:5432/postgres'
+New-Secret billcheck-secret-key (uv run --directory api python -c "import secrets; print(secrets.token_urlsafe(48))")
+New-Secret billcheck-anthropic-key 'sk-ant-...'
+```
+
 Let the service read them:
 
 ```sh
@@ -135,6 +171,18 @@ for secret in billcheck-database-url billcheck-secret-key billcheck-anthropic-ke
     --role=roles/secretmanager.secretAccessor
 done
 ```
+
+```powershell
+$NUMBER = gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
+foreach ($secret in 'billcheck-database-url','billcheck-secret-key','billcheck-anthropic-key') {
+  gcloud secrets add-iam-policy-binding $secret --member="serviceAccount:$NUMBER-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+}
+```
+
+`$NUMBER-compute@developer.gserviceaccount.com` is the Compute Engine default
+service account, which is what Cloud Run runs as unless told otherwise. If
+the deploy later says it cannot find it, that account has been removed or
+disabled on this project, and the service needs one of its own.
 
 ## 3. Deploy to Cloud Run
 
@@ -153,6 +201,18 @@ gcloud run deploy billcheck-api \
   --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' \
   --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
 ```
+
+In PowerShell, all on one line, since a stray `\` would silently drop
+everything after it:
+
+```powershell
+gcloud run deploy billcheck-api --source . --region asia-southeast1 --allow-unauthenticated --memory 1Gi --timeout 600 --concurrency 20 --max-instances 4 --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
+```
+
+The first run asks to create an Artifact Registry repository to keep the image
+in; answer yes. It then uploads the build context and builds on Cloud Build,
+which takes a few minutes. Later deploys reuse the repository and the cached
+layers.
 
 `--allow-unauthenticated` is right here: the API does its own sign-in with
 phone and OTP, and Cloud Run's IAM would be a second, unrelated door.
@@ -177,6 +237,16 @@ Check it before putting a domain in front:
 URL=$(gcloud run services describe billcheck-api --region asia-southeast1 --format='value(status.url)')
 curl -s "$URL/health"     # {"status":"ok"}
 ```
+
+```powershell
+$URL = gcloud run services describe billcheck-api --region asia-southeast1 --format="value(status.url)"
+Invoke-RestMethod "$URL/health"     # status : ok
+```
+
+If it answers anything else, the logs say why —
+`gcloud run services logs read billcheck-api --region asia-southeast1 --limit 50`.
+A container that starts and immediately exits is almost always `settings.py`
+refusing the configuration it was given, and it says which setting.
 
 That `*.run.app` URL already works over HTTPS with no cap but Cloud Run's own.
 Everything below is to put a name you own in front of it.
