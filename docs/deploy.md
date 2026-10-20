@@ -97,8 +97,10 @@ where the API itself runs.
 3. **Put it in `api/.env`**, as `DATABASE_URL`, with two edits:
    - change the scheme from `postgresql://` to **`postgresql+psycopg://`**,
      which names the driver we use;
-   - percent-encode the password if it contains `@ : / ? #` or `%`. Resetting
-     it to something alphanumeric in *Database → Settings* is easier.
+   - escape the password if it contains `@` or `%`, as `%40` and `%25`. Those
+     are the only two that break it: `?`, `#`, `/` and `:` are read
+     literally, whatever a URL does elsewhere. Resetting the password to
+     something alphanumeric in *Database → Settings* avoids the question.
 
    ```sh
    cd api && cp .env.example .env     # if you haven't already
