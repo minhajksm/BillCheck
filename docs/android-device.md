@@ -74,12 +74,25 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 startup. Then check both:
 
 ```powershell
-adb version        # Android Debug Bridge version 1.0.41 or similar
-java -version      # 17.x, from the Android Studio path above
+adb version                                   # 1.0.41 or similar
+Test-Path "$env:JAVA_HOME\bin\java.exe"       # True
+& "$env:JAVA_HOME\bin\java.exe" -version      # 17.x
 ```
 
-If `adb` is still not recognised, `$sdk\platform-tools\adb.exe` does not
-exist, which means step 2's Platform-Tools did not install.
+Note that `java -version` on its own will *not* work, and does not need to:
+only `JAVA_HOME` is set above, not the JDK's `bin` directory on `Path`, and
+Gradle reads `JAVA_HOME`. Adding it to `Path` as well is a matter of taste.
+
+If `adb` is not recognised, `$sdk\platform-tools\adb.exe` does not exist,
+which means step 2's Platform-Tools did not install. If `Test-Path` says
+`False`, Android Studio went somewhere else; find its JDK with
+
+```powershell
+Get-ChildItem "C:\Program Files\Android" -Recurse -Depth 3 -Filter java.exe -ErrorAction SilentlyContinue |
+  Select-Object -First 5 FullName
+```
+
+and set `JAVA_HOME` to the directory that contains that `bin`.
 
 ## 4. The phone
 
@@ -126,7 +139,7 @@ app connects back to Metro and JavaScript changes reload on the phone.
 | --- | --- |
 | `Failed to resolve the Android SDK path` | `ANDROID_HOME` not set, or set in a window opened before step 3. Open a new terminal. |
 | `'adb' is not recognized` | `platform-tools` not on `Path`, same cause. |
-| `Unsupported class file major version` or a Gradle JDK complaint | `JAVA_HOME` points at the wrong Java. Point it at Android Studio's `jbr`. |
+| `Unsupported class file major version` or a Gradle JDK complaint | `JAVA_HOME` points at the wrong Java. Point it at Android Studio's `jbr`. `java -version` failing is not this, and not a problem: `java` is not on `Path` and Gradle does not use it. |
 | `An Application Control policy has blocked this file` | Windows Smart App Control, the same thing that blocked `uv` earlier. It has to be turned off in *Windows Security → App & browser control*, and that needs a reinstall of Windows to turn back on — so weigh it. |
 | `INSTALL_FAILED_USER_RESTRICTED` | The phone refused the install: enable *Install via USB* in Developer options. |
 | App installs, then "couldn't connect" | `EXPO_PUBLIC_API_URL` was not set when it was built. Rebuild with it. |
