@@ -25,9 +25,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from alembic.config import Config  # noqa: E402
 from alembic.script import ScriptDirectory  # noqa: E402
 from sqlalchemy import Connection, create_engine, func, inspect, make_url, select, text  # noqa: E402
+from sqlalchemy.engine import URL  # noqa: E402
 
 import tables  # noqa: E402, F401  (registers the tables on Base.metadata)
-from db import Base, engine_options  # noqa: E402
+from db import ENCRYPTED_SSLMODES, Base, effective_sslmode, engine_options  # noqa: E402
 from settings import get_settings  # noqa: E402
 
 HERE = Path(__file__).resolve().parent.parent
@@ -40,21 +41,58 @@ def head_revision() -> str:
     return ScriptDirectory.from_config(Config(str(HERE / "alembic.ini"))).get_current_head() or ""
 
 
-def report(connection: Connection) -> int:
+def report_tls(connection: Connection, url: URL) -> int:
+    """Says whether this connection is encrypted, and how we know.
+
+    Two sources, and the order matters. Under sslmode=require and stricter,
+    libpq will not connect to a server that refuses TLS at all, so a
+    connection that exists is encrypted -- no question to ask. Only where we
+    asked for nothing is the server worth consulting, and even then its answer
+    is about its own end: through Supabase's pooler, `pg_stat_ssl` reports the
+    pooler's link to Postgres, which is inside their network and not ours.
+    Reading that as our connection says "NOT encrypted" about a connection
+    that could not have been made in clear text.
+    """
+    mode = effective_sslmode(str(url))
+    encrypted, cipher = connection.execute(
+        text("SELECT ssl, COALESCE(cipher, '') FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+    ).one()
+
+    if mode in ENCRYPTED_SSLMODES:
+        print(f"{OK}  connection encrypted (sslmode={mode}, which libpq will not downgrade)")
+        if not encrypted:
+            print("      The server reports none on its side, which is what a pooler looks")
+            print("      like: that is its own connection to Postgres, not ours to it.")
+        return 0
+
+    if encrypted:
+        print(f"{OK}  connection encrypted ({cipher})")
+        return 0
+
+    # Nothing asked for and nothing in use. Fine on this machine, where
+    # `engine_options` deliberately requires no TLS; not fine anywhere else.
+    if mode is None and not host_is_remote(url):
+        print(f"{OK}  not encrypted, which is fine for a database on this machine")
+        return 0
+
+    print(f"{BAD}  connection is NOT encrypted. These rows are health data under DPDP.")
+    print("      Set sslmode=require in DATABASE_URL, or point it at a host that offers TLS.")
+    return 1
+
+
+def host_is_remote(url: URL) -> bool:
+    """Whether this database is somewhere other than this machine."""
+    return effective_sslmode(str(url.set(query={}))) is not None
+
+
+def report(connection: Connection, url: URL) -> int:
     """Prints what is and isn't in order. Returns the number of problems."""
     problems = 0
 
     version, user = connection.execute(text("SELECT current_setting('server_version'), current_user")).one()
     print(f"{OK}  reached Postgres {version} as {user}")
 
-    encrypted, cipher = connection.execute(
-        text("SELECT ssl, COALESCE(cipher, '') FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
-    ).one()
-    if encrypted:
-        print(f"{OK}  connection encrypted ({cipher})")
-    else:
-        print(f"{BAD}  connection is NOT encrypted. These rows are health data under DPDP.")
-        problems += 1
+    problems += report_tls(connection, url)
 
     # What the database thinks it is, against what this checkout expects. A
     # database behind the code is the usual reason a request dies on a column
@@ -104,7 +142,7 @@ def main() -> int:
     engine = create_engine(url, **engine_options(str(url)))
     try:
         with engine.connect() as connection:
-            problems = report(connection)
+            problems = report(connection, url)
     except Exception as error:  # any failure to use it is the answer
         print(f"{BAD}  could not use the database: {type(error).__name__}: {error}")
         print("      Check the host, port and password, and that your network allows the connection.")

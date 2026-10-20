@@ -41,6 +41,13 @@ for it.
    as, whether the connection is encrypted, which migration the database is
    at, and whether row level security is on. It writes nothing.
 
+   Through the pooler it reports encryption as `sslmode=require, which libpq
+   will not downgrade`, and may add that the server reports none on its side.
+   That is the expected answer, not a warning: `pg_stat_ssl` describes the
+   pooler's own connection to Postgres, inside Supabase's network, while ours
+   is the one to the pooler — and under `require` libpq would have refused to
+   open it at all in clear text.
+
 ## Run
 
 ```sh
