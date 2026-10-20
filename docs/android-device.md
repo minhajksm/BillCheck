@@ -33,7 +33,22 @@ At Expo 57 and React Native 0.86 this project compiles against **API 36**
 - *SDK Platforms* tab → tick **Android 16.0 ("Baklava", API 36)**.
 - *SDK Tools* tab → tick **Android SDK Build-Tools**, **Android SDK
   Platform-Tools** and **Android SDK Command-line Tools**.
-- Apply, and let it download.
+- Still in *SDK Tools*, tick **Show Package Details** and add **NDK (Side by
+  side)** and **CMake**. Several dependencies here — `react-native-screens`
+  and `react-native-worklets` among them — compile C++, and without these the
+  build gets a long way in and then fails on
+  `Task :react-native-screens:configureCMakeDebug[arm64-v8a] FAILED`.
+- Apply, and let it download. The NDK alone is a couple of gigabytes.
+
+Which NDK and CMake version: the ones this project asks for.
+
+```powershell
+Select-String -Path app\android\build.gradle -Pattern "ndkVersion"
+```
+
+If a build has already failed, its `FAILURE:` block names them outright —
+"No version of NDK matched the requested version ..." or "CMake '3.22.1' was
+not found in SDK, PATH, or by cmake.dir property".
 
 That number is tied to the Expo and React Native versions in
 `package.json`, so it moves on an upgrade. Nothing in `android/build.gradle`
@@ -144,6 +159,7 @@ app connects back to Metro and JavaScript changes reload on the phone.
 | `INSTALL_FAILED_USER_RESTRICTED` | The phone refused the install: enable *Install via USB* in Developer options. |
 | App installs, then "couldn't connect" | `EXPO_PUBLIC_API_URL` was not set when it was built. Rebuild with it. |
 | `Could not determine java version` / Gradle stalls at 0% | A proxy or antivirus intercepting Gradle's downloads. |
+| `:<module>:configureCMakeDebug[arm64-v8a] FAILED` | The NDK or CMake is missing. Step 2. The failure names the version it wanted. |
 
 `npx expo run:android --device` with more than one device attached asks which
 one. `adb devices` first saves the guesswork.
