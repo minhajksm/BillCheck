@@ -26,27 +26,31 @@ needs: the SDK, the build tools, and `adb`.
 
 ## 2. Install the SDK pieces this project needs
 
-**Read what to install rather than guessing it.** `npx expo prebuild` has
-already generated `app/android/`, and that folder states the versions:
+At Expo 57 and React Native 0.86 this project compiles against **API 36**
+(Android 16) — the default `expo-modules-core` supplies. In Android Studio:
+**More Actions → SDK Manager**.
+
+- *SDK Platforms* tab → tick **Android 16.0 ("Baklava", API 36)**.
+- *SDK Tools* tab → tick **Android SDK Build-Tools**, **Android SDK
+  Platform-Tools** and **Android SDK Command-line Tools**.
+- Apply, and let it download.
+
+That number is tied to the Expo and React Native versions in
+`package.json`, so it moves on an upgrade. Nothing in `android/build.gradle`
+spells it out — the template leaves it to the Expo plugin's default — so to
+check it after an upgrade, search the generated folder rather than one file:
 
 ```powershell
-Select-String -Path app\android\build.gradle -Pattern "SdkVersion|buildToolsVersion"
+Get-ChildItem app\android -Recurse -Include *.gradle,*.properties -File |
+  Select-String -Pattern "(?i)compilesdk|targetsdk|minsdk|buildtools"
 ```
 
-It prints something like `compileSdkVersion = 36`, `targetSdkVersion = 36`,
-`minSdkVersion = 24`, `buildToolsVersion = "36.0.0"`. Those numbers come from
-the Expo and React Native versions in `package.json` and change when they do,
-which is why this is worth reading rather than copying from a guide.
+If that also comes back empty, the defaults are in force and the answer is
+whatever `node_modules\expo-modules-core\android\ExpoModulesCorePlugin.gradle`
+has on its `safeExtGet("compileSdkVersion", ...)` line.
 
-Then in Android Studio: **More Actions → SDK Manager**.
-
-- *SDK Platforms* tab → tick the Android version matching `compileSdkVersion`
-  (API 36 is Android 16). Tick **Show Package Details** and make sure
-  *Android SDK Platform* is selected.
-- *SDK Tools* tab → tick **Android SDK Build-Tools** (the version
-  `buildToolsVersion` names), **Android SDK Platform-Tools**, and **Android
-  SDK Command-line Tools**.
-- Apply, and let it download.
+Getting it wrong is not expensive, either way: Gradle fails naming the exact
+platform it wanted, and Android Studio offers to install it.
 
 ## 3. Two environment variables
 
