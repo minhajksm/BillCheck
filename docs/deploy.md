@@ -478,9 +478,18 @@ cd app
 EXPO_PUBLIC_API_URL=https://api.your-domain.example npx expo run:android
 ```
 
-For Expo web, the API has to allow the browser origin as well — redeploy with
-`CORS_ORIGINS=["https://your-web-origin"]` in `--set-env-vars`. The Android
-app doesn't need it.
+For Expo web, the API has to allow the browser origin as well. The default is
+`["http://localhost:8081"]`, which is where Expo's web dev server runs — so
+running the app locally against the deployed API works without changing
+anything, **until port 8081 is busy**. Expo then takes 8082, the origin no
+longer matches, and the browser refuses the request before it is sent: a CORS
+error in the console and a plain network error in the app, neither of which
+mentions the port.
+
+The fix is to free 8081, or to add the other origin. `CORS_ORIGINS` holds a
+JSON list, and gcloud splits `--update-env-vars` on commas, so the console's
+*Variables & Secrets* tab is the easier place to set it. The Android app needs
+none of this: CORS is a browser rule.
 
 ### How long the app itself will wait
 
@@ -599,7 +608,7 @@ Two things to know when it is:
 | `app/src/i18n/locales/*.json`, `app/src/data/flag-copy.ts` — the words a family reads | Ship the app | The API sends numbers and a reference, never a sentence. |
 | The Supabase password, or the Anthropic key | New secret **version**, then deploy the API | The service reads `:latest` at startup, so a new version does nothing until it restarts. |
 | `SECRET_KEY` | New version, then deploy | It signs the OTP code hashes only. Rotating it invalidates codes already sent — a five-minute window — and leaves signed-in sessions alone, since those are plain hashes of the token. |
-| `CORS_ORIGINS`, `BILL_UPLOADS_PER_DAY`, `OCR_MODEL`, `OCR_EFFORT` | `gcloud run services update --set-env-vars ...` | Settings, not code. No rebuild. |
+| `CORS_ORIGINS`, `BILL_UPLOADS_PER_DAY`, `OCR_MODEL`, `OCR_EFFORT` | `gcloud run services update --update-env-vars ...` | Settings, not code. No rebuild. **`--update-env-vars`, not `--set-env-vars`:** the latter replaces the whole set, so it would drop `ENVIRONMENT` and the rest and the service would come back up configured as production. A value containing commas, which `CORS_ORIGINS` does, is easier set in the console than escaped for gcloud. |
 | Going to real SMS | `OTP_DELIVERY=msg91` plus the MSG91 secrets, then deploy | Needs the DLT template first. See below. |
 | The custom domain | Once, per step 4 | Nothing to repeat. |
 | Supabase itself | Nothing | Managed. A free project does pause after a week idle and needs restoring from the dashboard. |
