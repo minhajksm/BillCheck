@@ -8,6 +8,9 @@ a hosted one.
 
 import importlib
 from pathlib import Path
+from urllib.parse import quote
+
+from sqlalchemy import make_url
 
 import tables
 from db import Base, engine_options
@@ -92,3 +95,20 @@ def test_every_table_has_row_level_security_enabled():
     missing = set(Base.metadata.tables) - locked_down_tables()
 
     assert not missing, f"no migration enables row level security on {sorted(missing)}"
+
+
+def test_a_password_is_read_whole_whatever_is_in_it():
+    """Which characters in a Supabase password have to be escaped, and which
+    do not. Only @ and % break the URL -- @ because the host starts after the
+    last one, % because it begins an escape -- and the docs say so because
+    this test says so. Everything else is read as itself, so telling someone
+    to escape it would corrupt a working password."""
+    for password in ("gAYr?w-tuc6XD84", "ab#cd", "ab/cd", "ab:cd", "p@ss%21"):
+        url = make_url(f"postgresql+psycopg://postgres.ref:{quote(password, safe='')}@host:5432/postgres")
+        assert url.password == password, password
+        assert url.host == "host"
+        assert url.database == "postgres"
+
+    # Unescaped, these two are read as the URL's own punctuation.
+    assert make_url("postgresql+psycopg://u:ab@cd@host:5432/db").password == "ab"
+    assert make_url("postgresql+psycopg://u:ab%41cd@host:5432/db").password == "abAcd"
