@@ -151,11 +151,15 @@ printf '%s' 'sk-ant-...' | gcloud secrets create billcheck-anthropic-key --data-
 ```
 
 *PowerShell — the same three secrets, through a temp file so that nothing
-appends a newline to them. Run this instead of the block above, from the
-repository root:*
+appends a newline to them. Run this instead of the block above; it does not
+matter which directory you are in:*
 
 ```powershell
 function New-Secret($name, $value) {
+  # A secret made from the output of a command that failed is the one error
+  # worth refusing: gcloud takes an empty payload without complaint, and an
+  # empty SECRET_KEY is what signs the OTP hashes.
+  if ([string]::IsNullOrWhiteSpace($value)) { throw "$name would be empty. Nothing created." }
   $file = Join-Path $env:TEMP "$name.txt"
   [IO.File]::WriteAllText($file, $value)
   gcloud secrets create $name --data-file=$file
@@ -163,9 +167,27 @@ function New-Secret($name, $value) {
 }
 
 New-Secret billcheck-database-url 'postgresql+psycopg://postgres.REF:PASSWORD@POOLER_HOST:5432/postgres'
-New-Secret billcheck-secret-key (uv run --directory api python -c "import secrets; print(secrets.token_urlsafe(48))")
 New-Secret billcheck-anthropic-key 'sk-ant-...'
+
+# 48 random bytes, base64, which is 64 characters. PowerShell's own generator
+# rather than Python's, so this works from any directory and needs no uv.
+$bytes = New-Object byte[] 48
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+New-Secret billcheck-secret-key ([Convert]::ToBase64String($bytes))
 ```
+
+Check each one arrived whole — this prints the length, not the value:
+
+```powershell
+foreach ($secret in 'billcheck-database-url','billcheck-secret-key','billcheck-anthropic-key') {
+  "$secret : " + (gcloud secrets versions access latest --secret=$secret).Length
+}
+```
+
+`billcheck-secret-key` should read 64. A secret that reads 0, or errors, was
+created empty; give it a real value with `gcloud secrets versions add <name>
+--data-file=<file>` rather than deleting and starting again, since the
+service always reads `:latest`.
 
 Let the service read them. *bash:*
 
