@@ -27,8 +27,11 @@ needs: the SDK, the build tools, and `adb`.
 ## 2. Install the SDK pieces this project needs
 
 At Expo 57 and React Native 0.86 this project compiles against **API 36**
-(Android 16) — the default `expo-modules-core` supplies. In Android Studio:
-**More Actions → SDK Manager**.
+(Android 16) — the default `expo-modules-core` supplies.
+
+Open **SDK Manager**: from the welcome screen it is under **More Actions**;
+with a project open it is **Tools → SDK Manager**. Both are the same panel as
+*Settings → Languages & Frameworks → Android SDK*.
 
 - *SDK Platforms* tab → tick **Android 16.0 ("Baklava", API 36)**.
 - *SDK Tools* tab → tick **Android SDK Build-Tools**, **Android SDK
@@ -49,6 +52,15 @@ Select-String -Path app\android\build.gradle -Pattern "ndkVersion"
 If a build has already failed, its `FAILURE:` block names them outright —
 "No version of NDK matched the requested version ..." or "CMake '3.22.1' was
 not found in SDK, PATH, or by cmake.dir property".
+
+All of this works from the command line too, which is quicker than hunting
+through checkboxes and shows you every version on offer:
+
+```powershell
+$sdkmanager = "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat"
+& $sdkmanager --list | Select-String "ndk;|cmake;|platforms;android-36"
+& $sdkmanager "platforms;android-36" "ndk;27.1.12297006" "cmake;3.22.1"
+```
 
 That number is tied to the Expo and React Native versions in
 `package.json`, so it moves on an upgrade. Nothing in `android/build.gradle`
