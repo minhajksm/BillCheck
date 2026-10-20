@@ -346,19 +346,40 @@ they survive every later deploy and are only edited when you mean to.
 What this does **not** remove: the migration in step 1 still runs from your
 machine, because Cloud Run starts a web server and a migration is not one.
 
-### If the build fails
+### If the build or the deploy fails
 
-The log names the step. The one worth recognising:
+Two failures are worth recognising on sight, because neither is a problem with
+the code.
+
+**`manifest unknown`, on the Dockerfile's first line.** That image tag does
+not exist, and nothing was built:
 
 ```
 Step 1/N : FROM ghcr.io/astral-sh/uv:...
 manifest unknown
 ```
 
-means that image tag does not exist — nothing was built, and nothing is wrong
-with the code. uv's versioned Python images moved to Debian 13 (trixie) at
-uv 0.9, so a `bookworm` tag for a current uv is not there to be pulled. The
-Dockerfile has the command for listing what does exist.
+uv's versioned Python images moved to Debian 13 (trixie) at uv 0.9, so a
+`bookworm` tag for a current uv is not there to be pulled. The Dockerfile has
+the command for listing what does exist.
+
+**`Permission denied on secret: ... for Revision service account`.** The image
+built and the service was created; the revision could not start because the
+account Cloud Run runs as may not read the secrets. This is the IAM grant from
+[step 2](#2-secrets), skipped or not yet applied — the console grants it for
+you as you add each secret reference, `gcloud` does not.
+
+The message names only the first secret it tried. All three need it:
+
+```powershell
+$NUMBER = gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
+foreach ($secret in 'billcheck-database-url','billcheck-secret-key','billcheck-anthropic-key') {
+  gcloud secrets add-iam-policy-binding $secret --member="serviceAccount:$NUMBER-compute@developer.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+}
+```
+
+Then deploy again; nothing rebuilds, since the image is already there. Check
+it took with `gcloud secrets get-iam-policy billcheck-database-url`.
 
 `--max-instances 4` with `--concurrency 20` caps what this can do to the
 database: four instances, each with SQLAlchemy's pool of 5 plus 10 overflow,
