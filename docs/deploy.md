@@ -469,15 +469,116 @@ defaults to 60 seconds per request, so a long bill will need
 it stands a platform timeout would arrive as `onerror`, which the app shows
 as a network error — the right message, at least.
 
-## When you change something
+## Shipping a change
 
-| What changed | What to run |
-| --- | --- |
-| API code | Nothing, if the service deploys from GitHub: push the branch. Otherwise `gcloud run deploy billcheck-api --source . --region asia-southeast1` from the repository root. The flags from step 3 stick to the service; you only repeat one you are changing. |
-| `api/tables.py` | `cd api && uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`, from your machine, **before** deploying the code that needs the new column. A new table also needs row level security turned on by hand; `api/README.md` says how. |
-| A secret | `printf '%s' 'new value' \| gcloud secrets versions add billcheck-database-url --data-file=-`, then redeploy so the service picks up `:latest`. |
-| The price lists in `data/samples/` | Redeploy, or push. They are baked into the image. |
-| App code | Nothing here — Expo builds and ships the app. |
+Four things ship separately, and only two of them are "deploys". The order
+below is the order to do them in when a change touches more than one.
+
+### 1. The database
+
+Schema lives in `api/tables.py`; the history of changes to it lives in
+`api/migrations/versions/`. Cloud Run never touches either — its only command
+is `uvicorn`, and a web server has no business altering a schema. Four
+instances booting at once would each try.
+
+So this always runs from your machine, and always **before** the API code
+that needs it:
+
+```sh
+cd api
+uv run alembic revision --autogenerate -m "what changed"
+# read the generated file. Autogenerate guesses, and a rename reads to it as
+# a drop and an add, which would take the column's data with it.
+uv run alembic upgrade head
+uv run python scripts/db_check.py
+```
+
+A **new table** needs two more things in that generated migration, or it is
+served to anyone holding the project's publishable key:
+
+```python
+op.execute('ALTER TABLE "your_table" ENABLE ROW LEVEL SECURITY')
+```
+
+and its name added to a `TABLES` tuple in the same file.
+`tests/test_db_connection.py` fails until both are done, which is the point.
+
+**Deploy first, migrate first — but not both.** A migration that only adds
+things (a nullable column, a new table) is safe to apply before the code
+ships, and that is the order to prefer: the old code ignores what it doesn't
+know about. A migration that removes or renames something is not, because the
+running API still expects it; add the new shape, ship the code, then remove
+the old shape in a second migration.
+
+**Rolling back:** `uv run alembic downgrade -1`. Check the migration's
+`downgrade()` first — it is generated too, and a dropped column's data is
+gone either way.
+
+### 2. The FastAPI service
+
+```sh
+# From the repository root. Or, with the GitHub trigger set up, just push.
+gcloud run deploy billcheck-api --source . --region asia-southeast1
+```
+
+The flags from step 3 stick to the service; repeat only one you are changing.
+Settings alone, without a rebuild, are `gcloud run services update
+billcheck-api --region ... --timeout 900` or the console's *Edit & deploy new
+revision*.
+
+**Rolling back** is the one genuinely easy rollback here. Every deploy makes a
+revision, and the old one is still there: *Cloud Run → the service →
+Revisions → Manage traffic*, and send 100% back. Nothing rebuilds, and it
+takes seconds. It does not roll back the database.
+
+**Watching it:**
+
+```sh
+gcloud run services logs read billcheck-api --region asia-southeast1 --limit 50
+```
+
+A container that starts and exits immediately is nearly always `settings.py`
+refusing its configuration, and it names the setting.
+
+### 3. The app
+
+Not deployed by any of the above, and **not currently set up to ship at all**:
+there is no `eas.json`, and `app.json` has no `updates` block. Today the only
+way to run it is a development build on a machine with the Android toolchain:
+
+```sh
+cd app
+EXPO_PUBLIC_API_URL=https://... npx expo run:android
+```
+
+To put it on someone else's phone, Expo Application Services has to be
+configured first — roughly `npm i -g eas-cli`, `eas login`, `eas build:configure`,
+then `eas build -p android --profile preview` for a shareable build or
+`--profile production` for a Play Store AAB. That is a piece of work in its
+own right and has not been started.
+
+Two things to know when it is:
+
+- **`EXPO_PUBLIC_API_URL` is baked into the bundle at build time.** Pointing
+  the app at a different API means a new build, or an over-the-air update once
+  `expo-updates` is configured.
+- **An over-the-air update only carries JavaScript.** Changed copy in
+  `app/src/i18n/locales/`, a changed screen, a changed flag sentence: all
+  shippable that way. A new native dependency is not.
+
+### 4. The things that are neither
+
+| What changed | What to do | Notes |
+| --- | --- | --- |
+| `data/samples/reference-prices.json` — including replacing the illustrative lists with the real NPPA and CGHS rates | Deploy the API | Baked into the image. No migration, no app build. |
+| `api/analysis_prompt.py`, `api/audit.py`, `api/review.py` — what gets flagged and why | Deploy the API | Flags are computed server-side; the app only renders them. |
+| `app/src/i18n/locales/*.json`, `app/src/data/flag-copy.ts` — the words a family reads | Ship the app | The API sends numbers and a reference, never a sentence. |
+| The Supabase password, or the Anthropic key | New secret **version**, then deploy the API | The service reads `:latest` at startup, so a new version does nothing until it restarts. |
+| `SECRET_KEY` | New version, then deploy | It signs the OTP code hashes only. Rotating it invalidates codes already sent — a five-minute window — and leaves signed-in sessions alone, since those are plain hashes of the token. |
+| `CORS_ORIGINS`, `BILL_UPLOADS_PER_DAY`, `OCR_MODEL`, `OCR_EFFORT` | `gcloud run services update --set-env-vars ...` | Settings, not code. No rebuild. |
+| Going to real SMS | `OTP_DELIVERY=msg91` plus the MSG91 secrets, then deploy | Needs the DLT template first. See below. |
+| The custom domain | Once, per step 4 | Nothing to repeat. |
+| Supabase itself | Nothing | Managed. A free project does pause after a week idle and needs restoring from the dashboard. |
 
 ## Going to actual production
 
@@ -491,8 +592,11 @@ these hold, and each one is deliberate:
 | `OCR_PROVIDER` | `claude` | nothing |
 | `REVIEW_KEEP_ALL` | `false` | nothing |
 
-Three more things to settle before real families use this:
+Four more things to settle before real families use this:
 
+- **The app has no way to reach a phone.** No `eas.json`, no `expo-updates`:
+  today it runs only as a development build on a machine with the Android
+  toolchain. Everything else here is moot until that is set up.
 - **Move to the load balancer** (B above), which is the supported path and the
   only one that can refuse TLS 1.0 and 1.1.
 - **The price lists are illustrative.** `data/samples/reference-prices.json`
