@@ -577,7 +577,8 @@ refusing its configuration, and it names the setting.
 
 Not deployed by any of the above, and **not currently set up to ship at all**:
 there is no `eas.json`, and `app.json` has no `updates` block. Today the only
-way to run it is a development build on a machine with the Android toolchain:
+way to run it is a development build on a machine with the Android toolchain
+([how to set that up](android-device.md)):
 
 ```sh
 cd app

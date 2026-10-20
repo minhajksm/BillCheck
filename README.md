@@ -20,6 +20,7 @@ a connection string in `api/.env`.
 cd api && uv run uvicorn main:app --reload
 
 # App, in a second terminal (development build; Expo Go doesn't support SDK 57)
+# On a phone or emulator for the first time: docs/android-device.md
 cd app && npm install && npx expo run:android
 # ...or in a browser
 cd app && npx expo start --web
