@@ -55,7 +55,9 @@ all bite silently:
 - **`$(...)` and `for x in` are different.** Assign with `$NUMBER = gcloud ...`
   and loop with `foreach ($s in 'a','b') { ... }`.
 
-Every command below that needs a different form has it.
+**Where a command appears twice below — once as `sh`, once as `powershell` —
+those are the same command in two shells. Run one of them, not both.** Each
+pair is labelled.
 
 ### Which region
 
@@ -134,7 +136,9 @@ from `api/.env` — never from `--set-env-vars`, and never baked into the image.
 `.dockerignore` keeps `api/.env` out of the build.
 
 Use the **same `DATABASE_URL` you just put in `api/.env`**, the one
-`db_check.py` approved:
+`db_check.py` approved.
+
+*bash — macOS, Linux, WSL, Git Bash:*
 
 ```sh
 printf '%s' 'postgresql+psycopg://postgres.REF:PASSWORD@POOLER_HOST:5432/postgres' \
@@ -146,7 +150,9 @@ python -c "import secrets; print(secrets.token_urlsafe(48), end='')" \
 printf '%s' 'sk-ant-...' | gcloud secrets create billcheck-anthropic-key --data-file=-
 ```
 
-In PowerShell, through a temp file so no newline is appended:
+*PowerShell — the same three secrets, through a temp file so that nothing
+appends a newline to them. Run this instead of the block above, from the
+repository root:*
 
 ```powershell
 function New-Secret($name, $value) {
@@ -161,7 +167,7 @@ New-Secret billcheck-secret-key (uv run --directory api python -c "import secret
 New-Secret billcheck-anthropic-key 'sk-ant-...'
 ```
 
-Let the service read them:
+Let the service read them. *bash:*
 
 ```sh
 NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)')
@@ -171,6 +177,8 @@ for secret in billcheck-database-url billcheck-secret-key billcheck-anthropic-ke
     --role=roles/secretmanager.secretAccessor
 done
 ```
+
+*PowerShell, instead of the above:*
 
 ```powershell
 $NUMBER = gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
@@ -187,7 +195,7 @@ disabled on this project, and the service needs one of its own.
 ## 3. Deploy to Cloud Run
 
 From the repository root, because the image needs `data/samples` as well as
-`api/`:
+`api/`. *bash:*
 
 ```sh
 gcloud run deploy billcheck-api \
@@ -202,8 +210,8 @@ gcloud run deploy billcheck-api \
   --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
 ```
 
-In PowerShell, all on one line, since a stray `\` would silently drop
-everything after it:
+*PowerShell — the same deploy, instead of the above, all on one line, since
+a stray `\` would silently drop everything after it:*
 
 ```powershell
 gcloud run deploy billcheck-api --source . --region asia-southeast1 --allow-unauthenticated --memory 1Gi --timeout 600 --concurrency 20 --max-instances 4 --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
@@ -231,12 +239,14 @@ database: four instances, each with SQLAlchemy's pool of 5 plus 10 overflow,
 is at most 60 client connections to Supabase's pooler. Raise them together,
 and watch the pooler's own limits when you do.
 
-Check it before putting a domain in front:
+Check it before putting a domain in front. *bash:*
 
 ```sh
 URL=$(gcloud run services describe billcheck-api --region asia-southeast1 --format='value(status.url)')
 curl -s "$URL/health"     # {"status":"ok"}
 ```
+
+*PowerShell, instead of the above:*
 
 ```powershell
 $URL = gcloud run services describe billcheck-api --region asia-southeast1 --format="value(status.url)"
