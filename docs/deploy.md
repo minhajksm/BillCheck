@@ -266,6 +266,40 @@ start in production while OTP codes are printed instead of sent, and real SMS
 needs a DLT-approved MSG91 template, which takes weeks. See
 [Going to actual production](#going-to-actual-production).
 
+### Or let a push deploy it
+
+Instead of running the command above each time, Cloud Run can watch the
+repository and build on every push. In the console: the service → **Edit &
+deploy new revision**, or on a new service the create flow → *Continuously
+deploy from a repository* → **Set up with Cloud Build** → GitHub → the repo
+and the branch → **Build type: Dockerfile**, location `/Dockerfile`.
+
+That location is also the build context, and `/Dockerfile` gives it the
+repository root, which is what this image needs.
+
+Two things to know before switching it on:
+
+- **Deploy by hand once first.** A build that fails is far easier to read when
+  you started it, and the environment variables and secrets are set on the
+  service, not in the trigger — so do step 2 and one `gcloud run deploy`
+  anyway. Repository deploys inherit them from then on.
+- **Every push to that branch deploys.** Point it at a branch you merge into
+  deliberately, not one you work on.
+
+### If the build fails
+
+The log names the step. The one worth recognising:
+
+```
+Step 1/N : FROM ghcr.io/astral-sh/uv:...
+manifest unknown
+```
+
+means that image tag does not exist — nothing was built, and nothing is wrong
+with the code. uv's versioned Python images moved to Debian 13 (trixie) at
+uv 0.9, so a `bookworm` tag for a current uv is not there to be pulled. The
+Dockerfile has the command for listing what does exist.
+
 `--max-instances 4` with `--concurrency 20` caps what this can do to the
 database: four instances, each with SQLAlchemy's pool of 5 plus 10 overflow,
 is at most 60 client connections to Supabase's pooler. Raise them together,
