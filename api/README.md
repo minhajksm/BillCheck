@@ -7,9 +7,12 @@ FastAPI backend with PostgreSQL, managed with [uv](https://docs.astral.sh/uv/).
 The database is hosted on Supabase, so there is nothing to install or start
 for it.
 
-1. **Make the project.** In Supabase, *New project*. Pick a region close to
-   the families — Mumbai (`ap-south-1`) or Singapore — and save the database
-   password it asks for.
+1. **Make the project.** In Supabase, *New project*. **Mumbai
+   (`ap-south-1`)**, closest to the families, and the same region the API is
+   deployed to. Save the database password it asks for. Supabase cannot move
+   a project to another region afterwards, so this one is worth not getting
+   wrong — see [Which region](../docs/deploy.md#which-region) for what it
+   decides.
 2. **Get the connection string.** *Connect*, in the top bar, → one of the
    **pooler** strings → then make sure the port reads **`5432`**. Go by the
    port rather than the label, which Supabase has renamed more than once:

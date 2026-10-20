@@ -61,13 +61,24 @@ pair is labelled.
 
 ### Which region
 
-Use **`asia-southeast1`** (Singapore) for Cloud Run, and put the Supabase
-project in Singapore too, so the API's queries don't cross a region.
+**`asia-south1`** (Mumbai), for Cloud Run and for Supabase both. Closest to
+the families, and the API's queries then stay inside one region — Supabase
+cannot be moved later, so this is the decision to get right first.
 
-Mumbai (`asia-south1`) is the tempting choice and is not in Cloud Run's list
-of regions that custom domains can be mapped to. The 40-odd milliseconds
-Singapore costs an Indian user is nothing beside the time the reader itself
-takes.
+It costs one thing, and only one: **Cloud Run cannot map a custom domain to a
+service in Mumbai.** That feature exists in ten regions —
+`asia-east1`, `asia-northeast1`, `asia-southeast1`, `europe-north1`,
+`europe-west1`, `europe-west4`, `us-central1`, `us-east1`, `us-east4`,
+`us-west1` — and Mumbai is not among them. The service's own
+`*.run.app` address works regardless, and a load balancer can put your own
+name in front of it from any region; see
+[step 4](#4-point-your-domain-at-the-service). Nothing else about the deploy
+changes.
+
+Singapore (`asia-southeast1`) is the alternative: it can map a domain
+directly, at the cost of every database round trip leaving the region. For an
+API whose slowest call waits on Claude for most of a minute, the domain is
+worth less than the proximity, which is why Mumbai is the recommendation here.
 
 ## 1. The database
 
@@ -76,8 +87,10 @@ first and on its own: once `db_check.py` is happy, the API already runs
 locally against the hosted database, and everything after this is only about
 where the API itself runs.
 
-1. **Create the project.** In Supabase, *New project*. **Singapore**, to match
-   the Cloud Run region above. Save the database password it asks for.
+1. **Create the project.** In Supabase, *New project*. **Mumbai
+   (`ap-south-1`)**, to match the Cloud Run region above. Save the database
+   password it asks for — and note that Supabase cannot change a project's
+   region afterwards, so this one is worth not getting wrong.
 2. **Copy the connection string.** *Connect*, in the top bar, → any of the
    **pooler** strings → then **make the port `5432`**.
 
@@ -238,7 +251,7 @@ From the repository root, because the image needs `data/samples` as well as
 ```sh
 gcloud run deploy billcheck-api \
   --source . \
-  --region asia-southeast1 \
+  --region asia-south1 \
   --allow-unauthenticated \
   --memory 1Gi \
   --timeout 600 \
@@ -252,7 +265,7 @@ gcloud run deploy billcheck-api \
 a stray `\` would silently drop everything after it:*
 
 ```powershell
-gcloud run deploy billcheck-api --source . --region asia-southeast1 --allow-unauthenticated --memory 1Gi --timeout 600 --concurrency 20 --max-instances 4 --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
+gcloud run deploy billcheck-api --source . --region asia-south1 --allow-unauthenticated --memory 1Gi --timeout 600 --concurrency 20 --max-instances 4 --set-env-vars 'ENVIRONMENT=development,OCR_PROVIDER=claude,OTP_DELIVERY=console,REVIEW_KEEP_ALL=false' --set-secrets 'DATABASE_URL=billcheck-database-url:latest,SECRET_KEY=billcheck-secret-key:latest,ANTHROPIC_API_KEY=billcheck-anthropic-key:latest'
 ```
 
 The first run asks to create an Artifact Registry repository to keep the image
@@ -298,7 +311,7 @@ generator will do; nothing reads it but the API.
 | Repository provider | GitHub, then authorise and pick this repository |
 | Branch | one you merge into deliberately — not a branch you are working on, since every push to it deploys |
 | Build type | **Dockerfile**, location `/Dockerfile` |
-| Region | `asia-southeast1`, or whichever matches your Supabase project |
+| Region | `asia-south1`, or whichever matches your Supabase project |
 | Authentication | allow unauthenticated invocations — the API does its own sign-in, and Cloud Run's IAM would be a second, unrelated door |
 
 The Dockerfile's location is also the build context, and `/Dockerfile` makes
@@ -355,19 +368,19 @@ and watch the pooler's own limits when you do.
 Check it before putting a domain in front. *bash:*
 
 ```sh
-URL=$(gcloud run services describe billcheck-api --region asia-southeast1 --format='value(status.url)')
+URL=$(gcloud run services describe billcheck-api --region asia-south1 --format='value(status.url)')
 curl -s "$URL/health"     # {"status":"ok"}
 ```
 
 *PowerShell, instead of the above:*
 
 ```powershell
-$URL = gcloud run services describe billcheck-api --region asia-southeast1 --format="value(status.url)"
+$URL = gcloud run services describe billcheck-api --region asia-south1 --format="value(status.url)"
 Invoke-RestMethod "$URL/health"     # status : ok
 ```
 
 If it answers anything else, the logs say why —
-`gcloud run services logs read billcheck-api --region asia-southeast1 --limit 50`.
+`gcloud run services logs read billcheck-api --region asia-south1 --limit 50`.
 A container that starts and immediately exits is almost always `settings.py`
 refusing the configuration it was given, and it says which setting.
 
@@ -376,36 +389,25 @@ Everything below is to put a name you own in front of it.
 
 ## 4. Point your domain at the service
 
-Two ways. Start with the mapping, move to the load balancer before real
-families use this — Google's own docs say the mapping is preview and
-[not recommended for production](https://docs.cloud.google.com/run/docs/mapping-custom-domains).
+**You probably do not need this yet.** The service's own
+`https://billcheck-api-<hash>.a.run.app` is real HTTPS with a certificate
+Google manages, and nothing but Cloud Run's own `--timeout` caps a request on
+it. Point the app at that, get the loop working end to end, and come back here
+when you want a name of your own.
 
-### A. Domain mapping — free, about fifteen minutes
+When you do, in Mumbai there is **one** way: a load balancer. Cloud Run's own
+`domain-mappings` — a `CNAME` to `ghs.googlehosted.com`, free, fifteen
+minutes — exists only in `asia-east1`, `asia-northeast1`,
+`asia-southeast1`, `europe-north1`, `europe-west1`, `europe-west4`,
+`us-central1`, `us-east1`, `us-east4` and `us-west1`. Not `asia-south1`.
 
-```sh
-# Once per domain: prove you own it. Opens Search Console.
-gcloud domains verify your-domain.example
+That is less of a loss than it sounds. Google's own docs call the mapping a
+preview feature, [not recommended for production](https://docs.cloud.google.com/run/docs/mapping-custom-domains)
+on latency grounds, and it cannot refuse TLS 1.0 and 1.1 or take a
+certificate of your own. The load balancer was always the answer for real
+users; being in Mumbai just removes the shortcut.
 
-gcloud beta run domain-mappings create \
-  --service billcheck-api \
-  --domain api.your-domain.example \
-  --region asia-southeast1
-```
-
-It prints the DNS record to add — a `CNAME` to `ghs.googlehosted.com` for a
-subdomain. Add it at your registrar. Google issues and renews the certificate
-itself; it usually takes about fifteen minutes and can take up to 24 hours.
-
-What you are accepting with it:
-
-- It is a **preview** feature, which Google says is not production-ready,
-  because of latency: a known issue reports very high latency from some
-  locations for services reached this way.
-- **TLS 1.0 and 1.1 cannot be turned off.** A load balancer or Hosting is the
-  only way to refuse them.
-- No wildcard certificates, and you cannot supply your own.
-
-### B. Global external Application Load Balancer — the production answer
+### Global external Application Load Balancer
 
 This is what Google recommends, and with a serverless NEG backend the
 timeout is 60 minutes and not configurable, so Cloud Run's own `--timeout`
@@ -416,7 +418,7 @@ monthly bill.
 
 ```sh
 gcloud compute network-endpoint-groups create billcheck-neg \
-  --region=asia-southeast1 --network-endpoint-type=serverless \
+  --region=asia-south1 --network-endpoint-type=serverless \
   --cloud-run-service=billcheck-api
 
 gcloud compute backend-services create billcheck-backend \
@@ -424,7 +426,7 @@ gcloud compute backend-services create billcheck-backend \
 
 gcloud compute backend-services add-backend billcheck-backend --global \
   --network-endpoint-group=billcheck-neg \
-  --network-endpoint-group-region=asia-southeast1
+  --network-endpoint-group-region=asia-south1
 
 gcloud compute url-maps create billcheck-lb --default-service billcheck-backend
 
@@ -443,7 +445,8 @@ Then point an `A` record at the address `gcloud compute addresses describe
 billcheck-ip --global --format='value(address)'` prints. Do not set
 `timeoutSec` on the backend service: with a serverless NEG the API rejects it.
 
-Load balancer flags move around more than most. If gcloud refuses one, follow
+Load balancer flags move around more than most, and I have not run these
+against a Mumbai project. If gcloud refuses one, follow
 [Serverless network endpoint groups](https://docs.cloud.google.com/load-balancing/docs/negs/serverless-neg-concepts)
 rather than arguing with it.
 
@@ -518,7 +521,7 @@ gone either way.
 
 ```sh
 # From the repository root. Or, with the GitHub trigger set up, just push.
-gcloud run deploy billcheck-api --source . --region asia-southeast1
+gcloud run deploy billcheck-api --source . --region asia-south1
 ```
 
 The flags from step 3 stick to the service; repeat only one you are changing.
@@ -534,7 +537,7 @@ takes seconds. It does not roll back the database.
 **Watching it:**
 
 ```sh
-gcloud run services logs read billcheck-api --region asia-southeast1 --limit 50
+gcloud run services logs read billcheck-api --region asia-south1 --limit 50
 ```
 
 A container that starts and exits immediately is nearly always `settings.py`
@@ -597,8 +600,9 @@ Four more things to settle before real families use this:
 - **The app has no way to reach a phone.** No `eas.json`, no `expo-updates`:
   today it runs only as a development build on a machine with the Android
   toolchain. Everything else here is moot until that is set up.
-- **Move to the load balancer** (B above), which is the supported path and the
-  only one that can refuse TLS 1.0 and 1.1.
+- **Put a load balancer in front** (step 4), which is the supported path, the
+  only one available in Mumbai, and the only one that can refuse TLS 1.0 and
+  1.1.
 - **The price lists are illustrative.** `data/samples/reference-prices.json`
   is not the real NPPA and CGHS data, and it ships inside the image. Replace
   it before any flag is shown to anyone.
