@@ -46,6 +46,7 @@ Out of scope for now: medical necessity review, pre-admission estimates, insuran
 
 - TypeScript strict mode in `app/`. Type hints and Pydantic models in `api/`.
 - Small, focused pull requests, one feature each.
+- Every command given to the user says which directory to run it from, or that it does not matter. A bare command is ambiguous and `cd app` from inside `app` is a silent failure.
 - Write tests for the audit logic in `api/` (price matching, duplicate detection) before UI polish.
 
 ## Current milestone
