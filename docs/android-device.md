@@ -86,12 +86,26 @@ offers to install it.
 
 ## 3. Two environment variables
 
-Gradle needs a JDK, and the Expo CLI needs to know where the SDK is. Android
-Studio bundles a suitable JDK, so there is nothing more to install:
+Gradle needs a JDK, and the Expo CLI needs to know where the SDK is.
+
+**Use JDK 17.** Not whatever is newest: at JDK 24 and above, `System.load`
+became a restricted method, and the JVM's warning about it is enough to fail
+Android's native build check — a 20-minute build that ends in
+`configureCMakeDebug[arm64-v8a] FAILED` and a message about
+`java.lang.System` that says nothing about the JDK. Recent Android Studio
+releases bundle a JDK too new for this, so the bundled one is worth checking
+rather than assuming.
+
+```powershell
+winget install Microsoft.OpenJDK.17
+Get-ChildItem "C:\Program Files\Microsoft" -Directory | Select-Object Name
+```
+
+Then, with the folder name that printed:
 
 ```powershell
 $sdk = "$env:LOCALAPPDATA\Android\Sdk"
-$jdk = "C:\Program Files\Android\Android Studio\jbr"
+$jdk = "C:\Program Files\Microsoft\jdk-17.0.16.8-hotspot"   # yours will differ
 
 [Environment]::SetEnvironmentVariable("ANDROID_HOME", $sdk, "User")
 [Environment]::SetEnvironmentVariable("JAVA_HOME", $jdk, "User")
@@ -108,7 +122,7 @@ startup. Then check both:
 ```powershell
 adb version                                   # 1.0.41 or similar
 Test-Path "$env:JAVA_HOME\bin\java.exe"       # True
-& "$env:JAVA_HOME\bin\java.exe" -version      # 17.x
+& "$env:JAVA_HOME\bin\java.exe" -version      # 17.x, and it matters that it is 17
 ```
 
 Note that `java -version` on its own will *not* work, and does not need to:
@@ -125,6 +139,9 @@ Get-ChildItem "C:\Program Files\Android" -Recurse -Depth 3 -Filter java.exe -Err
 ```
 
 and set `JAVA_HOME` to the directory that contains that `bin`.
+
+Gradle, not the shell, is the one whose answer counts:
+`cd app\android; .\gradlew --version` prints the JDK it will really use.
 
 ## 4. The phone
 
@@ -171,7 +188,8 @@ app connects back to Metro and JavaScript changes reload on the phone.
 | --- | --- |
 | `Failed to resolve the Android SDK path` | `ANDROID_HOME` not set, or set in a window opened before step 3. Open a new terminal. |
 | `'adb' is not recognized` | `platform-tools` not on `Path`, same cause. |
-| `Unsupported class file major version` or a Gradle JDK complaint | `JAVA_HOME` points at the wrong Java. Point it at Android Studio's `jbr`. `java -version` failing is not this, and not a problem: `java` is not on `Path` and Gradle does not use it. |
+| `Unsupported class file major version` or a Gradle JDK complaint | `JAVA_HOME` points at the wrong Java. `java -version` failing is not this, and not a problem: `java` is not on `Path` and Gradle does not use it. |
+| `configureCMakeDebug[...] FAILED` with `WARNING: A restricted method in java.lang.System has been called` | The JDK is 24 or newer. `cd android; .\gradlew --version` names it on the *Launcher JVM* line. Install JDK 17 and repoint `JAVA_HOME`; the `--enable-native-access` flags suggested elsewhere only silence the symptom. |
 | `An Application Control policy has blocked this file` | Windows Smart App Control, the same thing that blocked `uv` earlier. It has to be turned off in *Windows Security → App & browser control*, and that needs a reinstall of Windows to turn back on — so weigh it. |
 | `INSTALL_FAILED_USER_RESTRICTED` | The phone refused the install: enable *Install via USB* in Developer options. |
 | App installs, then "couldn't connect" | `EXPO_PUBLIC_API_URL` was not set when it was built. Rebuild with it. |
