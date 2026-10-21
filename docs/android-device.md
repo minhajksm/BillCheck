@@ -43,15 +43,32 @@ with a project open it is **Tools → SDK Manager**. Both are the same panel as
   `Task :react-native-screens:configureCMakeDebug[arm64-v8a] FAILED`.
 - Apply, and let it download. The NDK alone is a couple of gigabytes.
 
-Which NDK and CMake version: the ones this project asks for.
+Which versions: React Native pins them all in one file, and it is the only
+place worth looking. `android/build.gradle` does not name them — Expo's
+template leaves them to defaults — so searching there comes back empty.
 
 ```powershell
-Select-String -Path app\android\build.gradle -Pattern "ndkVersion"
+Get-Content app\node_modules\react-native\gradle\libs.versions.toml -TotalCount 8
 ```
 
-If a build has already failed, its `FAILURE:` block names them outright —
-"No version of NDK matched the requested version ..." or "CMake '3.22.1' was
-not found in SDK, PATH, or by cmake.dir property".
+At React Native 0.86 that reads:
+
+```toml
+minSdk = "24"
+targetSdk = "36"
+compileSdk = "36"
+buildTools = "36.0.0"
+ndkVersion = "27.1.12297006"
+```
+
+So: platform 36, build-tools **36.0.0** specifically, and NDK
+**27.1.12297006**. CMake is not pinned there; each native module's
+`CMakeLists.txt` asks for its own, and the 3.22.1 that ships alongside the NDK
+is normally the one.
+
+If a build has already failed on a version, its `FAILURE:` block names it
+outright — "No version of NDK matched the requested version ..." or "CMake
+'3.22.1' was not found in SDK, PATH, or by cmake.dir property".
 
 All of this works from the command line too, which is quicker than hunting
 through checkboxes and shows you every version on offer:
@@ -62,22 +79,10 @@ $sdkmanager = "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat"
 & $sdkmanager "platforms;android-36" "ndk;27.1.12297006" "cmake;3.22.1"
 ```
 
-That number is tied to the Expo and React Native versions in
-`package.json`, so it moves on an upgrade. Nothing in `android/build.gradle`
-spells it out — the template leaves it to the Expo plugin's default — so to
-check it after an upgrade, search the generated folder rather than one file:
-
-```powershell
-Get-ChildItem app\android -Recurse -Include *.gradle,*.properties -File |
-  Select-String -Pattern "(?i)compilesdk|targetsdk|minsdk|buildtools"
-```
-
-If that also comes back empty, the defaults are in force and the answer is
-whatever `node_modules\expo-modules-core\android\ExpoModulesCorePlugin.gradle`
-has on its `safeExtGet("compileSdkVersion", ...)` line.
-
-Getting it wrong is not expensive, either way: Gradle fails naming the exact
-platform it wanted, and Android Studio offers to install it.
+These move when React Native does, so re-read that file after an upgrade
+rather than trusting this page. Getting one wrong is not expensive either
+way: Gradle fails naming the exact version it wanted, and Android Studio
+offers to install it.
 
 ## 3. Two environment variables
 
