@@ -74,9 +74,7 @@ function CaseDashboard({ item }: { item: Case }) {
           <IconButton
             icon="edit-2"
             label={t('case.editDetails')}
-            onPress={() =>
-              router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })
-            }
+            onPress={() => router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })}
           />
           <IconButton
             icon="users"
@@ -98,7 +96,7 @@ function CaseDashboard({ item }: { item: Case }) {
       <Followers item={item} />
 
       <View style={styles.metrics}>
-        <Metric label={t('case.runningTotal', { day: latest?.day ?? item.dayOfStay })} value={formatINR(runningTotal(item))} />
+        <Metric label={t('case.runningTotal')} value={formatINR(runningTotal(item))} />
         <Metric label={t('case.sinceYesterday')} value={`+${formatINR(latest?.total ?? 0)}`} />
       </View>
       {item.recoveredAmount > 0 ? (
@@ -143,7 +141,8 @@ function Followers({ item }: { item: Case }) {
 
   let label: string;
   if (others.length === 0) label = t('case.followersYouOnly');
-  else if (others.length === 1) label = t('case.followersPair', { you: youName, other: others[0].name.split(' ')[0] });
+  else if (others.length === 1)
+    label = t('case.followersPair', { you: youName, other: others[0].name.split(' ')[0] });
   else label = t('case.followersMany', { you: youName, count: others.length });
 
   // The prototype shows up to two overlapping avatars.
@@ -152,7 +151,12 @@ function Followers({ item }: { item: Case }) {
   return (
     <View style={styles.followers}>
       {shown.map((m, i) => (
-        <Avatar key={m.id} name={m.name} tone={i === 0 ? 'indigo' : 'green'} style={i > 0 && styles.overlap} />
+        <Avatar
+          key={m.id}
+          name={m.name}
+          tone={i === 0 ? 'indigo' : 'green'}
+          style={i > 0 && styles.overlap}
+        />
       ))}
       <Text variant="faint" style={styles.followersLabel}>
         {label}
@@ -164,7 +168,12 @@ function Followers({ item }: { item: Case }) {
 function Metric({ label, value }: { label: string; value: string }) {
   const palette = usePalette();
   return (
-    <View style={[styles.metric, styles.metricHalf, { backgroundColor: palette.card, borderColor: palette.line }]}>
+    <View
+      style={[
+        styles.metric,
+        styles.metricHalf,
+        { backgroundColor: palette.card, borderColor: palette.line },
+      ]}>
       <Text variant="faint" color="ink2">
         {label}
       </Text>
@@ -178,8 +187,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 function StatusBanner({ status, onAsk }: { status: CaseStatus; onAsk: () => void }) {
   const { t } = useTranslation();
   switch (status.kind) {
-    case 'needsTodaysBill':
-      return <Banner tone="indigo" icon="file-text" title={t('case.bannerNotAddedTitle')} body={t('case.bannerNotAddedBody')} />;
     case 'toAsk':
       return (
         <Banner
@@ -191,7 +198,14 @@ function StatusBanner({ status, onAsk }: { status: CaseStatus; onAsk: () => void
         />
       );
     case 'upToDate':
-      return <Banner tone="green" icon="check" title={t('case.bannerSettledTitle')} body={t('case.bannerSettledBody')} />;
+      return (
+        <Banner
+          tone="green"
+          icon="check"
+          title={t('case.bannerSettledTitle')}
+          body={t('case.bannerSettledBody')}
+        />
+      );
     case 'closed':
       return null;
   }
@@ -215,10 +229,8 @@ function MainAction({ status, item }: { status: CaseStatus; item: Case }) {
   if (status.kind === 'closed') return null;
 
   switch (status.kind) {
-    case 'needsTodaysBill':
-      return <Button icon="camera" label={t('case.addTodaysBill')} onPress={() => scan(item)} />;
     case 'toAsk':
-      // Asking about yesterday and adding today's bill are both live during a
+      // Asking about one bill and adding the next are both live during a
       // stay, and a family does them in either order. This used to be the ask
       // button alone, so the way to add a bill disappeared the moment one had
       // an open question — which is the usual state — and the only way on was
@@ -239,7 +251,7 @@ function MainAction({ status, item }: { status: CaseStatus; item: Case }) {
         <Button
           variant="secondary"
           icon="camera"
-          label={t('case.addTomorrowsBill')}
+          label={t('case.addAnotherBill')}
           onPress={() => scan(item)}
         />
       );
@@ -251,12 +263,8 @@ function BillRow({ bill, first }: { bill: DailyBill; first: boolean }) {
   const palette = usePalette();
   const status = billStatus(bill);
 
-  const title = bill.day === 1 ? t('case.billAdmission', { day: bill.day }) : t('case.billInterim', { day: bill.day });
-  const meta = t('case.billMeta', {
-    date: formatDayMonth(t, bill.date),
-    count: bill.itemCount,
-    amount: formatINR(bill.total),
-  });
+  const title = t('case.billOn', { date: formatDayMonth(t, bill.date) });
+  const meta = t('case.billMeta', { count: bill.itemCount, amount: formatINR(bill.total) });
   const onPress = () => router.push({ pathname: '/bills/[billId]', params: { billId: bill.id } });
 
   return (

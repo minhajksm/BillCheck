@@ -338,3 +338,35 @@ def test_the_stay_check_runs_beside_the_reader_s_own_findings():
     flags = flags_from_findings(bill, [], ADMITTED)
     assert {flag.kind for flag in flags} == {"analysis_finding", "date_outside_stay"}
     assert [flag.row_position for flag in flags] == [1, 2]
+
+
+def test_a_charge_before_the_admission_is_still_flagged():
+    """The direction that stays worth asking about with an open stay: a
+    patient cannot have been charged for a bed the day before they arrived."""
+    admitted = date(2025, 5, 4)
+    lines = [
+        line("L1", "Room rent", 4500, on="04/05/2025"),
+        line("L2", "DOCTOR VISIT CHARGES", 4500, on="28/04/2025"),
+    ]
+
+    flags = flags_from_findings(analysis([], lines=lines, bill_date="04/05/2025"), [], admitted, None)
+
+    outside = [f for f in flags if f.kind == "date_outside_stay"]
+    assert len(outside) == 1
+    assert outside[0].reference_detail["row_date"] == "2025-04-28"
+    assert outside[0].reference_detail["line_numbers"] == "2"
+
+
+def test_a_closed_stay_still_bounds_both_ends():
+    """Where the bill prints a discharge date, it means what it says."""
+    lines = [
+        line("L1", "Room rent", 4500, on="04/05/2025"),
+        line("L2", "Follow-up visit", 800, on="20/05/2025"),
+    ]
+
+    flags = flags_from_findings(
+        analysis([], lines=lines, bill_date="04/05/2025"), [], date(2025, 5, 4), date(2025, 5, 6)
+    )
+
+    outside = [f for f in flags if f.kind == "date_outside_stay"]
+    assert [f.reference_detail["row_date"] for f in outside] == ["2025-05-20"]

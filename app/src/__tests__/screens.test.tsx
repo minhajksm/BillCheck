@@ -58,7 +58,7 @@ describe('Your cases', () => {
     await render('/', 'Welcome, Rohan');
     expect(screen.getByText('Welcome, Rohan')).toBeVisible();
     expect(screen.getByText("Papa's admission")).toBeVisible();
-    expect(screen.getByText('Admitted 9 Oct, day 3')).toBeVisible();
+    expect(screen.getByText('Admitted 9 Oct')).toBeVisible();
     // Two open questions on the latest bill, so the chip asks for them.
     expect(screen.getByText('2 to ask')).toBeVisible();
     expect(screen.getByText('Closed March 2026')).toBeVisible();
@@ -69,10 +69,11 @@ describe('Your cases', () => {
     const router = await render('/', "Papa's admission");
     fireEvent.press(screen.getByText("Papa's admission"));
     expect(router.getPathname()).toBe('/cases/papa-admission');
-    expect(await screen.findByText('Running total, day 3')).toBeVisible();
+    expect(await screen.findByText('Running total')).toBeVisible();
     expect(screen.getByText('₹73,890')).toBeVisible();
     expect(screen.getByText('Rohan (you) and Anita follow this case')).toBeVisible();
-    expect(screen.getByText('10 Oct, 37 items, ₹31,400')).toBeVisible();
+    expect(screen.getByText('10 Oct bill')).toBeVisible();
+    expect(screen.getByText('37 items, ₹31,400')).toBeVisible();
   });
 
   it('opens a closed case, so its reports and its delete button stay reachable', async () => {
@@ -103,7 +104,7 @@ describe('Your cases', () => {
   it('uses Hindi copy when the language is Hindi', async () => {
     await i18n.changeLanguage('hi');
     // Not the greeting: that reads "Welcome" in every language for now.
-    await render('/', '9 अक्टू॰ को भर्ती, दिन 3');
-    expect(screen.getByText('9 अक्टू॰ को भर्ती, दिन 3')).toBeVisible();
+    await render('/', '9 अक्टू॰ को भर्ती');
+    expect(screen.getByText('9 अक्टू॰ को भर्ती')).toBeVisible();
   });
 });

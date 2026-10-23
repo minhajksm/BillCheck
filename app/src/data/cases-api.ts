@@ -13,7 +13,6 @@ type ApiMember = { id: string; name: string; is_you: boolean };
 type ApiDailyBill = {
   id: string;
   date: string;
-  day: number;
   item_count: number;
   total: number;
   flag_count: number;
@@ -30,7 +29,6 @@ type ApiCase = {
   bed: string | null;
   admitted_on: string;
   closed_on: string | null;
-  day_of_stay: number;
   members: ApiMember[];
   is_owner: boolean;
   bills: ApiDailyBill[];
@@ -65,7 +63,6 @@ type ApiBill = {
   id: string;
   case_id: string;
   date: string;
-  day: number;
   page_count: number;
   total: number;
   line_items: ApiLineItem[];
@@ -81,7 +78,6 @@ const toMember = (m: ApiMember): Member => ({
 const toDailyBill = (b: ApiDailyBill): DailyBill => ({
   id: b.id,
   date: b.date,
-  day: b.day,
   itemCount: b.item_count,
   total: b.total,
   flagCount: b.flag_count,
@@ -94,7 +90,6 @@ export const toCase = (c: ApiCase): Case => ({
   hospital: { name: c.hospital_name, area: c.hospital_area },
   patient: { name: c.patient_name, ipNumber: c.ip_number, bed: c.bed ?? '' },
   admittedOn: c.admitted_on,
-  dayOfStay: c.day_of_stay,
   closedOn: c.closed_on ?? undefined,
   members: c.members.map(toMember),
   isOwner: c.is_owner,
@@ -130,7 +125,6 @@ export const toBill = (b: ApiBill): Bill => ({
   id: b.id,
   caseId: b.case_id,
   date: b.date,
-  day: b.day,
   pageCount: b.page_count,
   total: b.total,
   lineItems: b.line_items.map(toLineItem),

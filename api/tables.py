@@ -122,8 +122,6 @@ class Bill(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
     bill_date: Mapped[date] = mapped_column(Date)
-    # Day of the stay this bill covers. Day 1 is the admission day.
-    day: Mapped[int] = mapped_column(Integer)
     page_count: Mapped[int] = mapped_column(Integer, default=1)
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))

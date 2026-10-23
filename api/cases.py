@@ -9,7 +9,7 @@ in links and logs.
 import hashlib
 import secrets
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -46,12 +46,6 @@ ERRORS = {
 
 def case_error(status_code: int, code: str) -> HTTPException:
     return HTTPException(status_code, detail={"code": code, "message": ERRORS[code]})
-
-
-def day_of_stay(admitted_on: date, closed_on: date | None, today: date) -> int:
-    """Day 1 is the admission day. A closed case stops counting on its last day."""
-    end = closed_on if closed_on is not None else today
-    return max(1, (end - admitted_on).days + 1)
 
 
 def load_case(db: Session, case_id: uuid.UUID, user: User) -> Case:
@@ -132,7 +126,6 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
         bed=case.bed,
         admitted_on=case.admitted_on,
         closed_on=case.closed_on,
-        day_of_stay=day_of_stay(case.admitted_on, case.closed_on, india_today()),
         members=[
             MemberOut(id=member.user_id, name=member.user.name, is_you=member.user_id == user.id)
             for member in case.members
@@ -142,13 +135,12 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
             DailyBillOut(
                 id=bill.id,
                 date=bill.bill_date,
-                day=bill.day,
                 item_count=counts.get(bill.id, (0, 0, 0))[0],
                 total=float(bill.total),
                 flag_count=counts.get(bill.id, (0, 0, 0))[1],
                 open_flag_count=counts.get(bill.id, (0, 0, 0))[2],
             )
-            for bill in sorted(case.bills, key=lambda b: (b.bill_date, b.day))
+            for bill in sorted(case.bills, key=lambda b: (b.bill_date, b.created_at))
         ],
         recovered_amount=float(recovered_amount(db, case.id)),
     )

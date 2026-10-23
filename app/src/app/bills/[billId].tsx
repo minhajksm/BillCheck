@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/auth-context';
 import { AppHeader, IconButton } from '@/components/app-header';
@@ -90,7 +91,7 @@ function Report({
   const items = new Map(bill.lineItems.map((row) => [row.id, row]));
 
   return (
-    <Screen header={<AppHeader title={t('report.title', { day: bill.day })} showBack />}>
+    <Screen header={<AppHeader title={t('report.title', { date: formatDayMonth(t, bill.date) })} showBack />}>
       <Summary
         open={open.length}
         total={bill.lineItems.length}
@@ -457,6 +458,7 @@ function FlagSheet({
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
 
@@ -486,7 +488,10 @@ function FlagSheet({
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.scrim} accessibilityLabel={t('common.back')} onPress={onClose} />
-      <View style={[styles.sheet, { backgroundColor: palette.app }]}>
+      {/* A Modal renders outside the screen's SafeAreaView, so its own insets
+          are its own problem: without this the last button sits under
+          Android's navigation bar, where it cannot be tapped. */}
+      <View style={[styles.sheet, { backgroundColor: palette.app, paddingBottom: 24 + insets.bottom }]}>
         <View style={styles.sheetTop}>
           <Chip tone={chipTone(flag)} label={flagTag(t, flag)} />
           <IconButton icon="x" label={t('common.back')} onPress={onClose} />
@@ -644,7 +649,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     padding: Gutter,
-    paddingBottom: 24,
   },
   sheetTop: {
     flexDirection: 'row',

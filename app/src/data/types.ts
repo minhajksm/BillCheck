@@ -9,8 +9,6 @@ export type Member = {
 export type DailyBill = {
   id: string;
   date: string;
-  /** Day of the stay this bill covers. Day 1 is the admission day. */
-  day: number;
   itemCount: number;
   total: number;
   /** Flags raised by the audit. */
@@ -25,8 +23,6 @@ export type Case = {
   hospital: { name: string; area: string };
   patient: { name: string; ipNumber: string; bed: string };
   admittedOn: string;
-  /** Current day of the stay, counting the admission day as day 1. */
-  dayOfStay: number;
   closedOn?: string;
   members: Member[];
   /** Whether you started this case. Only you can delete it. */
@@ -128,7 +124,6 @@ export type Bill = {
   id: string;
   caseId: string;
   date: string;
-  day: number;
   pageCount: number;
   total: number;
   lineItems: LineItem[];

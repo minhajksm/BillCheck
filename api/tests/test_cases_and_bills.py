@@ -43,7 +43,6 @@ def test_creates_a_case_with_its_creator_as_a_member(client: TestClient, auth_he
     created = new_case(client, auth_headers)
 
     assert created["title"] == "Papa's admission"
-    assert created["day_of_stay"] == 3, "admitted the day before yesterday is day 3"
     assert [m["name"] for m in created["members"]] == ["Rohan Sharma"]
     assert created["members"][0]["is_you"] is True
     assert created["bills"] == []
@@ -205,12 +204,11 @@ def test_the_owner_cannot_leave_or_be_removed(client: TestClient, auth_headers: 
     assert client.post(f"/cases/{case['id']}/members/{owner_id}/remove", headers=anita).status_code == 403
 
 
-def test_closing_a_case_stops_the_day_count(client: TestClient, auth_headers: dict):
+def test_closing_a_case_records_the_day_it_ended(client: TestClient, auth_headers: dict):
     case = new_case(client, auth_headers)
     closed = client.post(f"/cases/{case['id']}/close", headers=auth_headers).json()
 
     assert closed["closed_on"] == str(india_today())
-    assert closed["day_of_stay"] == 3
 
 
 def test_cases_need_a_signed_in_user(client: TestClient):
@@ -371,12 +369,6 @@ def test_cannot_upload_to_someone_elses_case(client: TestClient, auth_headers: d
     assert response.status_code == 404
 
 
-def test_bill_day_counts_from_admission(client: TestClient, auth_headers: dict):
-    case = new_case(client, auth_headers, admitted_on=str(india_today() - timedelta(days=2)))
-    bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
-    assert bill["day"] == 3
-
-
 # --- what the hospital said --------------------------------------------------
 
 
@@ -472,7 +464,7 @@ def test_a_bill_after_midnight_in_india_lands_on_the_new_day(
     case = new_case(client, auth_headers, admitted_on="2026-10-10")
     monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 10, 11, 20, 0, tzinfo=UTC))
     bill = client.post(f"/cases/{case['id']}/bills", files=[page()], headers=auth_headers).json()
-    assert (bill["date"], bill["day"]) == ("2026-10-12", 3)
+    assert bill["date"] == "2026-10-12"
 
 
 # --- upload limit ---------------------------------------------------------------

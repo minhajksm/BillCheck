@@ -187,7 +187,6 @@ def bill_out(bill: Bill) -> BillOut:
         id=bill.id,
         case_id=bill.case_id,
         date=bill.bill_date,
-        day=bill.day,
         page_count=bill.page_count,
         total=float(bill.total),
         line_items=[
@@ -260,26 +259,26 @@ def bill_day(analysis: BillAnalysis, supplied: date | None) -> date:
 
 
 def closed_on(header: BillHeader, admitted_on: date) -> date | None:
-    """When the stay ended, or None while it is still going.
+    """When the stay ended, or None where the bill doesn't say.
 
-    A bill that prints a discharge date settles it. Where it prints none, the
-    bill's own date is the last day the stay is known to have reached, and
-    anything after that is an assumption -- so a bill from before today closes
-    the case there rather than leaving a family on "day 2,913".
+    Only a printed discharge date closes it. This used to fall back to the
+    bill's own date for any bill older than today, on the reasoning that the
+    stay is not known to have gone further -- which is true, and was the wrong
+    thing to do with it.
 
-    The one case left open is a bill dated today: someone at a counter during
-    an admission, which is what the daily-bill flow is for. A family can
-    correct either way on the case screen; this is a reading of the bill, not
-    a claim about where the patient is now.
+    `closed_on` is the upper bound of the stay check, so guessing one tells a
+    family that charges after it "may belong to another visit". On an interim
+    bill -- issued during an admission, which is most of them -- the guess
+    makes the stay one day long and every later charge a question. A real
+    bill: admitted 4 May, interim bill dated 4 May, no discharge printed, and
+    most of its rows flagged.
+
+    So the guess is gone. A bill that doesn't say when the stay ended leaves
+    it open, and the family can close the case themselves on the case screen.
+    Nothing is invented from a date the hospital didn't print.
     """
     discharged = parse_bill_date(header.discharge_date)
-    if discharged is not None:
-        return max(discharged, admitted_on)
-
-    billed = parse_bill_date(header.bill_date)
-    if billed is not None and billed < india_today():
-        return max(billed, admitted_on)
-    return None
+    return max(discharged, admitted_on) if discharged is not None else None
 
 
 def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
@@ -390,7 +389,6 @@ def check_and_store(
     bill = Bill(
         case_id=case.id,
         bill_date=on,
-        day=max(1, (on - case.admitted_on).days + 1),
         page_count=page_count,
         uploaded_by=uploaded_by,
     )

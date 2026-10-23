@@ -144,7 +144,6 @@ class MemberOut(BaseModel):
 class DailyBillOut(BaseModel):
     id: uuid.UUID
     date: date
-    day: int
     item_count: int
     total: float
     flag_count: int
@@ -161,8 +160,6 @@ class CaseOut(BaseModel):
     bed: str | None
     admitted_on: date
     closed_on: date | None
-    # Counting the admission day as day 1.
-    day_of_stay: int
     members: list[MemberOut]
     # Whether the caller is the one who started it. Only they can delete a case,
     # since it takes the bills away from everyone following it.
@@ -225,7 +222,6 @@ class BillOut(BaseModel):
     id: uuid.UUID
     case_id: uuid.UUID
     date: date
-    day: int
     page_count: int
     total: float
     line_items: list[LineItemOut]

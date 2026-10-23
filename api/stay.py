@@ -1,9 +1,9 @@
 """Re-checking stored bills when the admission dates change.
 
 A case's dates are typed by hand at the counter, so they get corrected later:
-the wrong month, a discharge a day out. Everything derived from them is already
-on disk by then — each bill's day of the stay, and the `date_outside_stay`
-flags `review.py` raised when the bill was read.
+the wrong month, a discharge a day out. What was derived from them is already
+on disk by then: the `date_outside_stay` flags `review.py` raised when the
+bill was read.
 
 Leaving those alone would put the review design the wrong way round. The whole
 point of re-checking the reader's claims is that a family is never shown a
@@ -60,9 +60,6 @@ def recheck_stay(db: Session, case: Case) -> int:
 
     changed = 0
     for bill in bills:
-        # The day of the stay is counted from the admission, so it moves too.
-        bill.day = max(1, (bill.bill_date - case.admitted_on).days + 1)
-
         items = sorted(bill.line_items, key=lambda i: i.position)
         by_position = {item.position: item for item in items}
         outside = _outside(items, bill.bill_date.year, case.admitted_on, case.closed_on)

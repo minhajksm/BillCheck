@@ -139,18 +139,6 @@ def test_a_settled_question_survives_a_date_correction(client: TestClient, auth_
     assert [flag["status"] for flag in after] == ["corrected"]
 
 
-def test_the_day_of_the_stay_moves_with_the_admission(client: TestClient, auth_headers: dict):
-    case = new_case(client, auth_headers)
-    bill = upload(client, auth_headers, case["id"])
-    assert bill["day"] == 3
-
-    later = str(date.fromisoformat(case["admitted_on"]) + timedelta(days=1))
-    client.patch(f"/cases/{case['id']}", json={"admitted_on": later}, headers=auth_headers)
-
-    after = client.get(f"/cases/{case['id']}", headers=auth_headers).json()
-    assert after["bills"][0]["day"] == 2, "a day later admitted is a day earlier in the stay"
-
-
 def test_the_report_stays_numbered_from_one(client: TestClient, auth_headers: dict):
     case = new_case(client, auth_headers)
     bill = upload(client, auth_headers, case["id"])

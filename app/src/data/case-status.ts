@@ -6,16 +6,11 @@ import type { Case, DailyBill } from './types';
  */
 export type CaseStatus =
   | { kind: 'closed'; recoveredAmount: number }
-  | { kind: 'needsTodaysBill' }
   | { kind: 'toAsk'; openFlagCount: number }
   | { kind: 'upToDate' };
 
 export function latestBill(c: Case): DailyBill | undefined {
   return c.bills[c.bills.length - 1];
-}
-
-export function hasTodaysBill(c: Case): boolean {
-  return latestBill(c)?.day === c.dayOfStay;
 }
 
 export function openFlagCount(c: Case): number {
@@ -26,7 +21,6 @@ export function caseStatus(c: Case): CaseStatus {
   if (c.closedOn) return { kind: 'closed', recoveredAmount: c.recoveredAmount };
   const open = openFlagCount(c);
   if (open > 0) return { kind: 'toAsk', openFlagCount: open };
-  if (!hasTodaysBill(c)) return { kind: 'needsTodaysBill' };
   return { kind: 'upToDate' };
 }
 
