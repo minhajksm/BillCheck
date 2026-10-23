@@ -14,7 +14,7 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { Gutter, Radius } from '@/constants/theme';
+import { Gutter, Radius, type Palette } from '@/constants/theme';
 import { readBill, readCase, setFlagStatus } from '@/data/cases-api';
 import { flagAmountLine, flagCopy, flagTag } from '@/data/flag-copy';
 import type { Bill, Case, Flag, LineCategory, LineItem } from '@/data/types';
@@ -91,13 +91,8 @@ function Report({
   const items = new Map(bill.lineItems.map((row) => [row.id, row]));
 
   return (
-    <Screen header={<AppHeader title={t('report.title', { date: formatDayMonth(t, bill.date) })} showBack />}>
-      <Summary
-        open={open.length}
-        total={bill.lineItems.length}
-        overcharge={overcharge}
-        recovered={recovered}
-      />
+    <Screen header={<AppHeader title={t('report.title')} showBack />}>
+      <ReportHeader bill={bill} item={item} overcharge={overcharge} recovered={recovered} />
 
       {bill.flags.length > 0 ? (
         <Segmented
@@ -157,31 +152,145 @@ function Report({
   );
 }
 
-function Summary({
-  open,
-  total,
+/**
+ * How a line stands, for the strip at the top. By line, not by flag: a row
+ * can carry two of them, which is how "10 of 9 items need a look" happened.
+ */
+type Shape = { red: number; amber: number; fine: number };
+
+function shapeOf(bill: Bill): Shape {
+  const worst = new Map<string, Flag['level']>();
+  for (const flag of bill.flags) {
+    if (!flag.lineItemId || flag.status !== 'open') continue;
+    if (flag.level === 'red' || !worst.has(flag.lineItemId)) worst.set(flag.lineItemId, flag.level);
+  }
+  const red = [...worst.values()].filter((level) => level === 'red').length;
+  return { red, amber: worst.size - red, fine: bill.lineItems.length - worst.size };
+}
+
+/**
+ * What the bill is, and what we make of it.
+ *
+ * The headline is the bill's own total, which is always true and is the
+ * number a family already has in their head. It used to be the sum of what
+ * every open flag was over its reference -- a figure the reader cannot
+ * produce for the questions it raises itself, so a bill flagged six times
+ * read "Possible overcharge / ₹0", which is the opposite of what it meant.
+ * Money only appears below now, and only when there is a figure to show.
+ */
+function ReportHeader({
+  bill,
+  item,
   overcharge,
   recovered,
 }: {
-  open: number;
-  total: number;
+  bill: Bill;
+  item: Case;
   overcharge: number;
   recovered: number;
 }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const settled = open === 0;
+  const shape = shapeOf(bill);
+  const patient = item.patient.name
+    ? t('report.patientLine', { ip: item.patient.ipNumber, patient: item.patient.name })
+    : t('report.patientUnknown');
 
   return (
-    <View style={[styles.summary, { backgroundColor: palette.card, borderColor: palette.line }]}>
-      <Text variant="small" color="ink2">
-        {settled ? t('report.allSettled') : t('report.possibleOvercharge')}
+    <Card style={styles.header}>
+      <View style={styles.headerTop}>
+        <View style={styles.headerWho}>
+          <Text weight="bold" numberOfLines={1}>
+            {item.hospital.name}
+          </Text>
+          <Text variant="small" color="ink2">
+            {patient}
+          </Text>
+        </View>
+        <Chip tone="indigo" label={t('report.billHeader', { date: formatDayMonth(t, bill.date) })} />
+      </View>
+
+      <Text variant="big" weight="bold" style={styles.headerTotal}>
+        {formatINR(bill.total)}
       </Text>
-      <Text variant="big" weight="bold" color={settled ? 'green' : 'ink'}>
-        {formatINR(settled ? recovered : overcharge)}
-      </Text>
-      <Text color="ink2">
-        {settled ? t('report.recoveredOnBill') : t('report.needALook', { count: open, total })}
+      <Text color="ink2">{t('report.billedAcross', { count: bill.lineItems.length })}</Text>
+
+      <SeverityBar shape={shape} />
+
+      <View style={styles.legend}>
+        {shape.red > 0 ? (
+          <LegendItem swatch={palette.red} color="red" label={t('report.legendRed', { count: shape.red })} />
+        ) : null}
+        {shape.amber > 0 ? (
+          <LegendItem
+            swatch={palette.marigold}
+            color="marigoldInk"
+            label={t('report.legendAmber', { count: shape.amber })}
+          />
+        ) : null}
+        {shape.fine > 0 ? (
+          <LegendItem
+            swatch={palette.line}
+            color="ink2"
+            label={t('report.legendFine', { count: shape.fine })}
+          />
+        ) : null}
+      </View>
+
+      {/* Both, where both apply: what the hospital has already put right is
+          not a reason to stop showing what is still open. */}
+      {recovered > 0 || overcharge > 0 ? (
+        <View style={styles.headerMoney}>
+          {recovered > 0 ? (
+            <Text variant="small" weight="semibold" color="green">
+              {t('report.recoveredSoFar', { amount: formatINR(recovered) })}
+            </Text>
+          ) : null}
+          {overcharge > 0 ? (
+            <Text variant="small" color="ink2">
+              {t('report.overReference', { amount: formatINR(overcharge) })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+/**
+ * The shape of the bill in one bar: how much of it is in question at a
+ * glance, before a word is read. Red and amber differ in lightness as well
+ * as hue, so the split survives a colour-blind reader; the legend names the
+ * counts in any case.
+ */
+function SeverityBar({ shape }: { shape: Shape }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const total = shape.red + shape.amber + shape.fine;
+  if (total === 0) return null;
+
+  return (
+    <View
+      accessibilityRole="image"
+      accessibilityLabel={t('report.barLabel', {
+        red: shape.red,
+        amber: shape.amber,
+        fine: shape.fine,
+      })}
+      style={styles.bar}>
+      {shape.red > 0 ? <View style={{ flex: shape.red, backgroundColor: palette.red }} /> : null}
+      {shape.amber > 0 ? <View style={{ flex: shape.amber, backgroundColor: palette.marigold }} /> : null}
+      {shape.fine > 0 ? <View style={{ flex: shape.fine, backgroundColor: palette.line }} /> : null}
+    </View>
+  );
+}
+
+function LegendItem({ swatch, color, label }: { swatch: string; color: keyof Palette; label: string }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendSwatch, { backgroundColor: swatch }]} />
+      <Text variant="small" weight="semibold" color={color}>
+        {label}
       </Text>
     </View>
   );
@@ -325,21 +434,9 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
   // reads down this beside the hospital's copy, so any order but the printed
   // one makes them hunt for the line they are looking at.
   const rows = [...bill.lineItems].sort((a, b) => a.position - b.position);
-  const patient = item.patient.name
-    ? t('report.patientLine', {
-        ip: item.patient.ipNumber,
-        patient: item.patient.name,
-      })
-    : t('report.patientUnknown');
 
   return (
     <Card style={styles.paper}>
-      <View style={[styles.billHead, { borderBottomColor: palette.line }]}>
-        <Text weight="bold">{item.hospital.name}</Text>
-        <Text variant="faint">{t('report.billHeader', { date: formatDayMonth(t, bill.date) })}</Text>
-        <Text variant="faint">{patient}</Text>
-      </View>
-
       {rows.map((row) => {
         const flag = byItem.get(row.id);
         const content = (
@@ -546,13 +643,15 @@ function FlagSheet({
 }
 
 const styles = StyleSheet.create({
-  summary: {
-    borderWidth: 1,
-    borderRadius: Radius.card,
-    padding: 16,
-    marginBottom: 14,
-    alignItems: 'flex-start',
-  },
+  header: { padding: 16, marginBottom: 14 },
+  headerTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  headerWho: { flex: 1 },
+  headerTotal: { marginTop: 14 },
+  bar: { flexDirection: 'row', gap: 2, height: 10, borderRadius: 999, overflow: 'hidden', marginTop: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 10 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendSwatch: { width: 9, height: 9, borderRadius: 2 },
+  headerMoney: { marginTop: 10, gap: 2 },
   segmented: {
     flexDirection: 'row',
     borderRadius: 12,
@@ -594,7 +693,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   paper: { padding: 14 },
-  billHead: { borderBottomWidth: 1, paddingBottom: 10, marginBottom: 4 },
   billRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -247,12 +247,7 @@
     "lineAnd": "and"
   },
   "report": {
-    "title": "Bill report, {{date}}",
-    "possibleOvercharge": "Possible overcharge",
-    "needALook_one": "{{count}} of {{total}} items needs a look",
-    "needALook_other": "{{count}} of {{total}} items need a look",
-    "allSettled": "All questions settled",
-    "recoveredOnBill": "recovered on this bill",
+    "title": "Bill report",
     "nothingFlagged": "Nothing to ask about",
     "nothingFlaggedBody": "Every item on this bill is within range.",
     "tabBill": "Marked bill",
@@ -289,7 +284,18 @@
     "backToCase": "Back to case",
     "patientUnknown": "Patient details not filled in",
     "whereItWent": "Where it went",
-    "tabSummary": "Bill summary"
+    "tabSummary": "Bill summary",
+    "billedAcross_one": "billed for {{count}} item",
+    "billedAcross_other": "billed across {{count}} items",
+    "legendRed_one": "{{count}} clear",
+    "legendRed_other": "{{count}} clear",
+    "legendAmber_one": "{{count}} to ask",
+    "legendAmber_other": "{{count}} to ask",
+    "legendFine_one": "{{count}} fine",
+    "legendFine_other": "{{count}} fine",
+    "barLabel": "{{red}} clear issues, {{amber}} worth asking about, {{fine}} within range",
+    "recoveredSoFar": "{{amount}} recovered so far",
+    "overReference": "{{amount}} above the references checked"
   },
   "ask": {
     "title": "Ask the billing desk",

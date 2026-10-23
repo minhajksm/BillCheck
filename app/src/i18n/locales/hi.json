@@ -247,12 +247,7 @@
     "lineAnd": "और"
   },
   "report": {
-    "title": "बिल रिपोर्ट, {{date}}",
-    "possibleOvercharge": "संभावित ज़्यादा शुल्क",
-    "needALook_one": "{{total}} में से {{count}} आइटम देखने लायक",
-    "needALook_other": "{{total}} में से {{count}} आइटम देखने लायक",
-    "allSettled": "सारे सवाल सुलझ गए",
-    "recoveredOnBill": "इस बिल पर वापस मिले",
+    "title": "बिल रिपोर्ट",
     "nothingFlagged": "पूछने लायक कुछ नहीं",
     "nothingFlaggedBody": "इस बिल का हर आइटम सही दायरे में है।",
     "tabBill": "निशान लगा बिल",
@@ -289,7 +284,18 @@
     "backToCase": "केस पर वापस",
     "patientUnknown": "मरीज़ का विवरण भरा नहीं गया",
     "whereItWent": "कहाँ कितना लगा",
-    "tabSummary": "बिल सारांश"
+    "tabSummary": "बिल सारांश",
+    "billedAcross_one": "{{count}} आइटम का बिल",
+    "billedAcross_other": "{{count}} आइटम का कुल बिल",
+    "legendRed_one": "{{count}} स्पष्ट",
+    "legendRed_other": "{{count}} स्पष्ट",
+    "legendAmber_one": "{{count}} पूछने योग्य",
+    "legendAmber_other": "{{count}} पूछने योग्य",
+    "legendFine_one": "{{count}} ठीक",
+    "legendFine_other": "{{count}} ठीक",
+    "barLabel": "{{red}} स्पष्ट मुद्दे, {{amber}} पूछने योग्य, {{fine}} सामान्य दायरे में",
+    "recoveredSoFar": "अब तक {{amount}} वापस मिले",
+    "overReference": "जाँचे गए संदर्भों से {{amount}} अधिक"
   },
   "ask": {
     "title": "बिलिंग डेस्क से पूछें",
