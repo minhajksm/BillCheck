@@ -132,6 +132,24 @@ where the API itself runs.
    uv run python scripts/db_check.py
    ```
 
+   **If Windows blocks this**, with `An Application Control policy has blocked
+   this file` somewhere inside alembic or sqlalchemy, Smart App Control is
+   refusing the compiled parts of those packages and no amount of retrying
+   will help. A migration is only SQL, so it can be applied from Supabase's
+   own **SQL Editor** instead: run the statements the migration contains,
+   then move the version marker by hand —
+
+   ```sql
+   -- whatever upgrade() does, then:
+   UPDATE alembic_version SET version_num = '<the new revision id>';
+   ```
+
+   That unblocks the deploy, and leaves the real problem: with the compiled
+   extensions blocked, nothing Python runs on that machine, so the tests and
+   the local API are out too. Turning Smart App Control off is the only fix,
+   in *Windows Security → App & browser control → Smart App Control*, and it
+   cannot be turned back on without reinstalling Windows.
+
    `db_check.py` writes nothing. It should say it reached Postgres, that the
    connection is encrypted, that migrations are up to date, and that row level
    security is on for all ten tables. **Row level security matters here**:
