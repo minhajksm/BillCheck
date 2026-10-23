@@ -53,7 +53,9 @@ def upload(
 def test_health(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    # The app reads `anonymous_accounts` here to decide whether to offer
+    # "use it without signing in", so it is part of the contract.
+    assert response.json() == {"status": "ok", "anonymous_accounts": False}
 
 
 @pytest.mark.parametrize(

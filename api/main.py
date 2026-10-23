@@ -31,4 +31,8 @@ app.include_router(bills.router)
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])
 def health() -> HealthResponse:
-    return HealthResponse()
+    # The app reads `anonymous_accounts` to decide whether to offer "use it
+    # without signing in". Asking rather than carrying its own copy of the
+    # setting is what keeps the button from appearing on a server that would
+    # refuse it.
+    return HealthResponse(anonymous_accounts=not get_settings().require_sign_in)

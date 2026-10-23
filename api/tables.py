@@ -12,8 +12,10 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    # E.164, e.g. "+919876543210".
-    phone: Mapped[str] = mapped_column(String(16), unique=True)
+    # E.164, e.g. "+919876543210". None for an anonymous account, which has
+    # no way to be recovered and is held only by the token on one device.
+    phone: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
+    # Empty for an anonymous account; the app greets those without a name.
     name: Mapped[str] = mapped_column(String(80))
     # DPDP: which consent text the user agreed to, and when.
     consent_version: Mapped[str] = mapped_column(String(20))

@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import auth
-from db import utcnow
+from db import india_today, utcnow
 from tests.conftest import PHONE, FakeSms, sign_up
 
 
@@ -192,3 +192,91 @@ def test_logout_revokes_the_session(client: TestClient, auth_headers: dict[str, 
 def test_session_expires(client: TestClient, auth_headers: dict[str, str], clock):
     clock.advance(days=31)
     assert client.get("/auth/me", headers=auth_headers).status_code == 401
+
+
+# --- anonymous accounts ---------------------------------------------------------
+
+
+@pytest.fixture
+def anonymous_allowed(monkeypatch: pytest.MonkeyPatch):
+    """REQUIRE_SIGN_IN=false, as a server running the app without a sign-in."""
+    import settings
+
+    get = settings.get_settings
+    get.cache_clear()
+    monkeypatch.setenv("REQUIRE_SIGN_IN", "false")
+    yield
+    get.cache_clear()
+
+
+def test_anonymous_accounts_are_refused_by_default(client: TestClient):
+    """A server says no unless it was told otherwise. Someone who has not
+    thought about it does not get an app anyone can use without signing in."""
+    response = client.post("/auth/anonymous", json={"consent": True})
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "sign_in_required"
+
+
+def test_an_anonymous_account_works_like_any_other(client: TestClient, anonymous_allowed):
+    """The point of it: nothing downstream knows the difference. A case made
+    on an anonymous account is owned, listed and read back exactly as one
+    made on a signed-in account."""
+    body = client.post("/auth/anonymous", json={"consent": True}).json()
+    headers = {"Authorization": f"Bearer {body['token']}"}
+
+    assert body["status"] == "logged_in"
+    assert body["user"]["phone"] is None, "there is no number, and the app reads that"
+    assert body["user"]["name"] == ""
+
+    made = client.post(
+        "/cases",
+        json={
+            "title": "Papa's admission",
+            "hospital_name": "City Care Hospital",
+            "hospital_area": "Andheri",
+            "patient_name": "Ramesh Sharma",
+            "ip_number": "20841",
+            "bed": "412",
+            "admitted_on": str(india_today()),
+        },
+        headers=headers,
+    )
+    assert made.status_code == 201
+    assert [case["id"] for case in client.get("/cases", headers=headers).json()] == [made.json()["id"]]
+
+
+def test_one_anonymous_account_cannot_see_another_s_cases(client: TestClient, anonymous_allowed):
+    """The reason this is accounts and not an open API. A case id must not
+    tell a stranger that somebody is in hospital."""
+    mine = client.post("/auth/anonymous", json={"consent": True}).json()
+    theirs = client.post("/auth/anonymous", json={"consent": True}).json()
+    headers = {"Authorization": f"Bearer {mine['token']}"}
+
+    case = client.post(
+        "/cases",
+        json={
+            "title": "Papa's admission",
+            "hospital_name": "City Care Hospital",
+            "hospital_area": "Andheri",
+            "patient_name": "Ramesh Sharma",
+            "ip_number": "20841",
+            "bed": "412",
+            "admitted_on": str(india_today()),
+        },
+        headers=headers,
+    ).json()
+
+    other = {"Authorization": f"Bearer {theirs['token']}"}
+    assert client.get(f"/cases/{case['id']}", headers=other).status_code == 404
+    assert client.get("/cases", headers=other).json() == []
+
+
+def test_consent_is_recorded_for_an_anonymous_account(client: TestClient, anonymous_allowed):
+    """DPDP does not care whether we know the person's number."""
+    assert client.post("/auth/anonymous", json={}).status_code == 422, "consent is not optional"
+    assert client.post("/auth/anonymous", json={"consent": False}).status_code == 422
+
+
+def test_health_says_whether_anonymous_accounts_are_on(client: TestClient, anonymous_allowed):
+    assert client.get("/health").json()["anonymous_accounts"] is True
