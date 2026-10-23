@@ -73,14 +73,18 @@ export default function ScanScreen() {
 
   if (checking) {
     return (
-      <SafeAreaView style={[styles.fill, { backgroundColor: palette.app }]} edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        style={[styles.fill, { backgroundColor: palette.app }]}
+        edges={['top', 'left', 'right', 'bottom']}>
         <ReadingBill sent={sent} pages={pages.length} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.fill, { backgroundColor: palette.app }]} edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      style={[styles.fill, { backgroundColor: palette.app }]}
+      edges={['top', 'left', 'right', 'bottom']}>
       <AppHeader title={caseId ? t('scan.title') : t('scan.titleFirst')} showBack />
 
       <ScrollView contentContainerStyle={styles.body}>
