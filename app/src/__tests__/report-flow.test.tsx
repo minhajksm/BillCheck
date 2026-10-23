@@ -99,8 +99,9 @@ describe('the bill report', () => {
     expect(screen.getByText('Surgical gloves')).toBeVisible();
     expect(screen.getByText('Worth asking')).toBeVisible();
 
-    // The headline is what might be recoverable: 6660 + 5100.
-    expect(screen.getByText('₹11,760')).toBeVisible();
+    // The headline is the bill's own total; what is over a reference is a
+    // line under it, and says what it means rather than standing alone.
+    expect(screen.getByText(/₹11,760 above the references/)).toBeVisible();
   });
 
   it('says the rest of the bill is fine, rather than leaving it unsaid', async () => {
@@ -153,8 +154,9 @@ describe('the bill report', () => {
     fireEvent.press(await screen.findByText('Hospital corrected it'));
 
     await waitFor(() => expect(screen.getByText('Corrected')).toBeVisible());
-    // One question left, so the headline drops to the gloves alone.
-    expect(screen.getByText('₹5,100')).toBeVisible();
+    // Both now: what the hospital put right, and what is still open.
+    expect(screen.getByText(/₹6,660 recovered so far/)).toBeVisible();
+    expect(screen.getByText(/₹5,100 above the references/)).toBeVisible();
   });
 
   it('shows the bill as the hospital printed it', async () => {
@@ -163,7 +165,8 @@ describe('the bill report', () => {
     expect(await screen.findByText('City Care Hospital')).toBeVisible();
     expect(screen.getByText('Room rent, twin sharing')).toBeVisible();
     expect(screen.getByText('Bill total')).toBeVisible();
-    expect(screen.getByText('₹42,490')).toBeVisible();
+    // Once at the top as the headline, once at the foot of the bill itself.
+    expect(screen.getAllByText('₹42,490')).toHaveLength(2);
   });
 
   it('keeps the rows in the order the bill prints them', async () => {
@@ -238,5 +241,47 @@ describe('asking the billing desk', () => {
     expect(await screen.findByText('Hospital grievance officer')).toBeVisible();
     expect(screen.getByText('Insurer or TPA')).toBeVisible();
     expect(screen.getByText('Consumer commission')).toBeVisible();
+  });
+});
+
+describe('the report header', () => {
+  it('leads with the bill, not with a figure the audit may not have', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    // The headline used to be the sum of what every open flag was over its
+    // reference. The reader cannot produce that for the questions it raises
+    // itself, so a bill flagged six times read "Possible overcharge / ₹0".
+    expect(await screen.findByText('City Care Hospital')).toBeVisible();
+    expect(screen.queryByText('Possible overcharge')).toBeNull();
+    expect(screen.queryByText('₹0')).toBeNull();
+  });
+
+  it('counts lines, not flags, so the shape cannot exceed the bill', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await screen.findByText('City Care Hospital');
+
+    // Three rows, two of them flagged once each. Counting flags against rows
+    // is what produced "10 of 9 items need a look" on a real bill, where two
+    // flags had landed on one line.
+    expect(screen.getByText('1 clear')).toBeVisible();
+    expect(screen.getByText('1 to ask')).toBeVisible();
+    expect(screen.getByText('1 fine')).toBeVisible();
+  });
+
+  it('describes the bar for a reader who cannot see it', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(
+      await screen.findByLabelText('1 clear issues, 1 worth asking about, 1 within range'),
+    ).toBeVisible();
+  });
+
+  it('names the hospital and patient once, above the bill rather than on it', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await screen.findByText('City Care Hospital');
+
+    // The marked bill is the family's own copy of the rows and nothing else.
+    expect(screen.getAllByText('City Care Hospital')).toHaveLength(1);
+    expect(screen.getByText('IP no. 20841, Ramesh Sharma')).toBeVisible();
   });
 });
