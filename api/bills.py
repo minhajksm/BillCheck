@@ -187,7 +187,6 @@ def bill_out(bill: Bill) -> BillOut:
         id=bill.id,
         case_id=bill.case_id,
         date=bill.bill_date,
-        day=bill.day,
         page_count=bill.page_count,
         total=float(bill.total),
         line_items=[
@@ -390,7 +389,6 @@ def check_and_store(
     bill = Bill(
         case_id=case.id,
         bill_date=on,
-        day=max(1, (on - case.admitted_on).days + 1),
         page_count=page_count,
         uploaded_by=uploaded_by,
     )

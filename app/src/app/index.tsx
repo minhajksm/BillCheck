@@ -173,10 +173,7 @@ function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
   const { t } = useTranslation();
   const when = item.closedOn
     ? t('home.closed', { date: formatMonthYear(t, item.closedOn) })
-    : t('home.admitted', {
-        date: formatDayMonth(t, item.admittedOn),
-        day: item.dayOfStay,
-      });
+    : t('home.admitted', { date: formatDayMonth(t, item.admittedOn) });
 
   return (
     <Card onPress={onPress} style={styles.case}>

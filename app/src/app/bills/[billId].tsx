@@ -91,7 +91,7 @@ function Report({
   const items = new Map(bill.lineItems.map((row) => [row.id, row]));
 
   return (
-    <Screen header={<AppHeader title={t('report.title', { day: bill.day })} showBack />}>
+    <Screen header={<AppHeader title={t('report.title', { date: formatDayMonth(t, bill.date) })} showBack />}>
       <Summary
         open={open.length}
         total={bill.lineItems.length}

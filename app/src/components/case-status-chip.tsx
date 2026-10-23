@@ -14,8 +14,6 @@ export function CaseStatusChip({ status }: { status: CaseStatus }) {
       ) : (
         <Chip tone="grey" label={t('caseStatus.closed')} />
       );
-    case 'needsTodaysBill':
-      return <Chip tone="indigo" label={t('caseStatus.addTodaysBill')} />;
     case 'toAsk':
       return <Chip tone="amber" label={t('caseStatus.toAsk', { count: status.openFlagCount })} />;
     case 'upToDate':

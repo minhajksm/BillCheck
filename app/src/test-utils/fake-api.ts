@@ -1,11 +1,10 @@
 import { jest } from '@jest/globals';
 
-/** The day 3 bill from the prototype, as the API would return it. */
+/** A bill from the prototype, as the API would return it. */
 export const SAMPLE_BILL = {
   id: 'b-day3',
   case_id: 'papa-admission',
   date: '2026-10-11',
-  day: 3,
   page_count: 1,
   total: 42490,
   line_items: [
@@ -89,7 +88,6 @@ export const SAMPLE_CASE = {
   bed: '412',
   admitted_on: '2026-10-09',
   closed_on: null,
-  day_of_stay: 3,
   members: [
     { id: 'u1', name: 'Rohan Sharma', is_you: true },
     { id: 'u2', name: 'Anita Sharma', is_you: false },
@@ -99,7 +97,6 @@ export const SAMPLE_CASE = {
     {
       id: 'b-day2',
       date: '2026-10-10',
-      day: 2,
       item_count: 37,
       total: 31400,
       flag_count: 0,
@@ -108,7 +105,6 @@ export const SAMPLE_CASE = {
     {
       id: 'b-day3',
       date: '2026-10-11',
-      day: 3,
       item_count: 3,
       total: 42490,
       flag_count: 2,
@@ -129,14 +125,12 @@ export const CLOSED_CASE = {
   bed: '6',
   admitted_on: '2026-03-12',
   closed_on: '2026-03-13',
-  day_of_stay: 2,
   members: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
   is_owner: true,
   bills: [
     {
       id: 'b-cat1',
       date: '2026-03-12',
-      day: 1,
       item_count: 18,
       total: 41200,
       flag_count: 2,

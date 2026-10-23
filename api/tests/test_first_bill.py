@@ -223,16 +223,6 @@ def test_the_stay_ends_where_the_bill_says_it_ended(analysis):
     assert case.closed_on == date(2018, 10, 23)
 
 
-def test_a_past_stay_is_two_days_long_not_eight_years(analysis):
-    from cases import day_of_stay
-    from db import india_today
-
-    case = case_from_analysis(past(analysis), uuid.uuid4())
-
-    assert day_of_stay(case.admitted_on, case.closed_on, india_today()) == 2
-    assert case.closed_on is not None, "nobody is still admitted in 2018"
-
-
 def test_a_bill_is_dated_from_the_bill(analysis):
     """Not from the day it was photographed."""
     from bills import bill_day

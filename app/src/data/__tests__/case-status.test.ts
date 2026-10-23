@@ -6,7 +6,6 @@ import type { Case, DailyBill } from '../types';
 const bill = (overrides: Partial<DailyBill>): DailyBill => ({
   id: 'b',
   date: '2026-10-11',
-  day: 3,
   itemCount: 11,
   total: 42490,
   flagCount: 0,
@@ -21,12 +20,11 @@ const papa: Case = {
   hospital: { name: 'City Care Hospital', area: 'Andheri' },
   patient: { name: 'Ramesh Sharma', ipNumber: '20841', bed: '412' },
   admittedOn: '2026-10-09',
-  dayOfStay: 3,
   members: [{ id: 'u1', name: 'Rohan Sharma', isYou: true }],
   isOwner: true,
   bills: [
-    bill({ id: 'b-day1', date: '2026-10-09', day: 1, itemCount: 24, total: 68490 }),
-    bill({ id: 'b-day2', date: '2026-10-10', day: 2, itemCount: 37, total: 31400 }),
+    bill({ id: 'b-day1', date: '2026-10-09', itemCount: 24, total: 68490 }),
+    bill({ id: 'b-day2', date: '2026-10-10', itemCount: 37, total: 31400 }),
   ],
   recoveredAmount: 0,
 };
@@ -41,10 +39,6 @@ const closed: Case = {
 const withBills = (bills: DailyBill[], extra: Partial<Case> = {}): Case => ({ ...papa, bills, ...extra });
 
 describe('caseStatus', () => {
-  it("asks for today's bill when the latest bill is from an earlier day", () => {
-    expect(caseStatus(papa)).toEqual({ kind: 'needsTodaysBill' });
-  });
-
   it('counts open flags across bills', () => {
     const c = withBills([...papa.bills, bill({ flagCount: 3, openFlagCount: 3 })]);
     expect(caseStatus(c)).toEqual({ kind: 'toAsk', openFlagCount: 3 });
