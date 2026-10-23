@@ -22,6 +22,8 @@ export function authErrorMessage(t: TFunction, error: unknown): string {
       return t('auth.errors.signup_token_invalid');
     case 'account_exists':
       return t('auth.errors.account_exists');
+    case 'sign_in_required':
+      return t('auth.errors.sign_in_required');
     case 'network':
       return t('auth.errors.network');
     default:

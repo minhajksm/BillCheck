@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://billcheck:billcheck@localhost:5432/billcheck"
     # Signs OTP hashes. Must be a long random value outside development.
     secret_key: str = DEV_SECRET_KEY
+    # Whether a family must sign in before using the app. With it off, the
+    # app can ask for an anonymous account instead: a real user row with no
+    # phone number, so every case still belongs to somebody and nothing else
+    # in the API changes. The bills then live on that one device and cannot
+    # be recovered, which is why the app says so before it offers it.
+    require_sign_in: bool = True
     # How OTP codes reach the user. "console" logs them instead of sending
     # SMS and is development only; "msg91" sends a real SMS.
     otp_delivery: Literal["console", "msg91"] = "console"

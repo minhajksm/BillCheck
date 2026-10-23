@@ -21,6 +21,9 @@ IndianMobile = Annotated[str, AfterValidator(_indian_mobile)]
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
+    # Whether POST /auth/anonymous will be answered. The app asks before
+    # offering "use it without signing in", so the two cannot disagree.
+    anonymous_accounts: bool = False
 
 
 class LineItem(BaseModel):
@@ -65,7 +68,9 @@ class OtpVerify(BaseModel):
 
 class UserOut(BaseModel):
     id: uuid.UUID
-    phone: str
+    # None on an anonymous account, which is how the app knows to say the
+    # bills are held on this phone alone.
+    phone: str | None
     name: str
 
 
@@ -90,6 +95,12 @@ OtpVerifyResponse = Annotated[LoggedIn | SignupRequired, Field(discriminator="st
 class Signup(BaseModel):
     signup_token: str
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    consent: Literal[True] = Field(
+        description="The user agreed to the consent text shown in the app (DPDP). Must be true."
+    )
+
+
+class AnonymousAccount(BaseModel):
     consent: Literal[True] = Field(
         description="The user agreed to the consent text shown in the app (DPDP). Must be true."
     )

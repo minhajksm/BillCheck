@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from db import get_db, utcnow
 from models import (
+    AnonymousAccount,
     ApiError,
     LoggedIn,
     OtpRequest,
@@ -62,6 +63,7 @@ ERRORS = {
     "otp_locked": "Too many wrong tries. Ask for a new code.",
     "signup_token_invalid": "Sign-up took too long. Start again with your phone number.",
     "account_exists": "This number already has an account. Log in instead.",
+    "sign_in_required": "Signing in with a phone number is required here.",
     "not_authenticated": "Log in to continue.",
     "sms_failed": "Couldn't send the code just now. Try again in a moment.",
 }
@@ -206,6 +208,39 @@ def signup(body: Signup, db: Db) -> LoggedIn:
     except IntegrityError:
         db.rollback()
         raise api_error(status.HTTP_409_CONFLICT, "account_exists") from None
+    return _new_session(db, user)
+
+
+@router.post(
+    "/anonymous",
+    status_code=status.HTTP_201_CREATED,
+    response_model=LoggedIn,
+    responses=ERROR_RESPONSES,
+    summary="Start without a phone number",
+)
+def anonymous(body: AnonymousAccount, db: Db) -> LoggedIn:
+    """An account with no phone number, for a family that wants to check a
+    bill before deciding to sign up for anything.
+
+    It is a real user row, so every case, bill and flag still belongs to
+    somebody: nothing else in the API has to know the difference, and a case
+    id still cannot be used to find out whether a stranger is in hospital.
+
+    What it costs is recovery. There is no number to send a code to, so the
+    session token on that one device is the only way back to the bills --
+    log out, lose the phone, and they are gone. The app says that before it
+    offers this, and hides the log-out button afterwards.
+
+    Consent is still taken, and recorded the same way: DPDP does not care
+    whether we know the person's number, only that they agreed.
+    """
+    if get_settings().require_sign_in:
+        raise api_error(status.HTTP_403_FORBIDDEN, "sign_in_required")
+
+    now = utcnow()
+    user = User(phone=None, name="", consent_version=CONSENT_VERSION, consented_at=now)
+    db.add(user)
+    db.flush()
     return _new_session(db, user)
 
 

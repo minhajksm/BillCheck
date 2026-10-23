@@ -9,21 +9,32 @@ import { Text } from './text';
 type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'danger' | 'quiet';
   icon?: IconName;
   disabled?: boolean;
   /** Shows a spinner and ignores presses while work is in flight. */
   loading?: boolean;
 };
 
-export function Button({ label, onPress, variant = 'primary', icon, disabled = false, loading = false }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  icon,
+  disabled = false,
+  loading = false,
+}: ButtonProps) {
   const palette = usePalette();
   const primary = variant === 'primary';
   // A destructive action should not look like the way forward. It is outlined
   // in red rather than filled, so it reads as a warning and not as the button
   // a thumb lands on by habit.
   const danger = variant === 'danger';
-  const fg = primary ? 'onIndigo' : danger ? 'red' : 'ink';
+  // The third way off a screen, under a filled and an outlined button. No box
+  // at all, so it reads as the option it is and not as a rival to the two
+  // above it.
+  const quiet = variant === 'quiet';
+  const fg = primary ? 'onIndigo' : danger ? 'red' : quiet ? 'indigoInk' : 'ink';
   const inactive = disabled || loading;
 
   return (
@@ -36,11 +47,13 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled = f
         styles.button,
         primary
           ? { backgroundColor: palette.indigo }
-          : {
-              backgroundColor: palette.card,
-              borderColor: danger ? palette.red : palette.line,
-              borderWidth: 1,
-            },
+          : quiet
+            ? null
+            : {
+                backgroundColor: palette.card,
+                borderColor: danger ? palette.red : palette.line,
+                borderWidth: 1,
+              },
         disabled && styles.disabled,
         pressed && styles.pressed,
       ]}>

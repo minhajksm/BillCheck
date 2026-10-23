@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals'
 import { act, fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import AuthLayout from '@/app/(auth)/_layout';
+import NoAccountScreen from '@/app/(auth)/no-account';
 import PhoneScreen from '@/app/(auth)/phone';
 import ProfileScreen from '@/app/(auth)/profile';
 import VerifyScreen from '@/app/(auth)/verify';
@@ -29,6 +30,7 @@ const routes = {
   'cases/[caseId]': CaseDashboardScreen,
   '(auth)/_layout': AuthLayout,
   '(auth)/welcome': WelcomeScreen,
+  '(auth)/no-account': NoAccountScreen,
   '(auth)/phone': PhoneScreen,
   '(auth)/verify': VerifyScreen,
   '(auth)/profile': ProfileScreen,
@@ -134,7 +136,9 @@ describe('log in', () => {
     await screen.findByText('Welcome back');
     await enterPhone('9876543210');
     await enterCode(server.lastCode);
-    expect(await screen.findByText("There's no account with this number yet, so let's create one.")).toBeVisible();
+    expect(
+      await screen.findByText("There's no account with this number yet, so let's create one."),
+    ).toBeVisible();
   });
 
   it('restores a saved session on launch', async () => {
@@ -167,6 +171,51 @@ describe('log in', () => {
     expect(await screen.findByText('Create account')).toBeVisible();
     expect(await tokenStore.get()).toBeNull();
     expect(server.sessions.has('saved-token')).toBe(false);
+  });
+});
+
+describe('without an account', () => {
+  it('is not offered while the API requires signing in', async () => {
+    await start();
+    expect(screen.getByText('Create account')).toBeVisible();
+    expect(screen.queryByText('Use it without an account')).toBeNull();
+  });
+
+  it('says what is given up, and only starts once that is agreed to', async () => {
+    server.anonymousAccounts = true;
+    await start();
+    fireEvent.press(screen.getByText('Use it without an account'));
+
+    expect(await screen.findByText('No account needed')).toBeVisible();
+    // The trade has to be on screen before they agree to it.
+    expect(screen.getByText('Your bills stay on this phone')).toBeVisible();
+
+    const begin = screen.getByRole('button', { name: 'Start checking bills' });
+    expect(begin).toBeDisabled();
+    fireEvent.press(screen.getByRole('checkbox'));
+    await act(async () => fireEvent.press(begin));
+
+    // No name was asked for, so the greeting cannot use one.
+    expect(await screen.findByText('Welcome')).toBeVisible();
+    expect(server.calls).toContain('POST /auth/anonymous');
+    expect(await tokenStore.get()).toMatch(/^token-/);
+  });
+
+  it('offers no log out, which would throw the bills away for good', async () => {
+    server.anonymousAccounts = true;
+    server.users.set('device-0', { id: 'u-device-0', phone: null, name: '' });
+    server.sessions.set('saved-token', 'device-0');
+    resetTokenStore('saved-token');
+    await start('/', /Welcome/);
+
+    fireEvent.press(screen.getByLabelText('Account'));
+    expect(screen.getByText('No account on this phone')).toBeVisible();
+    expect(screen.queryByText('Log out')).toBeNull();
+  });
+
+  it('sends people back to the welcome screen if the API has since closed it', async () => {
+    const router = await start('/no-account');
+    expect(router.getPathname()).toBe('/welcome');
   });
 });
 

@@ -19,6 +19,7 @@ export type ApiErrorCode =
   | 'sms_failed'
   | 'signup_token_invalid'
   | 'account_exists'
+  | 'sign_in_required'
   | 'not_authenticated'
   | 'invalid_request'
   | 'page_too_large'
@@ -47,7 +48,10 @@ type RequestOptions = {
   token?: string | null;
 };
 
-export async function apiFetch<T>(path: string, { method = 'GET', body, token }: RequestOptions = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  { method = 'GET', body, token }: RequestOptions = {},
+): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
