@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
+import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/button';
 import { Logo } from '@/components/logo';
 import { Text } from '@/components/text';
@@ -10,6 +11,7 @@ import { Gutter } from '@/constants/theme';
 
 export default function WelcomeScreen() {
   const { t } = useTranslation();
+  const { anonymousAllowed } = useAuth();
   return (
     <SafeAreaView style={styles.fill} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.hero}>
@@ -31,6 +33,15 @@ export default function WelcomeScreen() {
           label={t('auth.logIn')}
           onPress={() => router.push({ pathname: '/phone', params: { mode: 'login' } })}
         />
+        {/* Only when the API is set up for it: without it the next screen's
+            button can only fail. */}
+        {anonymousAllowed ? (
+          <Button
+            variant="quiet"
+            label={t('auth.withoutAccount')}
+            onPress={() => router.push('/no-account')}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );

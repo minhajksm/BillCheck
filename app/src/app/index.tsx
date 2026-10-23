@@ -40,6 +40,8 @@ export default function YourCasesScreen() {
   // The root layout only shows this screen to signed-in people.
   if (state.status !== 'signedIn') return null;
   const { user } = state;
+  // A device-only account has no number, and was never asked for a name.
+  const { phone } = user;
 
   const header = (
     <AppHeader
@@ -58,7 +60,7 @@ export default function YourCasesScreen() {
           accessibilityState={{ expanded: accountOpen }}
           hitSlop={6}
           onPress={() => setAccountOpen((open) => !open)}>
-          <Avatar name={user.name} />
+          <Avatar name={user.name} label={t('auth.guest')} />
         </Pressable>
       }
     />
@@ -68,15 +70,28 @@ export default function YourCasesScreen() {
     <Screen header={header}>
       {accountOpen ? (
         <Card style={styles.account}>
-          <Text weight="bold">{user.name}</Text>
-          <Text variant="small" color="ink2">
-            {t('auth.signedInAs', { phone: formatPhone(user.phone) })}
-          </Text>
-          <Button variant="secondary" icon="log-out" label={t('auth.logOut')} onPress={logout} />
+          {phone === null ? (
+            // No log out: without a number there is nothing to sign back in
+            // with, so the button would only throw the bills away.
+            <>
+              <Text weight="bold">{t('auth.deviceAccountTitle')}</Text>
+              <Text variant="small" color="ink2">
+                {t('auth.deviceAccountBody')}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text weight="bold">{user.name}</Text>
+              <Text variant="small" color="ink2">
+                {t('auth.signedInAs', { phone: formatPhone(phone) })}
+              </Text>
+              <Button variant="secondary" icon="log-out" label={t('auth.logOut')} onPress={logout} />
+            </>
+          )}
         </Card>
       ) : null}
       <Text variant="hello" weight="bold" style={styles.hello}>
-        {t('home.greeting', { name: user.name.split(' ')[0] })}
+        {phone === null ? t('home.greetingNoName') : t('home.greeting', { name: user.name.split(' ')[0] })}
       </Text>
       <Text color="ink2">{t('home.intro')}</Text>
 

@@ -146,7 +146,9 @@ export const CLOSED_CASE = {
  */
 export function installFakeApi() {
   const server = {
-    users: new Map<string, { id: string; phone: string; name: string }>(),
+    users: new Map<string, { id: string; phone: string | null; name: string }>(),
+    /** What GET /health answers, i.e. whether REQUIRE_SIGN_IN is off on the API. */
+    anonymousAccounts: false,
     codes: new Map<string, string>(),
     signupTokens: new Map<string, string>(),
     sessions: new Map<string, string>(),
@@ -189,6 +191,8 @@ export function installFakeApi() {
     const auth = (init?.headers as Record<string, string> | undefined)?.Authorization?.replace('Bearer ', '');
 
     switch (`${method} ${path}`) {
+      case 'GET /health':
+        return json(200, { status: 'ok', anonymous_accounts: server.anonymousAccounts });
       case 'POST /auth/otp/request':
         server.lastCode = server.nextCode;
         server.codes.set(body.phone, server.lastCode);
@@ -214,6 +218,14 @@ export function installFakeApi() {
         if (body.consent !== true) return json(422, { detail: [] });
         server.signupTokens.delete(body.signup_token);
         server.users.set(phone, { id: `u-${phone}`, phone, name: body.name });
+        return json(201, login(phone));
+      }
+      case 'POST /auth/anonymous': {
+        if (!server.anonymousAccounts) return fail(403, 'sign_in_required');
+        if (body.consent !== true) return json(422, { detail: [] });
+        // No number, so the key is one the device holds and nothing else.
+        const phone = `device-${server.users.size}`;
+        server.users.set(phone, { id: `u-${phone}`, phone: null, name: '' });
         return json(201, login(phone));
       }
       case 'GET /auth/me': {
