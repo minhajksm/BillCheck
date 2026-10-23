@@ -9,6 +9,7 @@ import CaseDashboardScreen from '@/app/cases/[caseId]';
 import YourCasesScreen from '@/app/index';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { ToastProvider } from '@/components/toast';
+import { Colors } from '@/constants/theme';
 import { installFakeApi } from '@/test-utils/fake-api';
 import { resetTokenStore } from '@/test-utils/memory-token-store';
 
@@ -38,8 +39,10 @@ const routes = {
   'bills/[billId]/ask': AskScreen,
 };
 
+let server: ReturnType<typeof installFakeApi>;
+
 beforeEach(() => {
-  const server = installFakeApi();
+  server = installFakeApi();
   server.users.set('+919876543210', {
     id: 'u1',
     phone: '+919876543210',
@@ -215,6 +218,35 @@ describe('the bill report', () => {
     fireEvent.press(await screen.findByText('Inj. Meropenem 1g'));
 
     expect(await screen.findByText("Why it's flagged")).toBeVisible();
+  });
+
+  it('colours a line for its own level, not every flagged line alike', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    // Both were painted amber, so a line the sheet then opened as a red
+    // "Duplicate" was striped as though it were only worth asking about.
+    expect(await screen.findByLabelText('1: Inj. Meropenem 1g')).toHaveStyle({
+      backgroundColor: Colors.light.redSoft,
+    });
+    expect(screen.getByLabelText('2: Surgical gloves')).toHaveStyle({
+      backgroundColor: Colors.light.marigoldSoft,
+    });
+  });
+
+  it('stands for the worst flag when one line carries two', async () => {
+    const bill = server.bills[0];
+    bill.flags.push({
+      ...structuredClone(bill.flags[1]),
+      id: 'f-second',
+      position: 3,
+      line_item_id: 'li-5',
+    });
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    // The amber one is listed last, and used to win the line by arriving last.
+    expect(await screen.findByLabelText('1: Inj. Meropenem 1g')).toHaveStyle({
+      backgroundColor: Colors.light.redSoft,
+    });
   });
 });
 

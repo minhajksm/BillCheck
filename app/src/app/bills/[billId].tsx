@@ -429,7 +429,15 @@ function categoryTotals(rows: LineItem[]): { category: LineCategory; total: numb
 function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (flag: Flag) => void }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const byItem = new Map(bill.flags.filter((f) => f.lineItemId).map((f) => [f.lineItemId as string, f]));
+  // A line can carry more than one flag, so the row has to stand for the
+  // worst of them. Last-one-wins put an amber stripe on a line the sheet then
+  // opened as a red duplicate.
+  const byItem = new Map<string, Flag>();
+  for (const flag of bill.flags) {
+    if (!flag.lineItemId) continue;
+    const shown = byItem.get(flag.lineItemId);
+    if (!shown || severity(flag) < severity(shown)) byItem.set(flag.lineItemId, flag);
+  }
   // The bill's own order, by the position the reader transcribed. A family
   // reads down this beside the hospital's copy, so any order but the printed
   // one makes them hunt for the line they are looking at.
@@ -469,8 +477,10 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
             style={[
               styles.billRow,
               { borderBottomColor: palette.line },
+              // The same two colours as the legend above and the markers in
+              // the flag list: red for a clear issue, amber for worth asking.
               flag.status === 'open' && {
-                backgroundColor: palette.marigoldSoft,
+                backgroundColor: flag.level === 'red' ? palette.redSoft : palette.marigoldSoft,
               },
             ]}>
             {content}
@@ -519,6 +529,14 @@ function WhereItWent({ rows, total }: { rows: LineItem[]; total: number }) {
       </View>
     </Card>
   );
+}
+
+/**
+ * Worst first, for a line with more than one flag: an open question before a
+ * settled one, and within those a clear issue before one worth asking.
+ */
+function severity(flag: Flag): number {
+  return (flag.status === 'open' ? 0 : 2) + (flag.level === 'red' ? 0 : 1);
 }
 
 function Marker({ position, level }: { position: number; level: Flag['level'] }) {
