@@ -265,15 +265,28 @@ def test_a_discharge_date_settles_it(analysis):
     assert case.closed_on == date(2018, 10, 25), "the discharge, even past the bill's own date"
 
 
-def test_an_old_bill_with_no_discharge_date_closes_on_its_own_date(analysis):
-    """The last day the stay is known to have reached. Anything after it would
-    be an assumption, and the assumption that cost a family "day 2,913" was
-    that the patient never left."""
+def test_an_old_bill_with_no_discharge_date_leaves_the_stay_open(analysis):
+    """A bill that does not say when the stay ended does not get to decide.
+
+    This used to close the case on the bill's own date, which reads as modest
+    -- the last day the stay is known to have reached -- and is not, because
+    `closed_on` is the upper bound of the stay check. An interim bill dated
+    the day of admission made the stay one day long and every later charge on
+    it "may belong to another visit".
+    """
     case = case_from_analysis(
         header(analysis, admission_date="22-Oct-18", discharge_date="", bill_date="23-Oct-18"),
         uuid.uuid4(),
     )
-    assert case.closed_on == date(2018, 10, 23)
+    assert case.closed_on is None
+
+
+def test_a_printed_discharge_date_still_closes_the_stay(analysis):
+    case = case_from_analysis(
+        header(analysis, admission_date="22-Oct-18", discharge_date="25-Oct-18", bill_date="23-Oct-18"),
+        uuid.uuid4(),
+    )
+    assert case.closed_on == date(2018, 10, 25)
 
 
 def test_a_bill_from_today_leaves_the_stay_open(analysis):
@@ -318,3 +331,56 @@ def test_a_family_can_say_the_patient_is_still_in(client: TestClient, auth_heade
 
     assert reopened.status_code == 200
     assert reopened.json()["closed_on"] is None
+
+
+def test_an_interim_bill_does_not_flag_the_days_it_covers(analysis):
+    """The whole bug, on the path it actually took.
+
+    A real bill: OLIVE Multispeciality, admitted 4 May 2025, interim bill
+    dated the same day, no discharge printed. `closed_on` was guessed from the
+    bill's own date, so the stay came out one day long, and every charge the
+    bill covered after that day was returned as "may belong to another visit"
+    -- most of the rows on it. An interim bill is issued during a stay; the
+    date it carries is not the day the patient left.
+
+    Both halves together, because neither is wrong on its own: the guess only
+    does damage once it reaches the stay check, which is how it survived.
+    """
+    from analysis import AnalysedLine
+    from review import flags_from_findings
+
+    def row(line_id: str, name: str, amount: float, on: str) -> AnalysedLine:
+        return AnalysedLine(
+            line_id=line_id,
+            description_verbatim=name,
+            category="unclassified",
+            quantity=None,
+            unit="",
+            rate=None,
+            amount=amount,
+            date=on,
+            mrp_printed=None,
+        )
+
+    interim = header(
+        analysis,
+        admission_date="04/05/2025",
+        discharge_date="",
+        bill_date="04/05/2025",
+    ).model_copy(
+        update={
+            "lines": [
+                row("L1", "Complete Blood Count-CBC", 300, "04/05/2025"),
+                row("L2", "Room rent", 4500, "05/05/2025"),
+                row("L3", "DOCTOR VISIT CHARGES", 4500, "06/05/2025"),
+                row("L4", "Nursing charges", 1200, "07/05/2025"),
+            ]
+        }
+    )
+
+    case = case_from_analysis(interim, uuid.uuid4())
+    assert case.closed_on is None, "no discharge date was printed on it"
+
+    # Exactly what bills.py hands the review.
+    flags = flags_from_findings(interim, [], case.admitted_on, case.closed_on)
+    assert [flag for flag in flags if flag.kind == "date_outside_stay"] == []
