@@ -22,7 +22,8 @@ export type Case = {
   title: string;
   hospital: { name: string; area: string };
   patient: { name: string; ipNumber: string; bed: string };
-  admittedOn: string;
+  /** Missing where the bill printed no admission date and nobody has said. */
+  admittedOn?: string;
   closedOn?: string;
   members: Member[];
   /** Whether you started this case. Only you can delete it. */

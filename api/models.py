@@ -169,7 +169,8 @@ class CaseOut(BaseModel):
     patient_name: str
     ip_number: str
     bed: str | None
-    admitted_on: date
+    admitted_on: date | None
+    """Null where the bill printed none and nobody has filled it in yet."""
     closed_on: date | None
     members: list[MemberOut]
     # Whether the caller is the one who started it. Only they can delete a case,

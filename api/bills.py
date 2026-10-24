@@ -286,7 +286,7 @@ def bill_day(analysis: BillAnalysis, supplied: date | None) -> date:
     return supplied or parse_bill_date(analysis.bill.bill_date) or india_today()
 
 
-def closed_on(header: BillHeader, admitted_on: date) -> date | None:
+def closed_on(header: BillHeader, admitted_on: date | None) -> date | None:
     """When the stay ended, or None where the bill doesn't say.
 
     Only a printed discharge date closes it. This used to fall back to the
@@ -306,7 +306,9 @@ def closed_on(header: BillHeader, admitted_on: date) -> date | None:
     Nothing is invented from a date the hospital didn't print.
     """
     discharged = parse_bill_date(header.discharge_date)
-    return max(discharged, admitted_on) if discharged is not None else None
+    if discharged is None:
+        return None
+    return discharged if admitted_on is None else max(discharged, admitted_on)
 
 
 def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
@@ -319,9 +321,13 @@ def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
     header = analysis.bill
     hospital_name, hospital_area = _split_hospital(header.hospital)
 
-    # The admission is what the stay is counted from, so a readable date on the
-    # bill beats the bill's own date, which beats today.
-    admitted_on = parse_bill_date(header.admission_date) or parse_bill_date(header.bill_date) or india_today()
+    # Only an admission date the bill prints. It used to fall back to the
+    # bill's own date and then to today, which put a date the hospital never
+    # printed on a case and showed it as fact: one real bill printed only
+    # "Date: 04/05/2025", two days before its own line items, and the case
+    # read "Admitted 4 May" while the reader was saying -- correctly -- that
+    # no admission date was printed on it. Left blank, the app asks for it.
+    admitted_on = parse_bill_date(header.admission_date)
 
     # The bill's own words for a label, so nothing of ours needs translating
     # into a case title. Blank where the bill says neither, and the app shows

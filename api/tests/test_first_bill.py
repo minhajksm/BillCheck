@@ -157,19 +157,40 @@ def test_the_admission_date_is_what_the_stay_is_counted_from(analysis):
     assert case.admitted_on == date(2018, 10, 22)
 
 
-def test_the_bill_s_own_date_stands_in_for_an_unprinted_admission(analysis):
-    """Many interim bills print no admission date. Dating the stay from the
-    bill is wrong by at most the length of the stay; dating it from today
-    would make every line of an old bill fall outside it."""
+def test_a_bill_that_prints_no_admission_date_leaves_it_blank(analysis):
+    """The bill's own date is not the admission date, and standing it in for
+    one said so on screen. A real bill printed "Date: 04/05/2025" and line
+    items dated two days after it: the case read "Admitted 4 May" while the
+    reader was saying, correctly, that no admission date was printed."""
     case = case_from_analysis(header(analysis, admission_date="", bill_date="23-Oct-2018"), uuid.uuid4())
-    assert case.admitted_on == date(2018, 10, 23)
+    assert case.admitted_on is None
 
 
-def test_a_bill_with_no_date_at_all_is_dated_today(analysis):
-    from db import india_today
+def test_a_bill_with_no_date_at_all_leaves_it_blank_too(analysis):
+    """Not today's date. A family would carry that to a billing desk."""
+    case = case_from_analysis(header(analysis, admission_date="", bill_date=""), uuid.uuid4())
+    assert case.admitted_on is None
+
+
+def test_a_discharge_date_still_closes_a_stay_with_no_start(analysis):
+    """The two are read apart. A bill that prints one and not the other says
+    what it says, and neither fills in for the other."""
+    case = case_from_analysis(
+        header(analysis, admission_date="", bill_date="", discharge_date="23-Oct-2018"), uuid.uuid4()
+    )
+    assert case.admitted_on is None
+    assert case.closed_on == date(2018, 10, 23)
+
+
+def test_the_stay_check_is_off_until_someone_says_when_it_started(analysis):
+    """Nothing can be outside a stay with no start, so nothing is flagged for
+    being. The app asks the family for the date instead."""
+    from review import flags_from_findings
 
     case = case_from_analysis(header(analysis, admission_date="", bill_date=""), uuid.uuid4())
-    assert case.admitted_on == india_today()
+    flags = flags_from_findings(analysis, [], case.admitted_on, case.closed_on)
+
+    assert [flag for flag in flags if flag.kind == "date_outside_stay"] == []
 
 
 def test_a_patient_the_bill_does_not_name_is_left_blank(analysis):

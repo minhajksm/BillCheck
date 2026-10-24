@@ -66,7 +66,11 @@ class Case(Base):
     patient_name: Mapped[str] = mapped_column(String(80))
     ip_number: Mapped[str] = mapped_column(String(40))
     bed: Mapped[str | None] = mapped_column(String(20))
-    admitted_on: Mapped[date] = mapped_column(Date)
+    # Null where the bill a case was opened from printed no admission date.
+    # A case is the record of a real admission and a plausible-looking guess
+    # in one is worse than a blank: the family is asked for it instead, and
+    # the stay check stays off until they give it.
+    admitted_on: Mapped[date | None] = mapped_column(Date)
     closed_on: Mapped[date | None] = mapped_column(Date)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

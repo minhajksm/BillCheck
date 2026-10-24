@@ -27,7 +27,7 @@ type ApiCase = {
   patient_name: string;
   ip_number: string;
   bed: string | null;
-  admitted_on: string;
+  admitted_on: string | null;
   closed_on: string | null;
   members: ApiMember[];
   is_owner: boolean;
@@ -92,7 +92,7 @@ export const toCase = (c: ApiCase): Case => ({
   title: c.title,
   hospital: { name: c.hospital_name, area: c.hospital_area },
   patient: { name: c.patient_name, ipNumber: c.ip_number, bed: c.bed ?? '' },
-  admittedOn: c.admitted_on,
+  admittedOn: c.admitted_on ?? undefined,
   closedOn: c.closed_on ?? undefined,
   members: c.members.map(toMember),
   isOwner: c.is_owner,
