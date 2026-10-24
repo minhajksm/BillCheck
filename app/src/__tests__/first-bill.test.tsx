@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Stack } from 'expo-router';
 import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { Image } from 'react-native';
 
 import BillReportScreen from '@/app/bills/[billId]';
 import ScanScreen from '@/app/cases/[caseId]/scan';
@@ -9,6 +10,7 @@ import FirstScanScreen from '@/app/scan';
 import { AuthProvider } from '@/auth/auth-context';
 import i18n from '@/i18n';
 import { ToastProvider } from '@/components/toast';
+import { Colors } from '@/constants/theme';
 import { installFakeApi } from '@/test-utils/fake-api';
 import { resetTokenStore } from '@/test-utils/memory-token-store';
 
@@ -21,6 +23,9 @@ type Picked = {
   assets: { uri: string; fileName: string; mimeType: string }[];
 };
 
+/** What the document picker hands back for a PDF. */
+type PickedFile = { canceled: boolean; assets: { uri: string; name: string }[] };
+
 // Prefixed `mock` so the factories below may reach them: jest hoists
 // `jest.mock` above the file, and only these names are allowed through.
 const mockCamera = jest.fn<() => Promise<Picked>>();
@@ -30,6 +35,12 @@ jest.mock('expo-image-picker', () => ({
   requestCameraPermissionsAsync: () => Promise.resolve({ granted: true }),
   launchCameraAsync: () => mockCamera(),
   launchImageLibraryAsync: () => mockLibrary(),
+}));
+
+const mockDocument = jest.fn<() => Promise<PickedFile>>();
+
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: () => mockDocument(),
 }));
 
 jest.mock('@/data/prepare-page', () => ({
@@ -80,7 +91,16 @@ beforeEach(async () => {
   resetTokenStore('saved-token');
   mockCamera.mockReset();
   mockLibrary.mockReset();
+  mockDocument.mockReset();
 });
+
+/** The scan screen with one page already on it. */
+async function withOnePage() {
+  mockCamera.mockResolvedValue(PICKED);
+  renderRouter(routes, { initialUrl: '/' });
+  fireEvent.press(await screen.findByText('Photograph bill'));
+  await screen.findByText('Check bill');
+}
 
 /**
  * Checking a bill before there is a case for it.
@@ -227,5 +247,57 @@ describe('checking a bill from the home screen', () => {
 
     // For anyone setting a case up before the first bill arrives.
     expect(await screen.findByText('Start a new case')).toBeVisible();
+  });
+});
+
+describe('the page waiting to be checked', () => {
+  it('is the photograph itself, not a numbered box', async () => {
+    await withOnePage();
+
+    // A stamp-sized square with a "1" in it proved nothing about whether the
+    // page is square in frame or the small print came out.
+    const [preview] = screen.UNSAFE_getAllByType(Image);
+    expect(preview.props.source).toEqual({ uri: 'file:///bill-page-1.jpg' });
+    expect(preview.props.resizeMode).toBe('contain');
+  });
+
+  it('is still removable by tapping it', async () => {
+    await withOnePage();
+
+    fireEvent.press(screen.getByLabelText('Remove page 1'));
+    expect(await screen.findByText(/Fit one page inside the frame/)).toBeVisible();
+  });
+
+  it('shows a PDF by name, having no picture to show', async () => {
+    mockDocument.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///final-bill.pdf', name: 'final-bill.pdf' }],
+    });
+    renderRouter(routes, { initialUrl: '/scan' });
+    fireEvent.press(await screen.findByText('Upload PDF'));
+
+    expect(await screen.findByText('final-bill.pdf')).toBeVisible();
+    expect(screen.UNSAFE_queryAllByType(Image)).toEqual([]);
+  });
+});
+
+describe('what to do next on the scan screen', () => {
+  it('leads with the camera while there is nothing to check', async () => {
+    renderRouter(routes, { initialUrl: '/scan' });
+
+    const photo = await screen.findByRole('button', { name: 'Take photo' });
+    expect(photo).toHaveStyle({ backgroundColor: Colors.light.indigo });
+    expect(screen.queryByText('Check bill')).toBeNull();
+  });
+
+  it('leads with checking the bill the moment there is one', async () => {
+    await withOnePage();
+
+    // "Check bill" used to be the fourth button down and the quietest of
+    // them, under three ways to add another page.
+    const check = screen.getByRole('button', { name: 'Check bill' });
+    const photo = screen.getByRole('button', { name: 'Take photo' });
+    expect(check).toHaveStyle({ backgroundColor: Colors.light.indigo });
+    expect(photo).not.toHaveStyle({ backgroundColor: Colors.light.indigo });
   });
 });
