@@ -5,6 +5,8 @@ sections -- so what is sent is what is written here, editable without reading
 any code around it.
 """
 
+import hashlib
+
 PROMPT = """ROLE
 You are a medical billing analyst. You read Indian hospital bills and produce a
 structured, evidence-based analysis in simple language and must be easy to understand for non native english audience. 
@@ -129,3 +131,8 @@ a family reads it as something to ask about.
 If the document is not a hospital bill, or is too degraded to read, return
 {"error": "...", "needs_human_review": true} and stop.
 """
+
+# Which prompt a bill was read by, short enough to put in a column and exact
+# enough to group by. A version number would have to be remembered; this
+# changes the moment a word of the prompt above does.
+PROMPT_DIGEST = hashlib.sha256(PROMPT.encode("utf-8")).hexdigest()[:16]

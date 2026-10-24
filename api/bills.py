@@ -19,15 +19,25 @@ from sqlalchemy.orm import Session, selectinload
 
 import audit
 from analysis import AnalysedLine, BillAnalysis, BillHeader
+from analysis_prompt import PROMPT_DIGEST
 from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, FlagOut, FlagUpdate, LineItemOut
 from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data, parse_bill_date
-from review import flags_from_findings
+from review import Reviewed, flags_from_findings, review_findings
 from settings import get_settings
-from tables import Bill, Case, CaseMember, Flag, LineItem, UploadAttempt
+from tables import (
+    Bill,
+    BillRead,
+    Case,
+    CaseMember,
+    Flag,
+    LineItem,
+    ReaderFinding,
+    UploadAttempt,
+)
 
 router = APIRouter(tags=["bills"])
 
@@ -157,8 +167,19 @@ def bill_discount(analysis: BillAnalysis, subtotal: Decimal) -> Decimal | None:
     return discount
 
 
-def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audit.Flag], bill: Bill) -> Bill:
-    """Writes the line items and their flags, and totals the bill."""
+def store_bill(
+    db: Session,
+    case: Case,
+    analysis: BillAnalysis,
+    flags: list[audit.Flag],
+    bill: Bill,
+    reviewed: list[Reviewed] | None = None,
+) -> Bill:
+    """Writes the line items and their flags, and totals the bill.
+
+    `reviewed` is what the reader returned and what became of each of it; with
+    it the reading is recorded too. Left out, only the bill is written.
+    """
     items_by_position: dict[int, LineItem] = {}
     subtotal = Decimal("0")
     for position, line in enumerate(analysis.lines, start=1):
@@ -186,23 +207,87 @@ def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audi
     bill.total = subtotal - (bill.discount or Decimal("0"))
     db.flush()
 
+    # Keyed by the finding each came from, so the record of the reading can
+    # point at the flag a family actually saw.
+    by_finding: dict[str, Flag] = {}
     for position, flag in enumerate(flags, start=1):
         item = items_by_position.get(flag.row_position)
+        stored = Flag(
+            bill_id=bill.id,
+            line_item_id=item.id if item else None,
+            position=position,
+            kind=flag.kind,
+            level=flag.level,
+            billed=flag.billed,
+            reference_amount=flag.reference_amount,
+            reference_source=flag.reference_source,
+            reference_detail=flag.reference_detail,
+            excess=flag.excess,
+        )
+        db.add(stored)
+        index = flag.reference_detail.get("finding_index")
+        if index is not None:
+            by_finding[index] = stored
+
+    if reviewed is not None:
+        db.flush()
+        store_reading(db, analysis, reviewed, bill, by_finding)
+    return bill
+
+
+def store_reading(
+    db: Session,
+    analysis: BillAnalysis,
+    reviewed: list[Reviewed],
+    bill: Bill,
+    by_finding: dict[str, Flag],
+) -> None:
+    """What the reader did with this bill, kept so it can be judged later.
+
+    Nothing here is served to anybody. It exists because the two questions
+    worth asking of a reader -- how often it loses its own line numbering,
+    and whether a prompt change made it better -- were answerable only from
+    Cloud Run's logs, which is to say not answerable.
+    """
+    settings = get_settings()
+    structural = analysis.structural
+    db.add(
+        BillRead(
+            bill_id=bill.id,
+            provider=settings.ocr_provider,
+            model=settings.ocr_model,
+            effort=settings.ocr_effort,
+            prompt_digest=PROMPT_DIGEST,
+            extraction_confidence=to_decimal(analysis.bill.extraction_confidence),
+            needs_human_review=analysis.needs_human_review,
+            review_reasons=list(analysis.review_reasons),
+            consumable_share_pct=to_decimal(structural.consumable_share_pct),
+            unitemised_share_pct=to_decimal(structural.unitemised_share_pct),
+            unreadable_line_count=structural.unreadable_line_count,
+            lines_read=len(analysis.lines),
+            pages_processed=analysis.bill.pages_processed,
+            findings_returned=len(reviewed),
+            findings_shown=sum(1 for one in reviewed if one.shown),
+        )
+    )
+    for one in reviewed:
+        finding = one.finding
+        flag = by_finding.get(str(one.index)) if one.shown else None
         db.add(
-            Flag(
+            ReaderFinding(
                 bill_id=bill.id,
-                line_item_id=item.id if item else None,
-                position=position,
-                kind=flag.kind,
-                level=flag.level,
-                billed=flag.billed,
-                reference_amount=flag.reference_amount,
-                reference_source=flag.reference_source,
-                reference_detail=flag.reference_detail,
-                excess=flag.excess,
+                flag_id=flag.id if flag is not None else None,
+                finding_id=finding.finding_id[:40],
+                rule=finding.rule[:200],
+                severity=finding.severity,
+                outcome=one.outcome,
+                statement=finding.statement,
+                evidence=finding.evidence_quoted,
+                confirmation_required=finding.confirmation_required,
+                line_ids=",".join(finding.line_ids)[:300],
+                line_numbers=",".join(str(position) for position in one.positions)[:300],
             )
         )
-    return bill
 
 
 def bill_out(bill: Bill) -> BillOut:
@@ -411,14 +496,18 @@ def check_and_store(
         )
         for position, line in enumerate(analysis.lines, start=1)
     ]
+    keep_all = get_settings().review_keep_all
     reference_flags = audit.audit_bill(rows, references)
     flags = flags_from_findings(
         analysis,
         reference_flags,
         case.admitted_on,
         case.closed_on,
-        keep_all=get_settings().review_keep_all,
+        keep_all=keep_all,
     )
+    # The same pure pass the flags came from, so the record of the reading
+    # cannot say a finding was shown that wasn't.
+    reviewed = review_findings(analysis, keep_all=keep_all)
 
     bill = Bill(
         case_id=case.id,
@@ -428,7 +517,7 @@ def check_and_store(
     )
     db.add(bill)
     db.flush()
-    store_bill(db, case, analysis, flags, bill)
+    store_bill(db, case, analysis, flags, bill, reviewed)
     db.commit()
     return bill
 

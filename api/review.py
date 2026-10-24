@@ -15,7 +15,7 @@ already in hand here, so comparing them is not something to ask a model to do.
 """
 
 import logging
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 
@@ -33,6 +33,51 @@ _LEVEL: dict[str, FlagLevel] = {"high": "red", "medium": "amber", "low": "amber"
 _ORDER = {"red": 0, "amber": 1}
 
 STAY_KIND = "date_outside_stay"
+
+# What became of a finding. A dropped one never reaches a family, and used to
+# reach nothing else either: it went to the log, which on Cloud Run is not
+# somewhere you can ask how often the reader loses its own line numbering.
+SHOWN = "shown"
+DROPPED_LOW_SEVERITY = "dropped_low_severity"
+DROPPED_UNKNOWN_LINES = "dropped_unknown_lines"
+
+
+@dataclass(frozen=True)
+class Reviewed:
+    """A finding and what became of it.
+
+    `index` is its place in the reader's own `findings`, which is what ties a
+    stored flag back to the finding it came from: `finding_id` is the reader's
+    and nothing promises it is unique within a bill.
+    """
+
+    index: int
+    finding: Finding
+    positions: list[int]
+    outcome: str
+
+    @property
+    def shown(self) -> bool:
+        return self.outcome == SHOWN
+
+
+def review_findings(analysis: BillAnalysis, *, keep_all: bool = True) -> list[Reviewed]:
+    """Every finding the reader returned, with the lines it lands on and
+    whether it is shown. Pure, so it can be called for the flags and again for
+    the record of the reading without the two being able to disagree."""
+    reviewed = []
+    for index, finding in enumerate(analysis.findings):
+        positions = _positions(analysis, finding)
+        if not keep_all and finding.severity == "low":
+            outcome = DROPPED_LOW_SEVERITY
+        elif finding.line_ids and not positions:
+            # Named lines that aren't in the transcription: the reader lost its
+            # own numbering, and there is no line for the flag to hang on.
+            outcome = DROPPED_UNKNOWN_LINES
+        else:
+            outcome = SHOWN
+        reviewed.append(Reviewed(index=index, finding=finding, positions=positions, outcome=outcome))
+    return reviewed
 
 
 def date_detail(on: date, admitted_on: date, closed_on: date | None) -> dict[str, str]:
@@ -109,7 +154,7 @@ def _billed(analysis: BillAnalysis, positions: list[int]) -> Decimal:
     return Decimal(str(line.amount)) if line and line.amount is not None else Decimal("0")
 
 
-def _to_flag(analysis: BillAnalysis, finding: Finding, positions: list[int]) -> Flag:
+def _to_flag(analysis: BillAnalysis, finding: Finding, positions: list[int], index: int) -> Flag:
     """A flag carrying the reader's own words.
 
     `statement` goes in as `why_en` because that is the field the app shows in
@@ -141,6 +186,9 @@ def _to_flag(analysis: BillAnalysis, finding: Finding, positions: list[int]) -> 
             # the numbers are what goes on screen.
             "lines": ",".join(finding.line_ids),
             "line_numbers": ",".join(str(position) for position in positions),
+            # Its place in the reader's own findings, so what was stored can
+            # be matched back to what was read. Nothing on screen shows it.
+            "finding_index": str(index),
             "why_en": finding.statement,
         },
     )
@@ -185,17 +233,15 @@ def flags_from_findings(
     one.
     """
     flags: list[Flag] = []
-    for finding in analysis.findings:
-        if not keep_all and finding.severity == "low":
+    for reviewed in review_findings(analysis, keep_all=keep_all):
+        finding = reviewed.finding
+        if reviewed.outcome == DROPPED_LOW_SEVERITY:
             logger.warning("Dropped %s: low severity (%s)", finding.rule, finding.statement)
             continue
-        positions = _positions(analysis, finding)
-        if finding.line_ids and not positions:
-            # Named lines that aren't in the transcription: the reader lost its
-            # own numbering, and there is no line for the flag to hang on.
+        if reviewed.outcome == DROPPED_UNKNOWN_LINES:
             logger.warning("Dropped %s: names lines %s that aren't there", finding.rule, finding.line_ids)
             continue
-        flags.append(_to_flag(analysis, finding, positions))
+        flags.append(_to_flag(analysis, finding, reviewed.positions, reviewed.index))
 
     if admitted_on is not None:
         for position, on in _outside_stay(analysis, admitted_on, closed_on):
