@@ -78,11 +78,12 @@ Return a single JSON object and nothing else:
 
 {
   "bill": { "hospital", "bill_no", "bill_date", "admission_date",
-            "discharge_date", "stay_days", "room_category", "total",
+            "discharge_date", "stay_days", "room_category",
+            "discount", "total",
             "patient_name", "ip_number",
             "pages_processed", "extraction_confidence": 0.0-1.0 },
   "lines": [ { "line_id", "description_verbatim", "category",
-               "quantity", "unit", "rate", "amount", "date",
+               "quantity", "unit", "rate", "amount", "net_amount", "date",
                "mrp_printed" } ],
   "findings": [ { "finding_id", "rule", "severity", "line_ids": [],
                   "evidence_quoted", "statement",
@@ -93,6 +94,13 @@ Return a single JSON object and nothing else:
   "needs_human_review": true|false,
   "review_reasons": []
 }
+
+Indian bills often print two money columns: a gross "Amount" and a "Net
+Amount" after a discount applied across the bill. Then "amount" is the gross
+as printed and "net_amount" the net, "discount" is the bill's own discount
+line, and "total" is what is payable after it. Where a bill prints one money
+column, "net_amount" and "discount" are null and "total" is the total printed.
+Never compute any of them: a figure the bill does not print is null.
 
 "requires_reference_price" lists every consumable, disposable and device line
 whose rate cannot be assessed from the bill alone. That list is the handoff to

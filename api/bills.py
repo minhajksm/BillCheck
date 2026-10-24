@@ -140,10 +140,27 @@ def line_detail(line: AnalysedLine) -> str | None:
     return f"{count} {line.unit}".strip() or None
 
 
+def bill_discount(analysis: BillAnalysis, subtotal: Decimal) -> Decimal | None:
+    """The discount to trust, out of what the reader read.
+
+    A discount is a figure off the bill, so it is between nothing and the
+    whole of it. Anything else is a misreading -- the sub-total copied into
+    the wrong field, a minus sign, a line's own amount -- and taking it would
+    print a family a total that is larger than their bill, or negative.
+    """
+    discount = to_decimal(analysis.bill.discount)
+    if discount is None:
+        return None
+    if not Decimal("0") < discount <= subtotal:
+        logger.warning("ignoring a discount of %s against a sub-total of %s", discount, subtotal)
+        return None
+    return discount
+
+
 def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audit.Flag], bill: Bill) -> Bill:
     """Writes the line items and their flags, and totals the bill."""
     items_by_position: dict[int, LineItem] = {}
-    total = Decimal("0")
+    subtotal = Decimal("0")
     for position, line in enumerate(analysis.lines, start=1):
         amount = to_decimal(line.amount) or Decimal("0")
         item = LineItem(
@@ -154,13 +171,19 @@ def store_bill(db: Session, case: Case, analysis: BillAnalysis, flags: list[audi
             detail=(line_detail(line) or None),
             quantity=to_decimal(line.quantity),
             amount=amount,
+            net_amount=to_decimal(line.net_amount),
             category=line.category,
         )
         db.add(item)
         items_by_position[position] = item
-        total += amount
+        subtotal += amount
 
-    bill.total = total
+    # The sub-total is added up here rather than taken from the bill's own
+    # printed one: it is the lines the family is shown, so it is the figure
+    # that has to agree with them. The discount is the bill's own, because
+    # nothing on the lines gives it.
+    bill.discount = bill_discount(analysis, subtotal)
+    bill.total = subtotal - (bill.discount or Decimal("0"))
     db.flush()
 
     for position, flag in enumerate(flags, start=1):
@@ -188,6 +211,10 @@ def bill_out(bill: Bill) -> BillOut:
         case_id=bill.case_id,
         date=bill.bill_date,
         page_count=bill.page_count,
+        # All three, so the report can show the ledger the bill prints rather
+        # than asking the app to do the arithmetic back.
+        subtotal=float(bill.total + (bill.discount or Decimal("0"))),
+        discount=float(bill.discount) if bill.discount is not None else None,
         total=float(bill.total),
         line_items=[
             LineItemOut(
@@ -197,6 +224,7 @@ def bill_out(bill: Bill) -> BillOut:
                 detail=item.detail,
                 quantity=float(item.quantity) if item.quantity is not None else None,
                 amount=float(item.amount),
+                net_amount=float(item.net_amount) if item.net_amount is not None else None,
                 category=item.category,  # type: ignore[arg-type]
             )
             for item in bill.line_items

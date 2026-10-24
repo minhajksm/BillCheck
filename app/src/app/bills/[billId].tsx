@@ -113,10 +113,10 @@ function Report({
           body={t('report.nothingFlaggedBody')}
         />
       ) : view === 'bill' ? (
-        <MarkedBill bill={bill} item={item} onOpen={setOpenFlag} />
+        <MarkedBill bill={bill} onOpen={setOpenFlag} />
       ) : (
         <>
-          <WhereItWent rows={bill.lineItems} total={bill.total} />
+          <WhereItWent bill={bill} />
           <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
         </>
       )}
@@ -214,6 +214,17 @@ function ReportHeader({
         {formatINR(bill.total)}
       </Text>
       <Text color="ink2">{t('report.billedAcross', { count: bill.lineItems.length })}</Text>
+      {/* The headline is what the hospital is asking for. Where that is not
+          what the lines add up to, the difference is the bill's own discount
+          and has to be said, or the rows below look like they disagree. */}
+      {bill.discount !== undefined ? (
+        <Text variant="small" color="ink2">
+          {t('report.afterDiscount', {
+            subtotal: formatINR(bill.subtotal),
+            discount: formatINR(bill.discount),
+          })}
+        </Text>
+      ) : null}
 
       <SeverityBar shape={shape} />
 
@@ -426,8 +437,7 @@ function categoryTotals(rows: LineItem[]): { category: LineCategory; total: numb
   }));
 }
 
-function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (flag: Flag) => void }) {
-  const { t } = useTranslation();
+function MarkedBill({ bill, onOpen }: { bill: Bill; onOpen: (flag: Flag) => void }) {
   const palette = usePalette();
   // A line can carry more than one flag, so the row has to stand for the
   // worst of them. Last-one-wins put an amber stripe on a line the sheet then
@@ -488,11 +498,47 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
         );
       })}
 
+      <BillLedger bill={bill} />
+    </Card>
+  );
+}
+
+/**
+ * What the bill comes to, the way the bill itself prints it.
+ *
+ * One figure where there is one. Where the hospital discounted, three: the
+ * rows above add up to the sub-total and not to what was paid, so printing
+ * only the payable makes them look wrong, and printing only their sum tells a
+ * family handed a bill for Rs 35,000 that it was Rs 43,300.
+ */
+function BillLedger({ bill }: { bill: Bill }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+
+  if (bill.discount === undefined) {
+    return (
       <View style={styles.billTotal}>
         <Text weight="bold">{t('report.billTotal')}</Text>
         <Text weight="bold">{formatINR(bill.total)}</Text>
       </View>
-    </Card>
+    );
+  }
+
+  return (
+    <View style={styles.ledger}>
+      <View style={styles.ledgerRow}>
+        <Text color="ink2">{t('report.subtotal')}</Text>
+        <Text color="ink2">{formatINR(bill.subtotal)}</Text>
+      </View>
+      <View style={styles.ledgerRow}>
+        <Text color="ink2">{t('report.discount')}</Text>
+        <Text color="green">{t('report.lessAmount', { amount: formatINR(bill.discount) })}</Text>
+      </View>
+      <View style={[styles.ledgerRow, styles.ledgerTotal, { borderTopColor: palette.line }]}>
+        <Text weight="bold">{t('report.billTotal')}</Text>
+        <Text weight="bold">{formatINR(bill.total)}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -503,10 +549,10 @@ function MarkedBill({ bill, item, onOpen }: { bill: Bill; item: Case; onOpen: (f
  * bill, and "the medicines came to more than the room" is worth asking even
  * where no single line was flagged.
  */
-function WhereItWent({ rows, total }: { rows: LineItem[]; total: number }) {
+function WhereItWent({ bill }: { bill: Bill }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const totals = categoryTotals(rows);
+  const totals = categoryTotals(bill.lineItems);
 
   return (
     <Card style={styles.whereItWent}>
@@ -524,8 +570,7 @@ function WhereItWent({ rows, total }: { rows: LineItem[]; total: number }) {
         ))}
       </View>
       <View style={[styles.wentTotal, { borderTopColor: palette.line }]}>
-        <Text weight="bold">{t('report.billTotal')}</Text>
-        <Text weight="bold">{formatINR(total)}</Text>
+        <BillLedger bill={bill} />
       </View>
     </Card>
   );
@@ -725,13 +770,7 @@ const styles = StyleSheet.create({
   billName: { flex: 1 },
   whereItWent: { padding: 14, marginBottom: 14 },
   wentRows: { marginTop: 8, gap: 5 },
-  wentTotal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-  },
+  wentTotal: { marginTop: 10, borderTopWidth: 1 },
   wentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -746,6 +785,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingHorizontal: 4,
   },
+  ledger: { paddingTop: 10, paddingHorizontal: 4, gap: 4 },
+  ledgerRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  ledgerTotal: { borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
   fine: { marginTop: 14, lineHeight: 18 },
   cta: { marginTop: 18, gap: 10 },
   scrim: {

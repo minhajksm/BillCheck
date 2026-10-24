@@ -56,7 +56,10 @@ export type LineItem = {
   name: string;
   detail?: string;
   quantity?: number;
+  /** Gross, as the line prints it. */
   amount: number;
+  /** The same line after the bill's discount, where it prints one. */
+  netAmount?: number;
   category: LineCategory;
 };
 
@@ -125,6 +128,11 @@ export type Bill = {
   caseId: string;
   date: string;
   pageCount: number;
+  /** What the lines come to, before any discount. */
+  subtotal: number;
+  /** The discount the bill prints across the whole of it, where it prints one. */
+  discount?: number;
+  /** What the hospital is asking for: the sub-total less the discount. */
   total: number;
   lineItems: LineItem[];
   flags: Flag[];

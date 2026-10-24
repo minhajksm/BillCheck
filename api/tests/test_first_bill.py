@@ -348,6 +348,7 @@ def test_an_interim_bill_does_not_flag_the_days_it_covers(analysis):
             unit="",
             rate=None,
             amount=amount,
+            net_amount=None,
             date=on,
             mrp_printed=None,
         )

@@ -6,6 +6,8 @@ export const SAMPLE_BILL = {
   case_id: 'papa-admission',
   date: '2026-10-11',
   page_count: 1,
+  subtotal: 42490,
+  discount: null,
   total: 42490,
   line_items: [
     {
@@ -15,6 +17,7 @@ export const SAMPLE_BILL = {
       detail: '1 day',
       quantity: null,
       amount: 6500,
+      net_amount: null,
       category: 'room_and_nursing',
     },
     {
@@ -24,6 +27,7 @@ export const SAMPLE_BILL = {
       detail: '6 vials',
       quantity: 6,
       amount: 17700,
+      net_amount: null,
       category: 'pharmacy_drug',
     },
     {
@@ -33,6 +37,7 @@ export const SAMPLE_BILL = {
       detail: '80 pairs',
       quantity: 80,
       amount: 6800,
+      net_amount: null,
       category: 'consumable_disposable',
     },
   ],

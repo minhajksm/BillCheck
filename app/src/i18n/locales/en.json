@@ -267,6 +267,10 @@
     "othersInRange_other": "{{count}} other items are within range",
     "fine": "Checked against listed MRPs, NPPA ceiling prices, and what similar hospital stays cost. Flags are questions, not verdicts.",
     "billTotal": "Bill total",
+    "subtotal": "Sub total",
+    "discount": "Discount",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} billed, less a {{discount}} discount",
     "billHeader": "Interim bill, {{date}}",
     "patientLine": "IP no. {{ip}}, {{patient}}",
     "categories": {

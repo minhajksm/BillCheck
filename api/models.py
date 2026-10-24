@@ -210,6 +210,9 @@ class LineItemOut(BaseModel):
     detail: str | None
     quantity: float | None
     amount: float
+    """Gross, as the line prints it."""
+    net_amount: float | None
+    """The same line after the bill's discount, where it prints one. Else null."""
     category: Category
 
 
@@ -234,7 +237,12 @@ class BillOut(BaseModel):
     case_id: uuid.UUID
     date: date
     page_count: int
+    subtotal: float
+    """What the lines come to, before any discount."""
+    discount: float | None
+    """The discount the bill prints across the whole of it. Null when none."""
     total: float
+    """What the hospital is asking for: the sub-total less the discount."""
     line_items: list[LineItemOut]
     flags: list[FlagOut]
 

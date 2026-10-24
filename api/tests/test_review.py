@@ -42,6 +42,7 @@ def line(
         unit=unit,
         rate=None,
         amount=amount,
+        net_amount=None,
         date=on,
         mrp_printed=None,
     )
@@ -93,6 +94,7 @@ def analysis(
             discharge_date="",
             stay_days=None,
             room_category="",
+            discount=None,
             total=float(sum(row.amount or 0 for row in rows)),
             patient_name="Ramesh Sharma",
             ip_number="IP/4417",

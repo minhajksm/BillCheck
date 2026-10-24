@@ -110,6 +110,7 @@ def test_a_line_carries_only_what_something_reads():
         "unit",
         "rate",
         "amount",
+        "net_amount",
         "date",
         "mrp_printed",
     ]

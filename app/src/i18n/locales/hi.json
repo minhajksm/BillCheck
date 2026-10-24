@@ -267,6 +267,10 @@
     "othersInRange_other": "{{count}} और आइटम सही दायरे में हैं",
     "fine": "सूचीबद्ध MRP, NPPA की अधिकतम कीमतों और ऐसे ही अस्पताल ठहरावों के खर्च से मिलान किया गया। ये सवाल हैं, फ़ैसले नहीं।",
     "billTotal": "बिल का कुल",
+    "subtotal": "उप-योग",
+    "discount": "छूट",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} का बिल, {{discount}} की छूट के बाद",
     "billHeader": "अंतरिम बिल, {{date}}",
     "patientLine": "IP नं. {{ip}}, {{patient}}",
     "categories": {

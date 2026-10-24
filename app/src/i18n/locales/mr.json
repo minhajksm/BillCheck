@@ -267,6 +267,10 @@
     "othersInRange_other": "{{count}} आणखी आयटम योग्य मर्यादेत आहेत",
     "fine": "नोंदवलेली MRP, NPPA च्या कमाल किमती आणि अशाच रुग्णालयातील मुक्कामांच्या खर्चाशी पडताळले. हे प्रश्न आहेत, निर्णय नाहीत.",
     "billTotal": "बिलाची एकूण रक्कम",
+    "subtotal": "उप-बेरीज",
+    "discount": "सवलत",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} चे बिल, {{discount}} सवलतीनंतर",
     "billHeader": "अंतरिम बिल, {{date}}",
     "patientLine": "IP क्र. {{ip}}, {{patient}}",
     "categories": {
