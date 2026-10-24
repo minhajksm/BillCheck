@@ -31,7 +31,18 @@ class User(Base):
     # DPDP: which consent text the user agreed to, and when.
     consent_version: Mapped[str] = mapped_column(String(20))
     consented_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    # A separate consent, for lab reports. The one above covers "the bills I
+    # add", used "only to check my bills": a lab report is neither, so purpose
+    # limitation means asking again, once, before the first one. Null until
+    # they have agreed.
+    lab_consent_version: Mapped[str | None] = mapped_column(String(20))
+    lab_consented_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    @property
+    def lab_consent(self) -> bool:
+        """Whether they have agreed to lab reports being stored and explained."""
+        return self.lab_consented_at is not None
 
 
 class OtpChallenge(Base):
@@ -324,3 +335,43 @@ class ReaderFinding(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     bill: Mapped[Bill] = relationship(back_populates="reader_findings")
+
+
+class LabReport(Base):
+    """A lab report, read and explained in plain words.
+
+    The pages are never kept, as with bills: what is stored is the results as
+    printed and the explanation of them, so the family can open it again and
+    read it in the other language. It belongs to the account that uploaded it
+    and goes when that account does.
+
+    `tests` is a document read back whole and never queried by test, so it is
+    JSON: each result verbatim -- name, value, unit, the range the report
+    printed -- with its status and its explanation in English and Hindi. A
+    status the arithmetic corrected keeps the reader's own beside it as
+    `reader_status`. See lab_analysis.py.
+    """
+
+    __tablename__ = "lab_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # As printed. The date in particular is never parsed: lab reports print
+    # it every way there is, nothing here computes with it, and a parse that
+    # guessed the day and month the wrong way round would be an invention.
+    lab_name: Mapped[str] = mapped_column(String(200))
+    patient_name: Mapped[str] = mapped_column(String(80))
+    report_date: Mapped[str] = mapped_column(String(40))
+    page_count: Mapped[int] = mapped_column(Integer, default=1)
+    tests: Mapped[list] = mapped_column(JSON, default=list)
+    summary_en: Mapped[str] = mapped_column(Text)
+    summary_hi: Mapped[str] = mapped_column(Text)
+    questions_en: Mapped[list] = mapped_column(JSON, default=list)
+    questions_hi: Mapped[list] = mapped_column(JSON, default=list)
+    # Only where the report itself marked a result critical.
+    urgent: Mapped[bool] = mapped_column(Boolean, default=False)
+    # What explained it, for the same reason bill_reads records it.
+    model: Mapped[str] = mapped_column(String(60))
+    effort: Mapped[str] = mapped_column(String(10))
+    prompt_digest: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)

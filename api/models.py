@@ -72,6 +72,9 @@ class UserOut(BaseModel):
     # bills are held on this phone alone.
     phone: str | None
     name: str
+    # Whether they have agreed to lab reports. The app asks once, before the
+    # first, because the sign-up consent covers bills and only bills.
+    lab_consent: bool = False
 
 
 class LoggedIn(BaseModel):
@@ -250,3 +253,52 @@ class BillOut(BaseModel):
 
 class FlagUpdate(BaseModel):
     status: Literal["open", "corrected", "explained"]
+
+
+class LabConsent(BaseModel):
+    """Agreeing to lab reports being stored and explained. Only `true` is a body."""
+
+    consent: Literal[True]
+
+
+class LabTestOut(BaseModel):
+    """One result, verbatim, and what it is. Never what it means for the patient."""
+
+    name: str
+    value: str
+    unit: str
+    range: str
+    """Exactly as the report prints it. Empty where it prints none."""
+    status: Literal["low", "high", "in_range", "no_range"]
+    """Against the printed range only. Checked by arithmetic where both are numbers."""
+    explanation_en: str
+    explanation_hi: str
+
+
+class LabReportOut(BaseModel):
+    id: uuid.UUID
+    lab_name: str
+    patient_name: str
+    report_date: str
+    """As printed. Never parsed."""
+    page_count: int
+    tests: list[LabTestOut]
+    summary_en: str
+    summary_hi: str
+    questions_en: list[str]
+    questions_hi: list[str]
+    urgent: bool
+    """The report itself marked a result critical: show it to a doctor today."""
+    created_at: datetime
+
+
+class LabReportSummaryOut(BaseModel):
+    """A row in the list of saved reports."""
+
+    id: uuid.UUID
+    lab_name: str
+    report_date: str
+    test_count: int
+    outside_range: int
+    urgent: bool
+    created_at: datetime
