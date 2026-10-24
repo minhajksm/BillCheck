@@ -181,6 +181,25 @@ describe('without an account', () => {
     expect(screen.queryByText('Use it without an account')).toBeNull();
   });
 
+  it('is offered when the answer arrives, even after launch stopped waiting for it', async () => {
+    // A Cloud Run instance waking from idle takes longer to answer than launch
+    // waits. Its answer used to be thrown away, hiding the option for the
+    // whole of any launch that happened to wake the server.
+    server.anonymousAccounts = true;
+    let wake = () => {};
+    server.healthWaitsFor = new Promise<void>((resolve) => {
+      wake = resolve;
+    });
+
+    renderRouter(routes, { initialUrl: '/' });
+    // Launch stops waiting for the answer at 3 seconds and draws without it.
+    expect(await screen.findByText('Create account', {}, { timeout: 5000 })).toBeVisible();
+    expect(screen.queryByText('Use it without an account')).toBeNull();
+
+    await act(async () => wake());
+    expect(await screen.findByText('Use it without an account')).toBeVisible();
+  }, 10_000);
+
   it('says what is given up, and only starts once that is agreed to', async () => {
     server.anonymousAccounts = true;
     await start();

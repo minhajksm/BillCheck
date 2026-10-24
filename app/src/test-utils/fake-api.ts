@@ -209,6 +209,8 @@ export function installFakeApi() {
     users: new Map<string, { id: string; phone: string | null; name: string; lab_consent?: boolean }>(),
     /** What GET /health answers, i.e. whether REQUIRE_SIGN_IN is off on the API. */
     anonymousAccounts: false,
+    /** Set to a promise to hold GET /health until it settles: a server waking from cold. */
+    healthWaitsFor: null as Promise<void> | null,
     codes: new Map<string, string>(),
     signupTokens: new Map<string, string>(),
     sessions: new Map<string, string>(),
@@ -253,6 +255,7 @@ export function installFakeApi() {
 
     switch (`${method} ${path}`) {
       case 'GET /health':
+        if (server.healthWaitsFor) await server.healthWaitsFor;
         return json(200, { status: 'ok', anonymous_accounts: server.anonymousAccounts });
       case 'POST /auth/otp/request':
         server.lastCode = server.nextCode;
