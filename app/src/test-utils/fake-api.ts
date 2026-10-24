@@ -1,5 +1,24 @@
 import { jest } from '@jest/globals';
 
+/**
+ * A flag as the API sends one. Written out rather than inferred from the two
+ * samples below, so a test can add a kind they don't cover -- a finding about
+ * the bill rather than a charge on it carries no `line_item_id`.
+ */
+type SampleFlag = {
+  id: string;
+  position: number;
+  line_item_id: string | null;
+  kind: string;
+  level: string;
+  status: string;
+  billed: number;
+  reference_amount: number;
+  reference_source: string;
+  reference_detail: Record<string, string>;
+  excess: number;
+};
+
 /** A bill from the prototype, as the API would return it. */
 export const SAMPLE_BILL = {
   id: 'b-day3',
@@ -79,7 +98,7 @@ export const SAMPLE_BILL = {
       },
       excess: 5100,
     },
-  ],
+  ] as SampleFlag[],
 };
 
 /** One open case, as the API would return it. */

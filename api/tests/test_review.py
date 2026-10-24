@@ -177,6 +177,33 @@ def test_a_bill_level_finding_may_name_no_line():
     assert flags[0].billed == Decimal("0"), "no line to take an amount from"
 
 
+def test_a_finding_about_most_of_the_bill_hangs_on_no_line():
+    """The one that sent this back: a Rs 2 rounding difference across all nine
+    lines of a bill arrived as a question about the Rs 300 blood count on
+    line 1, because the first line a finding names is where it used to go."""
+    every = ["L1", "L2", "L3", "L4"]
+    flags = flags_from_findings(analysis([finding("A. the net amounts don't add up", every)]), [])
+
+    assert flags[0].row_position == 0, "about the bill, so no row to mark"
+    assert flags[0].billed == Decimal("0"), "and no line's amount to head it with"
+    assert flags[0].reference_detail["line_numbers"] == "1,2,3,4", "which lines is still on record"
+
+
+@pytest.mark.parametrize(
+    ("named", "row"),
+    [
+        # Two lines is a pair, and a pair is what a duplicate is: it belongs
+        # on the rows. Three and more than half the bill is about the bill.
+        (["L2", "L3"], 2),
+        (["L1", "L2", "L3"], 0),
+        (["L2", "L3", "L4"], 0),
+    ],
+)
+def test_where_a_finding_hangs_follows_how_much_of_the_bill_it_names(named: list[str], row: int):
+    flags = flags_from_findings(analysis([finding("C. billed twice", named)]), [])
+    assert flags[0].row_position == row
+
+
 def test_no_findings_means_no_reader_flags():
     assert flags_from_findings(analysis([]), []) == []
 

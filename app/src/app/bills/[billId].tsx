@@ -376,7 +376,9 @@ function FlagList({
             ]}>
             <Marker position={flag.position} level={flag.level} />
             <View style={styles.flagBody}>
-              <Text weight="bold">{item?.name ?? ''}</Text>
+              {/* A finding about most of the bill belongs to no line, and
+                  borrowing one's name made it a question about that charge. */}
+              <Text weight="bold">{item?.name ?? t('report.wholeBill')}</Text>
               <Text color="ink2" variant="small">
                 {copy.short}
               </Text>
@@ -658,11 +660,17 @@ function FlagSheet({
         </View>
 
         <Text variant="title" weight="bold" accessibilityRole="header">
-          {item?.name ?? ''}
+          {item?.name ?? t('report.wholeBill')}
         </Text>
-        <Text variant="big" weight="bold" style={styles.sheetBilled}>
-          {formatINR(flag.billed)}
-        </Text>
+        {/* No figure where the flag is about the bill: the only one to hand
+            would be one line's, and it is not what is being asked about. */}
+        {item ? (
+          <Text variant="big" weight="bold" style={styles.sheetBilled}>
+            {formatINR(flag.billed)}
+          </Text>
+        ) : (
+          <View style={styles.sheetNoAmount} />
+        )}
 
         <Text weight="semibold" style={styles.sheetHeading}>
           {t('report.whyFlagged')}
@@ -814,6 +822,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sheetBilled: { marginTop: 2, marginBottom: 6 },
+  sheetNoAmount: { height: 6 },
   sheetHeading: { marginTop: 14, marginBottom: 2 },
   sheetButtons: { gap: 8, marginTop: 8 },
 });

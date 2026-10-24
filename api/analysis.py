@@ -224,9 +224,7 @@ class BillHeader(BaseModel):
     discharge_date: Text = Field(description="As printed or supplied. Empty when neither.")
     stay_days: Number = Field(description="Days of stay. Null when the dates don't give it.")
     room_category: Text = Field(description="As printed. Empty when not readable.")
-    discount: Number = Field(
-        default=None, description="The discount printed on the bill. Null when none is."
-    )
+    discount: Number = Field(default=None, description="The discount printed on the bill. Null when none is.")
     total: Number = Field(description="The amount payable, after any discount. Null when none is printed.")
     patient_name: Text = Field(description="As printed. Empty when not readable.")
     ip_number: Text = Field(

@@ -250,6 +250,54 @@ describe('the bill report', () => {
   });
 });
 
+describe('a finding about the bill rather than a charge', () => {
+  /** What the reader returns for "the net amounts don't add up": no line. */
+  function wholeBillFinding() {
+    server.bills[0].flags.push({
+      ...structuredClone(server.bills[0].flags[1]),
+      id: 'f-whole',
+      position: 3,
+      line_item_id: null,
+      kind: 'analysis_finding',
+      billed: 0,
+      reference_amount: 0,
+      excess: 0,
+      reference_detail: {
+        why_en: 'The net amounts add up to ₹2 less than the printed total.',
+        line_numbers: '1,2,3',
+      },
+    });
+  }
+
+  it('names the bill, not whichever line it happened to list first', async () => {
+    wholeBillFinding();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await openFlags();
+
+    // It used to borrow line 1: a Rs 2 rounding difference across the bill
+    // arrived as a question about a Rs 300 blood count.
+    expect(await screen.findByText('This bill as a whole')).toBeVisible();
+  });
+
+  it('heads the sheet with no amount, because no one line is the amount', async () => {
+    wholeBillFinding();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await openFlags();
+    fireEvent.press(await screen.findByText('This bill as a whole'));
+
+    expect(await screen.findByText(/net amounts add up/)).toBeVisible();
+    expect(screen.queryByText('₹0')).toBeNull();
+  });
+
+  it('leaves it off the marked bill, where it has no row to mark', async () => {
+    wholeBillFinding();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    await screen.findByText('Inj. Meropenem 1g');
+    expect(screen.queryByText('This bill as a whole')).toBeNull();
+  });
+});
+
 describe('a bill that discounts', () => {
   /** The Olive bill's shape: two money columns and three totals under them. */
   function discount() {
