@@ -29,6 +29,9 @@ export type ApiErrorCode =
   | 'too_many_pages'
   | 'unreadable_bill'
   | 'upload_limit'
+  | 'lab_consent_required'
+  | 'lab_report_not_found'
+  | 'unreadable_lab_report'
   | 'network'
   | 'unknown';
 

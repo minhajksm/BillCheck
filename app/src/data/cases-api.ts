@@ -249,13 +249,17 @@ export type ScannedPage = { uri: string; name: string; type: string };
 /** Told how much of the upload has gone, from 0 to 1. */
 export type OnProgress = (sent: number) => void;
 
-async function postPages(
+/**
+ * Sends pages as multipart and resolves with the JSON that comes back.
+ * Shared by bills and lab reports: both are pages going up to be read.
+ */
+export async function sendPages(
   token: string,
   path: string,
   pages: ScannedPage[],
   billDate?: string,
   onProgress?: OnProgress,
-): Promise<Bill> {
+): Promise<unknown> {
   const form = new FormData();
   for (const page of pages) {
     if (page.uri.startsWith('blob:') || page.uri.startsWith('data:')) {
@@ -273,7 +277,7 @@ async function postPages(
   // takes most of a minute and the screen says which part it is on, so the one
   // part that can be measured -- the pages going up -- is measured rather than
   // guessed at. fetch reports nothing until the whole response is back.
-  return new Promise<Bill>((resolve, reject) => {
+  return new Promise<unknown>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('POST', `${API_URL}${path}`);
     request.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -300,13 +304,23 @@ async function postPages(
         reject(new ApiError(code as ApiErrorCode, request.status));
         return;
       }
-      resolve(toBill(data as ApiBill));
+      resolve(data);
     };
     request.onerror = () => reject(new ApiError('network', 0));
     request.onabort = () => reject(new ApiError('network', 0));
 
     request.send(form);
   });
+}
+
+async function postPages(
+  token: string,
+  path: string,
+  pages: ScannedPage[],
+  billDate?: string,
+  onProgress?: OnProgress,
+): Promise<Bill> {
+  return toBill((await sendPages(token, path, pages, billDate, onProgress)) as ApiBill);
 }
 
 /**

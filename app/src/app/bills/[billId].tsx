@@ -12,6 +12,7 @@ import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
+import { Segmented } from '@/components/segmented';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { Gutter, Radius, type Palette } from '@/constants/theme';
@@ -303,43 +304,6 @@ function LegendItem({ swatch, color, label }: { swatch: string; color: keyof Pal
       <Text variant="small" weight="semibold" color={color}>
         {label}
       </Text>
-    </View>
-  );
-}
-
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  const palette = usePalette();
-  return (
-    <View style={[styles.segmented, { backgroundColor: palette.soft }]} accessibilityRole="tablist">
-      {options.map((option) => {
-        const on = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
-            onPress={() => onChange(option.value)}
-            style={[
-              styles.segment,
-              on && {
-                backgroundColor: palette.card,
-                borderColor: palette.line,
-              },
-            ]}>
-            <Text weight="semibold" color={on ? 'ink' : 'ink2'}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
@@ -723,20 +687,6 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendSwatch: { width: 9, height: 9, borderRadius: 2 },
   headerMoney: { marginTop: 10, gap: 2 },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    padding: 3,
-    gap: 3,
-    marginBottom: 14,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 9,
-    alignItems: 'center',
-    borderWidth: 0,
-  },
   flag: {
     flexDirection: 'row',
     gap: 12,

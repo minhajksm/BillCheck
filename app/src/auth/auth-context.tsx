@@ -4,8 +4,10 @@ import { ApiError, apiFetch } from '@/lib/api';
 
 import { tokenStore } from './token-store';
 
-/** `phone` is null for a device-only account, which has no number to sign in with. */
-export type User = { id: string; phone: string | null; name: string };
+/** `phone` is null for a device-only account, which has no number to sign in with.
+ * `lab_consent` says whether lab reports have been agreed to: sign-up consent
+ * covers bills only, so the app asks once before the first report. */
+export type User = { id: string; phone: string | null; name: string; lab_consent?: boolean };
 
 /** Which button started the flow on the welcome screen. Only changes the copy. */
 export type AuthMode = 'signup' | 'login';
@@ -35,6 +37,8 @@ type AuthContextValue = {
   completeSignup: (name: string) => Promise<void>;
   /** Opens a device-only account: no number, so nothing to sign in with later. */
   continueWithoutSignIn: () => Promise<void>;
+  /** Records agreement to lab reports, and updates the signed-in user to match. */
+  agreeToLabReports: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -155,6 +159,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signIn(body);
   }, [signIn]);
 
+  const agreeToLabReports = useCallback(async () => {
+    if (state.status !== 'signedIn') return;
+    await apiFetch<void>('/lab-reports/consent', {
+      method: 'POST',
+      body: { consent: true },
+      token: state.token,
+    });
+    setState({ ...state, user: { ...state.user, lab_consent: true } });
+  }, [state]);
+
   const logout = useCallback(async () => {
     const token = state.status === 'signedIn' ? state.token : null;
     // Sign out locally even if the server can't be reached.
@@ -164,8 +178,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const value = useMemo(
-    () => ({ state, anonymousAllowed, requestOtp, verifyOtp, completeSignup, continueWithoutSignIn, logout }),
-    [state, anonymousAllowed, requestOtp, verifyOtp, completeSignup, continueWithoutSignIn, logout],
+    () => ({
+      state,
+      anonymousAllowed,
+      requestOtp,
+      verifyOtp,
+      completeSignup,
+      continueWithoutSignIn,
+      agreeToLabReports,
+      logout,
+    }),
+    [
+      state,
+      anonymousAllowed,
+      requestOtp,
+      verifyOtp,
+      completeSignup,
+      continueWithoutSignIn,
+      agreeToLabReports,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
