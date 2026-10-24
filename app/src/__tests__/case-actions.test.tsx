@@ -20,11 +20,14 @@ jest.mock('@expo/vector-icons/Feather', () => () => null);
 // is not about. Only that we arrive there matters.
 const ScanStub = () => <Text>Scan screen</Text>;
 
+const EditStub = () => <Text>Edit screen</Text>;
+
 const routes = {
   _layout: RootLayout,
   index: YourCasesScreen,
   'cases/[caseId]': CaseDashboardScreen,
   'cases/[caseId]/scan': ScanStub,
+  'cases/[caseId]/edit': EditStub,
 };
 
 let server: ReturnType<typeof installFakeApi>;
@@ -71,5 +74,34 @@ describe('adding another bill to the same admission', () => {
 
     expect(screen.queryByText('Add another bill')).toBeNull();
     expect(screen.queryByText("Add today's bill")).toBeNull();
+  });
+});
+
+describe('a bill that printed no admission date', () => {
+  /** The Olive bill: a Date on it, but no admission or discharge date. */
+  function noAdmissionDate() {
+    server.cases[0].admitted_on = null as unknown as string;
+  }
+
+  it('says so on the case list rather than showing a date nobody printed', async () => {
+    noAdmissionDate();
+    renderRouter(routes, { initialUrl: '/' });
+
+    // It used to show the bill's own date here, as "Admitted 4 May".
+    expect(await screen.findByText('Admission date not on the bill')).toBeVisible();
+  });
+
+  it('asks for it on the case, where the rest of the details are corrected', async () => {
+    noAdmissionDate();
+    const router = await openCase('papa-admission', /Add the admission date/);
+
+    fireEvent.press(screen.getByText('Add the admission date'));
+    expect(await screen.findByText('Edit screen')).toBeVisible();
+    expect(router.getPathname()).toBe('/cases/papa-admission/edit');
+  });
+
+  it('asks for nothing on a case that has one', async () => {
+    await openCase('papa-admission', /City Care Hospital/);
+    expect(screen.queryByText('Add the admission date')).toBeNull();
   });
 });

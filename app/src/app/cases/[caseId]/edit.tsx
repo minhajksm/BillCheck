@@ -56,7 +56,7 @@ function EditCase({ item, token }: { item: Case; token: string }) {
     patientName: item.patient.name,
     ipNumber: item.patient.ipNumber,
     bed: item.patient.bed,
-    admittedOn: item.admittedOn,
+    admittedOn: item.admittedOn ?? '',
   });
   const [errors, setErrors] = useState<CaseFormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -107,20 +107,14 @@ function EditCase({ item, token }: { item: Case; token: string }) {
             // Spelled out rather than hidden behind a dialog: this takes the
             // bills away from everyone on the case, and it cannot be undone.
             <>
-              <Text color="ink2">
-                {t('editCase.confirmDelete', { name: item.title })}
-              </Text>
+              <Text color="ink2">{t('editCase.confirmDelete', { name: item.title })}</Text>
               <Button
                 variant="danger"
                 label={t('editCase.confirmDeleteAction')}
                 loading={deleting}
                 onPress={remove}
               />
-              <Button
-                variant="secondary"
-                label={t('common.cancel')}
-                onPress={() => setConfirming(false)}
-              />
+              <Button variant="secondary" label={t('common.cancel')} onPress={() => setConfirming(false)} />
             </>
           ) : (
             <Button variant="secondary" label={t('editCase.delete')} onPress={() => setConfirming(true)} />

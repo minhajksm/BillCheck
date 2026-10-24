@@ -27,7 +27,7 @@ type ApiCase = {
   patient_name: string;
   ip_number: string;
   bed: string | null;
-  admitted_on: string;
+  admitted_on: string | null;
   closed_on: string | null;
   members: ApiMember[];
   is_owner: boolean;
@@ -42,6 +42,7 @@ type ApiLineItem = {
   detail: string | null;
   quantity: number | null;
   amount: number;
+  net_amount: number | null;
   category: LineItem['category'];
 };
 
@@ -64,6 +65,8 @@ type ApiBill = {
   case_id: string;
   date: string;
   page_count: number;
+  subtotal: number;
+  discount: number | null;
   total: number;
   line_items: ApiLineItem[];
   flags: ApiFlag[];
@@ -89,7 +92,7 @@ export const toCase = (c: ApiCase): Case => ({
   title: c.title,
   hospital: { name: c.hospital_name, area: c.hospital_area },
   patient: { name: c.patient_name, ipNumber: c.ip_number, bed: c.bed ?? '' },
-  admittedOn: c.admitted_on,
+  admittedOn: c.admitted_on ?? undefined,
   closedOn: c.closed_on ?? undefined,
   members: c.members.map(toMember),
   isOwner: c.is_owner,
@@ -104,6 +107,7 @@ const toLineItem = (i: ApiLineItem): LineItem => ({
   detail: i.detail ?? undefined,
   quantity: i.quantity ?? undefined,
   amount: i.amount,
+  netAmount: i.net_amount ?? undefined,
   category: i.category,
 });
 
@@ -126,6 +130,8 @@ export const toBill = (b: ApiBill): Bill => ({
   caseId: b.case_id,
   date: b.date,
   pageCount: b.page_count,
+  subtotal: b.subtotal,
+  discount: b.discount ?? undefined,
   total: b.total,
   lineItems: b.line_items.map(toLineItem),
   flags: b.flags.map(toFlag),

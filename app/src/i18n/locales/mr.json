@@ -48,6 +48,7 @@
     "intro": "कुटुंबातील प्रत्येक हॉस्पिटल बिल तपासा आणि समजून घ्या.",
     "yourCases": "तुमच्या केसेस",
     "admitted": "{{date}} रोजी दाखल",
+    "admittedUnknown": "दाखल झाल्याची तारीख बिलावर नाही",
     "closed": "{{date}} मध्ये बंद",
     "startNewCase": "नवीन केस सुरू करा",
     "newCaseSoon": "नवीन केस सुरू करण्याची सुविधा लवकरच येत आहे",
@@ -68,6 +69,8 @@
   },
   "case": {
     "patientLine": "रुग्ण {{name}}, IP क्र. {{ipNumber}}, बेड {{bed}}",
+    "admissionDateMissing": "दाखल झाल्याची तारीख जोडा",
+    "admissionDateWhy": "या बिलावर ती छापलेली नाही, त्यामुळे शुल्क मुक्कामाशी तपासता येत नाहीत.",
     "inviteFamily": "कुटुंबाला जोडा",
     "inviteSoon": "कुटुंबाला जोडण्याची सुविधा लवकरच येत आहे",
     "followersYouOnly": "या केसवर फक्त तुमचे लक्ष आहे",
@@ -267,6 +270,10 @@
     "othersInRange_other": "{{count}} आणखी आयटम योग्य मर्यादेत आहेत",
     "fine": "नोंदवलेली MRP, NPPA च्या कमाल किमती आणि अशाच रुग्णालयातील मुक्कामांच्या खर्चाशी पडताळले. हे प्रश्न आहेत, निर्णय नाहीत.",
     "billTotal": "बिलाची एकूण रक्कम",
+    "subtotal": "उप-बेरीज",
+    "discount": "सवलत",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} चे बिल, {{discount}} सवलतीनंतर",
     "billHeader": "अंतरिम बिल, {{date}}",
     "patientLine": "IP क्र. {{ip}}, {{patient}}",
     "categories": {
@@ -282,6 +289,7 @@
       "unclassified": "इतर शुल्क"
     },
     "whyFlagged": "हा प्रश्न का आहे",
+    "wholeBill": "हे संपूर्ण बिल",
     "whatToAsk": "काय विचारावे",
     "whatHappened": "काय झाले?",
     "markCorrected": "रुग्णालयाने दुरुस्त केले",

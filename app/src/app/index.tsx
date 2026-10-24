@@ -186,9 +186,13 @@ function CheckABill() {
 
 function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
   const { t } = useTranslation();
+  // Nothing invented: a bill that printed no admission date leaves the case
+  // without one, and saying so is what gets it filled in.
   const when = item.closedOn
     ? t('home.closed', { date: formatMonthYear(t, item.closedOn) })
-    : t('home.admitted', { date: formatDayMonth(t, item.admittedOn) });
+    : item.admittedOn
+      ? t('home.admitted', { date: formatDayMonth(t, item.admittedOn) })
+      : t('home.admittedUnknown');
 
   return (
     <Card onPress={onPress} style={styles.case}>

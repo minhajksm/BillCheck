@@ -13,6 +13,7 @@ import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
+import { Radius } from '@/constants/theme';
 import { useAuth } from '@/auth/auth-context';
 import { billStatus, caseStatus, latestBill, runningTotal, type CaseStatus } from '@/data/case-status';
 import { readCase } from '@/data/cases-api';
@@ -92,6 +93,24 @@ function CaseDashboard({ item }: { item: Case }) {
       <Text variant="faint" style={styles.patient}>
         {t('case.patientLine', item.patient)}
       </Text>
+
+      {/* The one detail the checks need and a bill often doesn't print.
+          Nothing is assumed in its place, so it is asked for here, where the
+          rest of the admission details are corrected. */}
+      {item.admittedOn === undefined ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })}
+          style={[styles.needsDate, { backgroundColor: palette.soft, borderColor: palette.line }]}>
+          <Icon name="calendar" size={18} color="ink2" />
+          <View style={styles.needsDateText}>
+            <Text variant="small" weight="semibold">
+              {t('case.admissionDateMissing')}
+            </Text>
+            <Text variant="faint">{t('case.admissionDateWhy')}</Text>
+          </View>
+        </Pressable>
+      ) : null}
 
       <Followers item={item} />
 
@@ -292,6 +311,17 @@ function BillRow({ bill, first }: { bill: DailyBill; first: boolean }) {
 
 const styles = StyleSheet.create({
   notFound: { marginVertical: 16 },
+  needsDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: Radius.card,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+  },
+  needsDateText: { flex: 1 },
   patient: { marginBottom: 12 },
   followers: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   overlap: { marginLeft: -8 },

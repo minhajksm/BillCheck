@@ -48,6 +48,7 @@
     "intro": "परिवार के हर अस्पताल बिल की जाँच करें और उसे समझें।",
     "yourCases": "आपके केस",
     "admitted": "{{date}} को भर्ती",
+    "admittedUnknown": "भर्ती की तारीख बिल पर नहीं है",
     "closed": "{{date}} में बंद",
     "startNewCase": "नया केस शुरू करें",
     "newCaseSoon": "नया केस शुरू करने की सुविधा जल्द आ रही है",
@@ -68,6 +69,8 @@
   },
   "case": {
     "patientLine": "मरीज़ {{name}}, IP नं. {{ipNumber}}, बेड {{bed}}",
+    "admissionDateMissing": "भर्ती की तारीख जोड़ें",
+    "admissionDateWhy": "इस बिल पर यह छपी नहीं है, इसलिए चार्ज भर्ती की अवधि से नहीं मिलाए जा सकते।",
     "inviteFamily": "परिवार को जोड़ें",
     "inviteSoon": "परिवार को जोड़ने की सुविधा जल्द आ रही है",
     "followersYouOnly": "इस केस पर सिर्फ़ आप नज़र रख रहे हैं",
@@ -267,6 +270,10 @@
     "othersInRange_other": "{{count}} और आइटम सही दायरे में हैं",
     "fine": "सूचीबद्ध MRP, NPPA की अधिकतम कीमतों और ऐसे ही अस्पताल ठहरावों के खर्च से मिलान किया गया। ये सवाल हैं, फ़ैसले नहीं।",
     "billTotal": "बिल का कुल",
+    "subtotal": "उप-योग",
+    "discount": "छूट",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} का बिल, {{discount}} की छूट के बाद",
     "billHeader": "अंतरिम बिल, {{date}}",
     "patientLine": "IP नं. {{ip}}, {{patient}}",
     "categories": {
@@ -282,6 +289,7 @@
       "unclassified": "अन्य शुल्क"
     },
     "whyFlagged": "यह सवाल क्यों है",
+    "wholeBill": "यह पूरा बिल",
     "whatToAsk": "क्या पूछें",
     "whatHappened": "क्या हुआ?",
     "markCorrected": "अस्पताल ने ठीक कर दिया",

@@ -85,6 +85,25 @@ def _positions(analysis: BillAnalysis, finding: Finding) -> list[int]:
     return [by_id[line_id] for line_id in finding.line_ids if line_id in by_id]
 
 
+def _about_the_whole_bill(positions: list[int], line_count: int) -> bool:
+    """Whether a finding is about the bill rather than about a charge on it.
+
+    A finding is otherwise shown against one line: that row is marked on the
+    bill, and the sheet heads itself with the line's name and its amount. For
+    a finding that names most of the bill -- "the net amounts add up to Rs 2
+    less than the printed total", which cited all nine lines of one -- the
+    first of them is an arbitrary pick, and the amount it carries has nothing
+    to do with what is being asked. A family opened that one and read a
+    question about a Rs 300 blood count.
+
+    Three is the floor because two lines is a pair, and a pair is what a
+    duplicate is. That belongs on the rows, not above them.
+    """
+    if not positions:
+        return True
+    return len(positions) >= 3 and len(positions) * 2 > line_count
+
+
 def _billed(analysis: BillAnalysis, positions: list[int]) -> Decimal:
     line = analysis.lines[positions[0] - 1] if positions else None
     return Decimal(str(line.amount)) if line and line.amount is not None else Decimal("0")
@@ -98,11 +117,14 @@ def _to_flag(analysis: BillAnalysis, finding: Finding, positions: list[int]) -> 
     would confirm it -- rides along for the report and for anyone reading the
     database later.
     """
-    billed = _billed(analysis, positions)
+    # No row and no amount where the finding is about the bill: row 0 is what
+    # bills.py reads as "no line item", and a figure here would be one line's.
+    whole_bill = _about_the_whole_bill(positions, len(analysis.lines))
+    billed = Decimal("0") if whole_bill else _billed(analysis, positions)
     return Flag(
         kind="analysis_finding",
         level=_LEVEL.get(finding.severity, "amber"),
-        row_position=positions[0] if positions else 0,
+        row_position=0 if whole_bill else positions[0],
         billed=billed,
         # The prompt forbids pricing, so a finding never asserts an amount back.
         # Where money is recoverable it is the price lists that say so.

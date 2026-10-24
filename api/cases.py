@@ -177,7 +177,11 @@ def list_cases(db: Db, user: CurrentUser) -> list[CaseOut]:
             selectinload(Case.members).selectinload(CaseMember.user),
             selectinload(Case.bills),
         )
-        .order_by(Case.admitted_on.desc())
+        # Newest admission first. A case whose bill printed no admission date
+        # has none to sort by and is almost always one just opened, so it goes
+        # to the top; `created_at` breaks the tie, and both engines agree
+        # rather than SQLite and Postgres disagreeing about where nulls land.
+        .order_by(Case.admitted_on.desc().nullsfirst(), Case.created_at.desc())
     ).all()
     return [case_out(db, case, user) for case in cases]
 

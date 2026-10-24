@@ -141,6 +141,7 @@ class StubOcr:
                 unit=unit,
                 rate=float(rate),
                 amount=float(amount),
+                net_amount=None,
                 date=today if verbatim in STUB_DATED else "",
                 mrp_printed=None if mrp is None else float(mrp),
             )
@@ -156,8 +157,8 @@ class StubOcr:
                 bill_date="",
                 admission_date="",
                 discharge_date="",
-                stay_days=None,
                 room_category="Twin sharing",
+                discount=None,
                 total=total,
                 patient_name="Ramesh Sharma",
                 ip_number="IP/2026/4417",

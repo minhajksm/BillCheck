@@ -66,7 +66,11 @@ class Case(Base):
     patient_name: Mapped[str] = mapped_column(String(80))
     ip_number: Mapped[str] = mapped_column(String(40))
     bed: Mapped[str | None] = mapped_column(String(20))
-    admitted_on: Mapped[date] = mapped_column(Date)
+    # Null where the bill a case was opened from printed no admission date.
+    # A case is the record of a real admission and a plausible-looking guess
+    # in one is worse than a blank: the family is asked for it instead, and
+    # the stay check stays off until they give it.
+    admitted_on: Mapped[date | None] = mapped_column(Date)
     closed_on: Mapped[date | None] = mapped_column(Date)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -125,6 +129,11 @@ class Bill(Base):
     case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
     bill_date: Mapped[date] = mapped_column(Date)
     page_count: Mapped[int] = mapped_column(Integer, default=1)
+    # The discount the bill prints across the whole of it, where it prints one.
+    # Null covers both a bill with no discount and one read before this column.
+    discount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    # What the hospital is asking for: the lines' own amounts less the
+    # discount. Not the sum of the lines, on a bill that discounts them.
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -164,7 +173,12 @@ class LineItem(Base):
     # Quantity or date as printed, e.g. "6 vials" or "11 Oct, 10:30 am".
     detail: Mapped[str | None] = mapped_column(String(120))
     quantity: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    # Gross, as the line prints it. A rate checked against a price list is
+    # quoted gross, so this is the figure the audit compares.
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # The same line after the bill's discount, where the bill prints a second
+    # money column for it. Null where it prints only one.
+    net_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     # What kind of charge this is, from the reader's PHASE 2 categories (see
     # analysis.Category). The report groups the bill by it, so a family can
     # see what the consumables came to. "unclassified" is both the reader's

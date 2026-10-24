@@ -169,7 +169,8 @@ class CaseOut(BaseModel):
     patient_name: str
     ip_number: str
     bed: str | None
-    admitted_on: date
+    admitted_on: date | None
+    """Null where the bill printed none and nobody has filled it in yet."""
     closed_on: date | None
     members: list[MemberOut]
     # Whether the caller is the one who started it. Only they can delete a case,
@@ -210,6 +211,9 @@ class LineItemOut(BaseModel):
     detail: str | None
     quantity: float | None
     amount: float
+    """Gross, as the line prints it."""
+    net_amount: float | None
+    """The same line after the bill's discount, where it prints one. Else null."""
     category: Category
 
 
@@ -234,7 +238,12 @@ class BillOut(BaseModel):
     case_id: uuid.UUID
     date: date
     page_count: int
+    subtotal: float
+    """What the lines come to, before any discount."""
+    discount: float | None
+    """The discount the bill prints across the whole of it. Null when none."""
     total: float
+    """What the hospital is asking for: the sub-total less the discount."""
     line_items: list[LineItemOut]
     flags: list[FlagOut]
 

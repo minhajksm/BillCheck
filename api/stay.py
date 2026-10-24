@@ -58,11 +58,15 @@ def recheck_stay(db: Session, case: Case) -> int:
         .options(selectinload(Bill.line_items), selectinload(Bill.flags))
     ).all()
 
+    # No admission date, no stay for a row to fall outside of.
+    admitted_on = case.admitted_on
     changed = 0
     for bill in bills:
         items = sorted(bill.line_items, key=lambda i: i.position)
         by_position = {item.position: item for item in items}
-        outside = _outside(items, bill.bill_date.year, case.admitted_on, case.closed_on)
+        outside = (
+            {} if admitted_on is None else _outside(items, bill.bill_date.year, admitted_on, case.closed_on)
+        )
         # A flag's `position` is its place in the report, not the row it is
         # about: that is `line_item_id`, which is what to match on here.
         existing = {
@@ -82,6 +86,11 @@ def recheck_stay(db: Session, case: Case) -> int:
             bill.flags.remove(flag)
             changed += 1
 
+        # Flags raised while an admission date was assumed have just come off
+        # above. With none there is nothing to raise in their place.
+        if admitted_on is None:
+            continue
+
         for position, on in outside.items():
             if position in existing:
                 continue
@@ -99,7 +108,7 @@ def recheck_stay(db: Session, case: Case) -> int:
                     reference_amount=0,
                     reference_source="reader",
                     reference_detail={
-                        **date_detail(on, case.admitted_on, case.closed_on),
+                        **date_detail(on, admitted_on, case.closed_on),
                         "confidence": "high",
                         "rows": str(position),
                         "line_numbers": str(position),

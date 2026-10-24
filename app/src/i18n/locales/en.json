@@ -48,6 +48,7 @@
     "intro": "Keep every hospital bill in your family checked and explained.",
     "yourCases": "Your cases",
     "admitted": "Admitted {{date}}",
+    "admittedUnknown": "Admission date not on the bill",
     "closed": "Closed {{date}}",
     "startNewCase": "Start a new case",
     "newCaseSoon": "Starting a new case is coming soon",
@@ -68,6 +69,8 @@
   },
   "case": {
     "patientLine": "Patient {{name}}, IP no. {{ipNumber}}, bed {{bed}}",
+    "admissionDateMissing": "Add the admission date",
+    "admissionDateWhy": "This bill doesn't print one, so charges can't be checked against the stay.",
     "inviteFamily": "Invite family",
     "inviteSoon": "Inviting family is coming soon",
     "followersYouOnly": "You follow this case",
@@ -267,6 +270,10 @@
     "othersInRange_other": "{{count}} other items are within range",
     "fine": "Checked against listed MRPs, NPPA ceiling prices, and what similar hospital stays cost. Flags are questions, not verdicts.",
     "billTotal": "Bill total",
+    "subtotal": "Sub total",
+    "discount": "Discount",
+    "lessAmount": "−{{amount}}",
+    "afterDiscount": "{{subtotal}} billed, less a {{discount}} discount",
     "billHeader": "Interim bill, {{date}}",
     "patientLine": "IP no. {{ip}}, {{patient}}",
     "categories": {
@@ -282,6 +289,7 @@
       "unclassified": "Other charges"
     },
     "whyFlagged": "Why it's flagged",
+    "wholeBill": "This bill as a whole",
     "whatToAsk": "What to ask",
     "whatHappened": "What happened?",
     "markCorrected": "Hospital corrected it",

@@ -110,6 +110,7 @@ def test_a_line_carries_only_what_something_reads():
         "unit",
         "rate",
         "amount",
+        "net_amount",
         "date",
         "mrp_printed",
     ]
@@ -442,9 +443,14 @@ def test_a_figure_that_is_not_one_reads_as_nothing_stated(printed: str):
     assert _parse(answer(lines=lines)).lines[0].quantity is None
 
 
-def test_a_part_day_stay_is_not_rounded_away():
-    """31 hours 45 minutes is 1.32 days, and the reader says so."""
-    assert _parse(answer(bill={**GOOD["bill"], "stay_days": 1.32})).bill.stay_days == 1.32
+def test_a_stay_the_reader_still_measures_costs_nothing():
+    """The prompt no longer asks how long the admission ran, because the bill
+    alone does not settle it. A reader that answers anyway is not a reader
+    that got the bill wrong."""
+    analysis = _parse(answer(bill={**GOOD["bill"], "stay_days": 1.32}))
+
+    assert not hasattr(analysis.bill, "stay_days")
+    assert analysis.bill.total == 6500.0, "and the rest of the header came through"
 
 
 def test_a_count_arriving_as_text_is_still_a_count():

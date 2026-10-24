@@ -14,6 +14,13 @@ instructions decide that:
   numbers here are read through that: "1 1/4" is 1.25, "5,150.00" is 5150.0,
   and anything that is not a number at all is null rather than a refusal.
 
+The two figures a discounted bill prints and a plain one does not --
+`AnalysedLine.net_amount` and `BillHeader.discount` -- default to null rather
+than being required. Most bills have no answer to give, and an answer that
+omits the key says the same thing as one that sends null: there is no
+discount. Failing a whole read over a key about a figure that is not on the
+page is exactly the forgiveness this module is for.
+
 What stays strict is `Finding.severity`, which decides whether a family is
 shown a red flag or an amber question. There is no safe guess between
 overstating what a bill proves and understating it, so an unrecognised
@@ -96,9 +103,9 @@ def _as_number(value: Any) -> Any:
 def _as_count(value: Any) -> Any:
     """A whole number, rounded from whatever arrived.
 
-    `stay_days` came back as 1.32 on a stay of 31 hours, which is the reader
-    answering honestly; page and line counts can arrive as "1". Neither is
-    worth refusing a bill over.
+    Page and line counts arrive as "1" often enough, and a reader that
+    answers 1.32 where a whole number was asked for is answering honestly.
+    Neither is worth refusing a bill over.
     """
     number = _as_number(value)
     return number if number is None else round(number)
@@ -154,7 +161,12 @@ class AnalysedLine(BaseModel):
     quantity: Number = Field(description="As printed. Null when the bill states none.")
     unit: Text = Field(description="As printed, e.g. 'vial'. Empty when the bill states none.")
     rate: Number = Field(description="Rate per unit as printed. Null when none is printed.")
-    amount: Number = Field(description="The line's amount. Null when it cannot be read.")
+    amount: Number = Field(description="The line's gross amount. Null when it cannot be read.")
+    net_amount: Number = Field(
+        default=None,
+        description="The line's amount after discount, where the bill prints a second money "
+        "column for it. Null where the bill prints only one.",
+    )
     date: Text = Field(description="The line's date as printed. Empty when it carries none.")
     mrp_printed: Number = Field(description="MRP, only where the bill prints one. Else null.")
 
@@ -210,9 +222,9 @@ class BillHeader(BaseModel):
     bill_date: Text = Field(description="As printed. Empty when not readable.")
     admission_date: Text = Field(description="As printed or supplied. Empty when neither.")
     discharge_date: Text = Field(description="As printed or supplied. Empty when neither.")
-    stay_days: Number = Field(description="Days of stay. Null when the dates don't give it.")
     room_category: Text = Field(description="As printed. Empty when not readable.")
-    total: Number = Field(description="The grand total printed. Null when none is printed.")
+    discount: Number = Field(default=None, description="The discount printed on the bill. Null when none is.")
+    total: Number = Field(description="The amount payable, after any discount. Null when none is printed.")
     patient_name: Text = Field(description="As printed. Empty when not readable.")
     ip_number: Text = Field(
         description="The IP, admission or registration number as printed. Empty when not readable."
