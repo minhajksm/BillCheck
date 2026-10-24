@@ -33,11 +33,28 @@ def sms() -> FakeSms:
 
 
 @pytest.fixture
-def client(sms: FakeSms) -> Iterator[TestClient]:
-    # A fresh in-memory database per test.
+def sessions() -> Iterator[sessionmaker[Session]]:
+    """A fresh in-memory database per test, and the way to open one on it.
+
+    Separate from `client` so a test can look at what an endpoint wrote: ask
+    for both and they are the same database.
+    """
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    yield sessionmaker(bind=engine, expire_on_commit=False)
+    engine.dispose()
+
+
+@pytest.fixture
+def db(sessions: sessionmaker[Session]) -> Iterator[Session]:
+    """A session on the client's database, for reading back what it stored."""
+    with sessions() as session:
+        yield session
+
+
+@pytest.fixture
+def client(sms: FakeSms, sessions: sessionmaker[Session]) -> Iterator[TestClient]:
+    factory = sessions
 
     def get_test_db() -> Iterator[Session]:
         with factory() as session:
@@ -48,7 +65,6 @@ def client(sms: FakeSms) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
-    engine.dispose()
 
 
 def sign_up(client: TestClient, sms: FakeSms, phone: str = PHONE, name: str = "Rohan Sharma") -> dict:

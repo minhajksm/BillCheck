@@ -2,7 +2,18 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import JSON, Date, ForeignKey, Integer, Numeric, String, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db import Base, UTCDateTime, utcnow
@@ -145,6 +156,13 @@ class Bill(Base):
     flags: Mapped[list["Flag"]] = relationship(
         back_populates="bill", cascade="all, delete-orphan", order_by="Flag.position"
     )
+    # What read it, and everything it found. Nothing serves these; they are
+    # deleted with the bill rather than left to the database's own cascade,
+    # so a case that goes takes its reading with it under either engine.
+    reads: Mapped[list["BillRead"]] = relationship(back_populates="bill", cascade="all, delete-orphan")
+    reader_findings: Mapped[list["ReaderFinding"]] = relationship(
+        back_populates="bill", cascade="all, delete-orphan"
+    )
 
 
 class UploadAttempt(Base):
@@ -223,3 +241,86 @@ class Flag(Base):
 
     bill: Mapped[Bill] = relationship(back_populates="flags")
     line_item: Mapped[LineItem | None] = relationship()
+
+
+class BillRead(Base):
+    """What read one bill, and what it said about its own reading.
+
+    None of this reaches a family. It is here so the reader can be judged
+    across bills and over time: a run of poor readings is only attributable
+    if the model, the effort and the prompt that produced them are on the row
+    beside them. A version number would have to be remembered by whoever
+    edits the prompt, so the prompt's own digest stands in for one.
+
+    One row per bill, and it goes when the bill does.
+    """
+
+    __tablename__ = "bill_reads"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    bill_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("bills.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    # "claude" or "stub", and which model and effort it was asked for.
+    provider: Mapped[str] = mapped_column(String(20))
+    model: Mapped[str] = mapped_column(String(60))
+    effort: Mapped[str] = mapped_column(String(10))
+    prompt_digest: Mapped[str] = mapped_column(String(16), index=True)
+    # The reader's own account of the reading: how sure it was, whether it
+    # asked for a human, and why. Nothing acts on these today.
+    extraction_confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    needs_human_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_reasons: Mapped[list] = mapped_column(JSON, default=list)
+    # PHASE 3's structural observations: the shape of the bill as a whole.
+    consumable_share_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    unitemised_share_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    unreadable_line_count: Mapped[int] = mapped_column(Integer, default=0)
+    lines_read: Mapped[int] = mapped_column(Integer, default=0)
+    pages_processed: Mapped[int] = mapped_column(Integer, default=0)
+    # How many findings came back, and how many a family was shown. The gap
+    # is what `reader_findings` explains row by row.
+    findings_returned: Mapped[int] = mapped_column(Integer, default=0)
+    findings_shown: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+    bill: Mapped[Bill] = relationship(back_populates="reads")
+
+
+class ReaderFinding(Base):
+    """Every finding the reader returned for a bill, shown to a family or not.
+
+    The dropped ones are the point. A finding the reader itself called low
+    severity, or one naming lines that aren't in its own transcription, used
+    to go to a log line and nowhere else -- so the two questions worth asking
+    of a reader, how often it does that and whether it got better, had no
+    answer. Both are a `GROUP BY` away now.
+
+    `flag_id` is the flag a shown finding became, which is how the family's
+    own verdict -- corrected, explained, or left open -- is reachable from
+    here. It is cleared rather than cascaded if that flag ever goes: what the
+    reader said is still a fact about the reading.
+    """
+
+    __tablename__ = "reader_findings"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    bill_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("bills.id", ondelete="CASCADE"), index=True)
+    flag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("flags.id", ondelete="SET NULL"))
+    # The reader's own id for it, which nothing promises is unique.
+    finding_id: Mapped[str] = mapped_column(String(40))
+    rule: Mapped[str] = mapped_column(String(200), index=True)
+    severity: Mapped[str] = mapped_column(String(10), index=True)
+    # "shown", "dropped_low_severity" or "dropped_unknown_lines". See review.py.
+    outcome: Mapped[str] = mapped_column(String(24), index=True)
+    # The reader's own words. Without them a dropped finding cannot be judged,
+    # which is the whole of what this table is for.
+    statement: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[str] = mapped_column(Text)
+    confirmation_required: Mapped[str] = mapped_column(Text)
+    # The reader's line ids, and the same lines as the family would see them
+    # numbered. Empty numbers on a finding about the bill as a whole.
+    line_ids: Mapped[str] = mapped_column(String(300))
+    line_numbers: Mapped[str] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    bill: Mapped[Bill] = relationship(back_populates="reader_findings")

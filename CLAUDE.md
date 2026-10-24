@@ -18,6 +18,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 - DB: hosted on Supabase, reached through `DATABASE_URL` in `api/.env` (setup in `api/README.md`). Schema changes: `cd api && uv run alembic upgrade head`. `uv run python scripts/db_check.py` says whether it is reachable, encrypted and migrated.
 - From the Android emulator, the API is at `http://10.0.2.2:8000`. Against a deployed API, set `EXPO_PUBLIC_API_URL`.
 - Deploy: `gcloud run deploy billcheck-api --source .` from the repository root. Runbook and caveats in `docs/deploy.md`. Not Firebase Hosting: it caps every request at 60s, and reading a long bill takes more.
+- How the reader is doing: `cd api && uv run python scripts/reader_report.py` (add `--days 30` for a window). Reads what every bill's reading recorded; writes nothing.
 - Sign-in is phone number + OTP. In development, codes print in the API's terminal (`OTP_DELIVERY=console`).
 - `REQUIRE_SIGN_IN=false` in `api/.env` lets people in without a number: the welcome screen then offers it, and the account belongs to that phone alone. Default is `true`.
 
