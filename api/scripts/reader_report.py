@@ -23,6 +23,10 @@ What to look at, in order:
     a family got money back, which is what all of this is for.
   * review           -- bills the reader asked for a human on.
 
+A model and an effort are one reader, so they group together: haiku on low
+and haiku on high are two rows, which is how to tell whether paying for the
+thinking bought anything.
+
 It prints one line per rule under the totals, because a drop rate is an
 average and the rule that is dragging it is usually one.
 """
@@ -57,26 +61,32 @@ def main() -> int:
     since = utcnow() - timedelta(days=args.days) if args.days else None
 
     with engine.connect() as connection:
+        # Effort groups alongside the model: the same model told to think
+        # harder is a different reader, and comparing them is the point.
         reads = select(
             BillRead.prompt_digest,
             BillRead.model,
+            BillRead.effort,
             func.count().label("bills"),
             func.sum(func.cast(BillRead.needs_human_review, Integer)).label("review"),
             func.avg(BillRead.extraction_confidence).label("confidence"),
-        ).group_by(BillRead.prompt_digest, BillRead.model)
+        ).group_by(BillRead.prompt_digest, BillRead.model, BillRead.effort)
         if since is not None:
             reads = reads.where(BillRead.created_at >= since)
 
-        rows = connection.execute(reads.order_by(func.count().desc())).all()
+        # Busiest first, then by name: two readers with the same number of
+        # bills must not swap places between runs of a report read side by side.
+        reads = reads.order_by(func.count().desc(), BillRead.model, BillRead.effort)
+        rows = connection.execute(reads).all()
         if not rows:
             print("No readings stored yet. Check a bill and run this again.")
             return 0
 
-        print(f"{'prompt':<18}{'model':<22}{'bills':>7}{'review':>8}{'conf':>7}")
+        print(f"{'prompt':<18}{'model':<20}{'effort':<8}{'bills':>7}{'review':>8}{'conf':>7}")
         for row in rows:
             confidence = "   -" if row.confidence is None else f"{float(row.confidence):.2f}"
             print(
-                f"{row.prompt_digest:<18}{row.model:<22}{row.bills:>7}"
+                f"{row.prompt_digest:<18}{row.model[:18]:<20}{row.effort:<8}{row.bills:>7}"
                 f"{pct(int(row.review or 0), row.bills):>8}{confidence:>7}"
             )
 
@@ -92,7 +102,8 @@ def main() -> int:
         if since is not None:
             outcomes = outcomes.where(ReaderFinding.created_at >= since)
 
-        found = connection.execute(outcomes.group_by(ReaderFinding.rule).order_by(func.count().desc())).all()
+        outcomes = outcomes.group_by(ReaderFinding.rule).order_by(func.count().desc(), ReaderFinding.rule)
+        found = connection.execute(outcomes).all()
         total = sum(row.total for row in found)
         lost = sum(int(row.lost or 0) for row in found)
         shown = total - lost - sum(int(row.low or 0) for row in found)
