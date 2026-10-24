@@ -157,7 +157,6 @@ class StubOcr:
                 bill_date="",
                 admission_date="",
                 discharge_date="",
-                stay_days=None,
                 room_category="Twin sharing",
                 discount=None,
                 total=total,

@@ -92,7 +92,6 @@ def analysis(
             bill_date=bill_date,
             admission_date="",
             discharge_date="",
-            stay_days=None,
             room_category="",
             discount=None,
             total=float(sum(row.amount or 0 for row in rows)),

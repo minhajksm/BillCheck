@@ -47,9 +47,15 @@ def test_a_quantity_is_read_as_the_bill_prints_it(analysis):
     assert private_room.rate == 1000.0, "the rate is a plain figure and stays one"
 
 
-def test_a_stay_of_part_days_is_not_a_whole_number(analysis):
-    """31 hours 45 minutes. The reader answered 1.32 and was right to."""
-    assert analysis.bill.stay_days == 1.32
+def test_the_stay_this_answer_measured_is_no_longer_asked_for(analysis):
+    """The reader worked out 1.32 days from 31 hours 45 minutes, and was
+    right to -- but what it could then do with it was raise findings about
+    the length of the stay, which the bill alone cannot settle. The prompt
+    stopped asking; an answer that still sends it is still a good answer."""
+    raw = json.loads(ANSWER.read_text(encoding="utf-8"))
+
+    assert raw["bill"]["stay_days"] == 1.32, "the fixture still has it"
+    assert not hasattr(analysis.bill, "stay_days"), "and the model does not"
 
 
 def test_what_the_prompt_no_longer_asks_for_is_dropped_quietly(analysis):

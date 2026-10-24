@@ -103,9 +103,9 @@ def _as_number(value: Any) -> Any:
 def _as_count(value: Any) -> Any:
     """A whole number, rounded from whatever arrived.
 
-    `stay_days` came back as 1.32 on a stay of 31 hours, which is the reader
-    answering honestly; page and line counts can arrive as "1". Neither is
-    worth refusing a bill over.
+    Page and line counts arrive as "1" often enough, and a reader that
+    answers 1.32 where a whole number was asked for is answering honestly.
+    Neither is worth refusing a bill over.
     """
     number = _as_number(value)
     return number if number is None else round(number)
@@ -222,7 +222,6 @@ class BillHeader(BaseModel):
     bill_date: Text = Field(description="As printed. Empty when not readable.")
     admission_date: Text = Field(description="As printed or supplied. Empty when neither.")
     discharge_date: Text = Field(description="As printed or supplied. Empty when neither.")
-    stay_days: Number = Field(description="Days of stay. Null when the dates don't give it.")
     room_category: Text = Field(description="As printed. Empty when not readable.")
     discount: Number = Field(default=None, description="The discount printed on the bill. Null when none is.")
     total: Number = Field(description="The amount payable, after any discount. Null when none is printed.")
