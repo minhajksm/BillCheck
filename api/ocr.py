@@ -24,6 +24,7 @@ import base64
 import json
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import lru_cache
@@ -32,6 +33,8 @@ from typing import Protocol
 from analysis import AnalysedLine, BillAnalysis, BillHeader, Finding, Structural
 from analysis_prompt import PROMPT
 from db import india_today
+from lab_analysis import LabAnalysis, LabHeader, LabTest
+from lab_prompt import PROMPT as LAB_PROMPT
 from settings import get_settings
 
 logger = logging.getLogger("billcheck.ocr")
@@ -63,6 +66,83 @@ class OcrError(Exception):
 
 class OcrProvider(Protocol):
     def read_bill(self, pages: list[BillPage]) -> BillAnalysis: ...
+
+    def read_lab_report(self, pages: list[BillPage]) -> LabAnalysis: ...
+
+
+# A sample report, as the lab reader would explain it. Not a real patient or
+# laboratory. One result of each kind the report screen has to show: below
+# its range, above it, within it, and a text result with nothing to compare.
+STUB_LAB = LabAnalysis(
+    report=LabHeader(lab_name="Sample Diagnostics", patient_name="TEST PATIENT", report_date="06/05/2025"),
+    tests=[
+        LabTest(
+            name="Haemoglobin",
+            value="9.8",
+            unit="g/dL",
+            range="12.0 - 15.0",
+            status="low",
+            explanation_en=(
+                "Haemoglobin carries oxygen in the blood. "
+                "This result is below the range printed on the report."
+            ),
+            explanation_hi=("हीमोग्लोबिन खून में ऑक्सीजन ले जाता है। यह नतीजा रिपोर्ट पर छपी सीमा से कम है।"),
+        ),
+        LabTest(
+            name="Total WBC Count",
+            value="13,400",
+            unit="/cumm",
+            range="4000 - 11000",
+            status="high",
+            explanation_en=(
+                "White blood cells help the body fight infection. "
+                "This result is above the range printed on the report."
+            ),
+            explanation_hi=(
+                "सफ़ेद रक्त कोशिकाएँ शरीर को संक्रमण से लड़ने में मदद करती हैं। यह नतीजा रिपोर्ट पर छपी सीमा से ज़्यादा है।"
+            ),
+        ),
+        LabTest(
+            name="Platelet Count",
+            value="2.4",
+            unit="lakh/cumm",
+            range="1.5 - 4.5",
+            status="in_range",
+            explanation_en=(
+                "Platelets help blood to clot. This result is within the range printed on the report."
+            ),
+            explanation_hi="प्लेटलेट्स खून को जमने में मदद करते हैं। यह नतीजा रिपोर्ट पर छपी सीमा के अंदर है।",
+        ),
+        LabTest(
+            name="Malaria Antigen",
+            value="Negative",
+            unit="",
+            range="",
+            status="no_range",
+            explanation_en=(
+                "This test looks for signs of malaria in the blood. "
+                "The report gives the result as a word, not a number."
+            ),
+            explanation_hi=("यह जाँच खून में मलेरिया के संकेत देखती है। रिपोर्ट नतीजा एक शब्द में देती है, संख्या में नहीं।"),
+        ),
+    ],
+    summary_en=(
+        "Two of the four results are outside the range printed on the report. "
+        "Your doctor is the person to explain what they mean together."
+    ),
+    summary_hi=(
+        "चार में से दो नतीजे रिपोर्ट पर छपी सीमा से बाहर हैं। इनका एक साथ क्या मतलब है, यह आपके डॉक्टर बता सकते हैं।"
+    ),
+    questions_en=[
+        "What do the haemoglobin and white blood cell results mean together?",
+        "Should these be checked again, and when?",
+    ],
+    questions_hi=[
+        "हीमोग्लोबिन और सफ़ेद रक्त कोशिकाओं के नतीजों का एक साथ क्या मतलब है?",
+        "क्या इन्हें फिर से जाँचना चाहिए, और कब?",
+    ],
+    urgent=False,
+)
 
 
 # The prototype's day 3 bill. Sample data, not a real patient or hospital.
@@ -177,6 +257,14 @@ class StubOcr:
             review_reasons=[],
         )
 
+    def read_lab_report(self, pages: list[BillPage]) -> LabAnalysis:
+        if not pages:
+            raise OcrError("No pages to read.")
+        logger.warning(
+            "Stub OCR: returning the sample lab report, not reading the %d page(s) sent", len(pages)
+        )
+        return STUB_LAB.model_copy(deep=True)
+
 
 def _loggable(request: dict) -> str:
     """The request as sent, with the pages' base64 replaced by its size.
@@ -230,18 +318,30 @@ class ClaudeOcr:
         raise OcrError(f"Page {index} is a {page.content_type}, which can't be read.")
 
     def read_bill(self, pages: list[BillPage]) -> BillAnalysis:
-        content: list[dict] = [self._block(page, index) for index, page in enumerate(pages, start=1)]
-        content.append(
-            {
-                "type": "text",
-                "text": "Analyse this hospital bill. Work the four phases and return the JSON object.",
-            }
+        return self._read(
+            pages,
+            PROMPT,
+            "Analyse this hospital bill. Work the four phases and return the JSON object.",
+            _parse,
         )
+
+    def read_lab_report(self, pages: list[BillPage]) -> LabAnalysis:
+        return self._read(
+            pages,
+            LAB_PROMPT,
+            "Explain this laboratory report and return the JSON object.",
+            _parse_lab,
+        )
+
+    def _read[T](self, pages: list[BillPage], system: str, instruction: str, parse: Callable[[str], T]) -> T:
+        """The pages, the instruction, one call, and one retry on a malformed answer."""
+        content: list[dict] = [self._block(page, index) for index, page in enumerate(pages, start=1)]
+        content.append({"type": "text", "text": instruction})
 
         request = {
             "model": self._model,
             "max_tokens": 16000,
-            "system": PROMPT,
+            "system": system,
             "output_config": {"effort": self._effort},
             "messages": [{"role": "user", "content": content}],
         }
@@ -251,17 +351,17 @@ class ClaudeOcr:
         logger.warning("Sending to Claude:\n%s", _loggable(request))
 
         try:
-            return _parse(self._ask(request))
+            return parse(self._ask(request))
         except OcrError as first:
             if not first.retryable:
                 raise
             # Nothing constrains the shape of the answer, so a malformed one is
             # a thing that happens rather than a thing that cannot. One more
-            # read is cheaper than telling a family their bill is unreadable --
-            # and if the second answer is malformed too, that is not a coin
-            # landing badly twice, it is this bill.
+            # read is cheaper than telling a family their pages are unreadable
+            # -- and if the second answer is malformed too, that is not a coin
+            # landing badly twice, it is these pages.
             logger.warning("Couldn't read the reader's answer (%s). Asking once more.", first)
-            return _parse(self._ask(request))
+            return parse(self._ask(request))
 
     def _ask(self, request: dict) -> str:
         """One call, returning the text of the answer."""
@@ -270,7 +370,7 @@ class ClaudeOcr:
         try:
             response = self._client.messages.create(**request)
         except anthropic.APIError as exc:
-            raise OcrError(f"Couldn't read the bill: {exc}") from exc
+            raise OcrError(f"Couldn't read the pages: {exc}") from exc
 
         # The whole response, verbatim, before anything here touches it. Logged
         # at WARNING so it shows with the API's default level, and logged
@@ -285,11 +385,11 @@ class ClaudeOcr:
             logger.warning("Claude responded (unserialisable):\n%r", response)
 
         if response.stop_reason == "refusal":
-            raise OcrError("The bill couldn't be read.")
+            raise OcrError("The pages couldn't be read.")
         if response.stop_reason == "max_tokens":
             # The JSON is cut off mid-object. Worth its own message, because
             # the fix is a bigger max_tokens, not a better photograph.
-            raise OcrError("The answer was cut off at max_tokens; this bill may have too many lines.")
+            raise OcrError("The answer was cut off at max_tokens; the document may be too long.")
 
         parts = [block.text for block in response.content if getattr(block, "type", "") == "text"]
         if not parts:
@@ -407,6 +507,24 @@ def _parse(text: str) -> BillAnalysis:
         " [needs human review]" if analysis.needs_human_review else "",
         ", ".join(f"{f.rule}({f.severity})" for f in analysis.findings) or "none",
     )
+    return analysis
+
+
+def _parse_lab(text: str) -> LabAnalysis:
+    """The lab reader's answer, or an OcrError saying why not."""
+    import pydantic
+
+    raw = json.loads(_json_object(text))
+    if raw.get("error"):
+        raise OcrError(str(raw["error"]))
+    try:
+        analysis = LabAnalysis.model_validate(raw)
+    except pydantic.ValidationError as exc:
+        raise OcrError(f"The lab reader's answer doesn't match its format: {exc}", retryable=True) from exc
+    if not analysis.tests:
+        # Nothing to explain is not an explanation, and not worth a retry.
+        raise OcrError("No test results were found on these pages.")
+    logger.info("Read %d lab result(s)%s", len(analysis.tests), " [urgent]" if analysis.urgent else "")
     return analysis
 
 

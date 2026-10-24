@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import auth
 import bills
 import cases
+import lab
 from models import HealthResponse
 from settings import get_settings
 
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(cases.router)
 app.include_router(bills.router)
+app.include_router(lab.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])

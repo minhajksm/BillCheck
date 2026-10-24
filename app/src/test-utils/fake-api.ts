@@ -164,13 +164,49 @@ export const CLOSED_CASE = {
   recovered_amount: 3200,
 };
 
+/** A lab report as the API returns it, explained. Sample data, not a real patient. */
+export const SAMPLE_LAB = {
+  id: 'lab-1',
+  lab_name: 'Sample Diagnostics',
+  patient_name: 'TEST PATIENT',
+  report_date: '06/05/2025',
+  page_count: 1,
+  tests: [
+    {
+      name: 'Haemoglobin',
+      value: '9.8',
+      unit: 'g/dL',
+      range: '12.0 - 15.0',
+      status: 'low',
+      explanation_en:
+        'Haemoglobin carries oxygen in the blood. This result is below the range printed on the report.',
+      explanation_hi: 'हीमोग्लोबिन खून में ऑक्सीजन ले जाता है। यह नतीजा रिपोर्ट पर छपी सीमा से कम है।',
+    },
+    {
+      name: 'Malaria Antigen',
+      value: 'Negative',
+      unit: '',
+      range: '',
+      status: 'no_range',
+      explanation_en: 'This test looks for signs of malaria in the blood.',
+      explanation_hi: 'यह जाँच खून में मलेरिया के संकेत देखती है।',
+    },
+  ],
+  summary_en: 'One of the two results is outside the range printed on the report.',
+  summary_hi: 'दो में से एक नतीजा रिपोर्ट पर छपी सीमा से बाहर है।',
+  questions_en: ['What does the haemoglobin result mean?'],
+  questions_hi: ['हीमोग्लोबिन के नतीजे का क्या मतलब है?'],
+  urgent: false,
+  created_at: '2026-10-24T08:00:00Z',
+};
+
 /**
  * An in-memory stand-in for api/, installed as global.fetch. Mirrors the real
  * responses closely enough to drive the screens in tests.
  */
 export function installFakeApi() {
   const server = {
-    users: new Map<string, { id: string; phone: string | null; name: string }>(),
+    users: new Map<string, { id: string; phone: string | null; name: string; lab_consent?: boolean }>(),
     /** What GET /health answers, i.e. whether REQUIRE_SIGN_IN is off on the API. */
     anonymousAccounts: false,
     codes: new Map<string, string>(),
@@ -185,6 +221,7 @@ export function installFakeApi() {
     failUpload: null as string | null,
     /** Set to hold an upload open, for testing what is shown while waiting. */
     stallUpload: false,
+    labReports: [] as (typeof SAMPLE_LAB)[],
   };
 
   const json = (status: number, body?: unknown) =>
@@ -264,6 +301,44 @@ export function installFakeApi() {
         return json(200, server.cases);
       default: {
         if (!auth || !server.sessions.has(auth)) return fail(401, 'not_authenticated');
+
+        // Lab reports: theirs only, and nothing read before they have agreed.
+        const signedIn = server.users.get(server.sessions.get(auth) ?? '');
+        if (method === 'POST' && path === '/lab-reports/consent') {
+          if (body.consent !== true) return json(422, { detail: [] });
+          if (signedIn) signedIn.lab_consent = true;
+          return new Response(null, { status: 204 });
+        }
+        if (method === 'POST' && path === '/lab-reports') {
+          if (!signedIn?.lab_consent) return fail(403, 'lab_consent_required');
+          const report = { ...structuredClone(SAMPLE_LAB), id: `lab-${server.labReports.length + 1}` };
+          server.labReports.unshift(report);
+          return json(201, report);
+        }
+        if (method === 'GET' && path === '/lab-reports') {
+          return json(
+            200,
+            server.labReports.map((r) => ({
+              id: r.id,
+              lab_name: r.lab_name,
+              report_date: r.report_date,
+              test_count: r.tests.length,
+              outside_range: r.tests.filter((test) => test.status === 'low' || test.status === 'high').length,
+              urgent: r.urgent,
+              created_at: r.created_at,
+            })),
+          );
+        }
+        const labReport = /^\/lab-reports\/([^/]+)$/.exec(path);
+        if (labReport) {
+          const at = server.labReports.findIndex((r) => r.id === labReport[1]);
+          if (at < 0) return fail(404, 'lab_report_not_found');
+          if (method === 'GET') return json(200, server.labReports[at]);
+          if (method === 'DELETE') {
+            server.labReports.splice(at, 1);
+            return new Response(null, { status: 204 });
+          }
+        }
 
         const readCase = /^\/cases\/([^/]+)$/.exec(path);
         if (method === 'GET' && readCase) {

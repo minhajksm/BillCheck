@@ -25,6 +25,11 @@ export function scanErrorMessage(t: TFunction, error: unknown, maxPages: number)
       return t('scan.errorLimit');
     case 'unreadable_bill':
       return t('scan.failed');
+    // A lab report fails the same ways a bill does, bar these two.
+    case 'unreadable_lab_report':
+      return t('lab.errors.unreadable_lab_report');
+    case 'lab_consent_required':
+      return t('lab.errors.lab_consent_required');
     default:
       // A proxy in front of the API can refuse a big upload with its own 413.
       return error.status === 413 ? t('scan.errorTooLarge') : t('scan.errorUnknown');

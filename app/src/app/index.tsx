@@ -16,6 +16,7 @@ import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
 import { caseStatus } from '@/data/case-status';
 import { listCases, type ScannedPage } from '@/data/cases-api';
+import { listLabReports, type LabReportRow } from '@/data/lab-api';
 import { stagePages } from '@/data/page-inbox';
 import type { Case } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
@@ -33,9 +34,18 @@ export default function YourCasesScreen() {
 
   const loadCases = useCallback(async () => (token ? listCases(token) : []), [token]);
   const cases = useAsync(loadCases);
-  // Coming back from a scan, the case's chip should already be up to date.
+  const loadLabReports = useCallback(async () => (token ? listLabReports(token) : []), [token]);
+  const labReports = useAsync(loadLabReports);
+  // Coming back from a scan, the case's chip should already be up to date,
+  // and a report just explained (or deleted) should already be in the list.
   const { reload } = cases;
-  useFocusEffect(useCallback(() => void reload(), [reload]));
+  const { reload: reloadLab } = labReports;
+  useFocusEffect(
+    useCallback(() => {
+      reload();
+      reloadLab();
+    }, [reload, reloadLab]),
+  );
 
   // The root layout only shows this screen to signed-in people.
   if (state.status !== 'signedIn') return null;
@@ -96,6 +106,7 @@ export default function YourCasesScreen() {
       <Text color="ink2">{t('home.intro')}</Text>
 
       <CheckABill />
+      <CheckALabReport consented={user.lab_consent === true} />
 
       <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
         {t('home.yourCases')}
@@ -123,6 +134,21 @@ export default function YourCasesScreen() {
         label={t('home.startNewCase')}
         onPress={() => router.push('/cases/new')}
       />
+
+      {labReports.status === 'ready' && labReports.value.length > 0 ? (
+        <>
+          <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
+            {t('lab.yourReports')}
+          </Text>
+          {labReports.value.map((row) => (
+            <LabReportCard
+              key={row.id}
+              row={row}
+              onPress={() => router.push({ pathname: '/lab/[reportId]', params: { reportId: row.id } })}
+            />
+          ))}
+        </>
+      ) : null}
 
       <View style={[styles.tip, { borderColor: palette.line }]}>
         <Text weight="bold">{t('home.planningTitle')}</Text>
@@ -181,6 +207,72 @@ function CheckABill() {
         />
       </View>
     </View>
+  );
+}
+
+/**
+ * The other page a family is handed in hospital.
+ *
+ * Under the bill, not beside it: the bill is what this app is for, and this
+ * is the second thing it does. Its own consent comes first -- the one given
+ * at sign-up covers bills -- so until it is given, either button goes there.
+ */
+function CheckALabReport({ consented }: { consented: boolean }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const picker = usePagePicker();
+
+  const pick = async (choose: () => Promise<ScannedPage[]>) => {
+    if (!consented) {
+      router.push('/lab/consent');
+      return;
+    }
+    const pages = await choose();
+    if (pages.length === 0) return;
+    stagePages(pages);
+    router.push('/lab/new');
+  };
+
+  return (
+    <View style={[styles.checkBill, { backgroundColor: palette.card, borderColor: palette.line }]}>
+      <Text weight="bold" style={styles.checkBillTitle}>
+        {t('lab.cardTitle')}
+      </Text>
+      <Text color="ink2">{t('lab.cardBody')}</Text>
+      <View style={styles.checkBillButtons}>
+        <Button
+          variant="secondary"
+          icon="camera"
+          label={t('lab.photograph')}
+          loading={picker.preparing}
+          onPress={() => void pick(picker.takePhoto)}
+        />
+        <Button
+          variant="secondary"
+          icon="upload"
+          label={t('lab.upload')}
+          onPress={() => void pick(picker.choosePages)}
+        />
+      </View>
+    </View>
+  );
+}
+
+function LabReportCard({ row, onPress }: { row: LabReportRow; onPress: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <Card onPress={onPress} style={styles.case}>
+      <View style={styles.caseText}>
+        <Text weight="bold" style={styles.caseTitle}>
+          {row.labName || t('lab.unnamedLab')}
+        </Text>
+        <Text color="ink2">
+          {row.outsideRange > 0 ? t('lab.outsideRange', { count: row.outsideRange }) : t('lab.noneOutside')}
+        </Text>
+        {row.reportDate ? <Text variant="faint">{row.reportDate}</Text> : null}
+      </View>
+      {row.urgent ? <Chip tone="amber" label={t('lab.urgentTitle')} /> : null}
+    </Card>
   );
 }
 
