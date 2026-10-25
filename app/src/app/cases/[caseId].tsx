@@ -12,7 +12,6 @@ import { Chip } from '@/components/chip';
 import { Icon } from '@/components/icon';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { useAuth } from '@/auth/auth-context';
 import { billStatus, caseStatus, latestBill, runningTotal, type CaseStatus } from '@/data/case-status';
@@ -60,7 +59,6 @@ export default function CaseDashboardScreen() {
 function CaseDashboard({ item }: { item: Case }) {
   const { t } = useTranslation();
   const palette = usePalette();
-  const toast = useToast();
   const status = caseStatus(item);
   const latest = latestBill(item);
   // Bills are newest first on screen, as in the prototype.
@@ -71,18 +69,11 @@ function CaseDashboard({ item }: { item: Case }) {
       title={item.title}
       showBack
       right={
-        <View style={styles.headerActions}>
-          <IconButton
-            icon="edit-2"
-            label={t('case.editDetails')}
-            onPress={() => router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })}
-          />
-          <IconButton
-            icon="users"
-            label={t('case.inviteFamily')}
-            onPress={() => toast(t('case.inviteSoon'))}
-          />
-        </View>
+        <IconButton
+          icon="edit-2"
+          label={t('case.editDetails')}
+          onPress={() => router.push({ pathname: '/cases/[caseId]/edit', params: { caseId: item.id } })}
+        />
       }
     />
   );
@@ -112,7 +103,7 @@ function CaseDashboard({ item }: { item: Case }) {
         </Pressable>
       ) : null}
 
-      <Followers item={item} />
+      <Whose item={item} />
 
       <View style={styles.metrics}>
         <Metric label={t('case.runningTotal')} value={formatINR(runningTotal(item))} />
@@ -152,35 +143,33 @@ function CaseDashboard({ item }: { item: Case }) {
   );
 }
 
-function Followers({ item }: { item: Case }) {
+/**
+ * Whose admission this is, and the way to them. Family follow the person, so
+ * inviting someone happens there, not here.
+ */
+function Whose({ item }: { item: Case }) {
   const { t } = useTranslation();
-  const you = item.members.find((m) => m.isYou);
-  const others = item.members.filter((m) => !m.isYou);
-  const youName = you?.name.split(' ')[0] ?? '';
-
-  let label: string;
-  if (others.length === 0) label = t('case.followersYouOnly');
-  else if (others.length === 1)
-    label = t('case.followersPair', { you: youName, other: others[0].name.split(' ')[0] });
-  else label = t('case.followersMany', { you: youName, count: others.length });
-
-  // The prototype shows up to two overlapping avatars.
-  const shown = [you, ...others].filter((m) => m !== undefined).slice(0, 2);
-
+  const { member } = item;
+  if (!member) {
+    return (
+      <Button
+        variant="secondary"
+        icon="user-check"
+        label={t('file.titleBill')}
+        onPress={() => router.push({ pathname: '/file', params: { kind: 'bill', id: item.id } })}
+      />
+    );
+  }
   return (
-    <View style={styles.followers}>
-      {shown.map((m, i) => (
-        <Avatar
-          key={m.id}
-          name={m.name}
-          tone={i === 0 ? 'indigo' : 'green'}
-          style={i > 0 && styles.overlap}
-        />
-      ))}
-      <Text variant="faint" style={styles.followersLabel}>
-        {label}
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push({ pathname: '/members/[memberId]', params: { memberId: member.id } })}
+      style={styles.followers}>
+      <Avatar name={member.name} />
+      <Text variant="small" weight="semibold" color="indigoInk" style={styles.followersLabel}>
+        {member.name}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

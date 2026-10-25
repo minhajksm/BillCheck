@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Stack } from 'expo-router';
-import { fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
+import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testing-library';
 import { Image } from 'react-native';
 
 import BillReportScreen from '@/app/bills/[billId]';
 import ScanScreen from '@/app/cases/[caseId]/scan';
+import FileScreen from '@/app/file';
 import YourCasesScreen from '@/app/index';
+import MemberScreen from '@/app/members/[memberId]';
 import FirstScanScreen from '@/app/scan';
 import { AuthProvider } from '@/auth/auth-context';
 import i18n from '@/i18n';
@@ -63,6 +65,8 @@ const routes = {
   _layout: TestLayout,
   index: YourCasesScreen,
   scan: FirstScanScreen,
+  file: FileScreen,
+  'members/[memberId]': MemberScreen,
   'cases/[caseId]/scan': ScanScreen,
   'bills/[billId]': BillReportScreen,
 };
@@ -147,26 +151,86 @@ describe('checking a bill from the home screen', () => {
     expect(screen.getByText('Have a hospital bill?')).toBeVisible();
   });
 
-  it('reads the bill and opens a case from it', async () => {
+  /** Signed in, and the bill on the home screen read: on to "whose is it?". */
+  async function readFromHome() {
     mockCamera.mockResolvedValue(PICKED);
     const server = installFakeApi();
-    server.users.set('+919876543210', {
-      id: 'u1',
-      phone: '+919876543210',
-      name: 'Rohan Sharma',
-    });
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
     server.sessions.set('saved-token', '+919876543210');
     resetTokenStore('saved-token');
+    return server;
+  }
 
+  async function checkFromHome() {
     renderRouter(routes, { initialUrl: '/' });
     fireEvent.press(await screen.findByText('Photograph bill'));
     fireEvent.press(await screen.findByText('Check bill'));
+    return screen.findByText('Whose bill is this?');
+  }
 
-    // Straight to the report, on the marked bill.
-    expect(await screen.findByText('Bill total')).toBeVisible();
+  it('reads the bill, then asks whose it is, offering the name it prints', async () => {
+    const server = await readFromHome();
+
+    expect(await checkFromHome()).toBeVisible();
     expect(server.calls).toContain('POST /bills');
-    // And the case it opened is the family's, not one they had to name.
-    expect(server.cases[0].title).toBe('Ramesh Sharma');
+    expect(screen.getByText('The page says: Ramesh Sharma')).toBeVisible();
+    // Nobody is picked for them: "Ramesh Sharma" is neither "Papa" nor
+    // "Mummy" as far as anything here can tell.
+    expect(screen.getByRole('radio', { name: 'Papa' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Mummy' })).not.toBeChecked();
+  });
+
+  it('files it under someone already there, then shows the report', async () => {
+    const server = await readFromHome();
+    await checkFromHome();
+
+    fireEvent.press(screen.getByText('Papa'));
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    expect(await screen.findByText('Bill total')).toBeVisible();
+    expect(server.cases[0].member).toEqual({ id: 'm-papa', name: 'Papa' });
+  });
+
+  it('adds someone new by the name on the bill', async () => {
+    const server = await readFromHome();
+    await checkFromHome();
+
+    fireEvent.press(screen.getByText('Someone new'));
+    expect(screen.getByDisplayValue('Ramesh Sharma')).toBeVisible();
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    expect(await screen.findByText('Bill total')).toBeVisible();
+    expect(server.members.map((m) => m.name)).toContain('Ramesh Sharma');
+    expect(server.cases[0].member?.name).toBe('Ramesh Sharma');
+  });
+
+  it('picks the member the bill names, where there is one', async () => {
+    const server = await readFromHome();
+    server.members[0].name = 'RAMESH  sharma';
+
+    await checkFromHome();
+
+    expect(screen.getByRole('radio', { name: 'RAMESH  sharma' })).toBeChecked();
+  });
+
+  it('asks for a choice rather than guessing', async () => {
+    const server = await readFromHome();
+    await checkFromHome();
+
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    expect(await screen.findByText('Choose someone, or add someone new.')).toBeOnTheScreen();
+    expect(server.cases[0].member).toBeNull();
+  });
+
+  it('needs no question when the bill was scanned from a member', async () => {
+    const server = await readFromHome();
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Check bill'));
+
+    expect(await screen.findByText('Bill total')).toBeVisible();
+    expect(server.cases[0].member).toEqual({ id: 'm-papa', name: 'Papa' });
   });
 
   it('shows the reading animation while the bill is read', async () => {
@@ -242,11 +306,11 @@ describe('checking a bill from the home screen', () => {
     expect(screen.getByText('Check bill')).toBeVisible();
   });
 
-  it('still lets a case be started by hand', async () => {
-    renderRouter(routes, { initialUrl: '/' });
+  it('still lets an admission be started by hand, from the member', async () => {
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
 
     // For anyone setting a case up before the first bill arrives.
-    expect(await screen.findByText('Start a new case')).toBeVisible();
+    expect(await screen.findByText('Add an admission by hand')).toBeVisible();
   });
 });
 

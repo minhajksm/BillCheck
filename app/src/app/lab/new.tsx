@@ -1,4 +1,4 @@
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -23,8 +23,12 @@ import { usePalette } from '@/hooks/use-palette';
  * The bill scan screen's shape -- pages collect, nothing goes until the family
  * says so -- because a lab report is often several pages too, and explaining
  * half of one would leave results out without saying so.
+ *
+ * From a member, the report is theirs. From the home screen, the family is
+ * asked whose it is once it is read, as with a bill.
  */
 export default function NewLabReportScreen() {
+  const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
   const toast = useToast();
@@ -35,7 +39,9 @@ export default function NewLabReportScreen() {
 
   if (state.status !== 'signedIn') return null;
   // Nothing is read before they have agreed to it.
-  if (!state.user.lab_consent) return <Redirect href="/lab/consent" />;
+  if (!state.user.lab_consent) {
+    return <Redirect href={{ pathname: '/lab/consent', params: memberId ? { memberId } : {} }} />;
+  }
 
   const token = state.token;
   const { pages, preparing } = picker;
@@ -45,8 +51,12 @@ export default function NewLabReportScreen() {
     if (pages.length === 0) return;
     setReading(true);
     try {
-      const report = await uploadLabReport(token, pages);
-      router.replace({ pathname: '/lab/[reportId]', params: { reportId: report.id } });
+      const report = await uploadLabReport(token, pages, memberId);
+      router.replace(
+        memberId
+          ? { pathname: '/lab/[reportId]', params: { reportId: report.id } }
+          : { pathname: '/file', params: { kind: 'lab', id: report.id } },
+      );
     } catch (error) {
       // The pages stay, so a retry doesn't mean photographing them again.
       setReading(false);

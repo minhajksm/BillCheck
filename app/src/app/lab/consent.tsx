@@ -1,4 +1,4 @@
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +21,9 @@ import { usePalette } from '@/hooks/use-palette';
  * hear before reading an explanation of their results: this is not a doctor.
  */
 export default function LabConsentScreen() {
+  // Passed on, so a report started from a member is still theirs.
+  const { memberId } = useLocalSearchParams<{ memberId?: string }>();
+  const next = { pathname: '/lab/new' as const, params: memberId ? { memberId } : {} };
   const { t } = useTranslation();
   const palette = usePalette();
   const { state, agreeToLabReports } = useAuth();
@@ -29,7 +32,7 @@ export default function LabConsentScreen() {
   const [busy, setBusy] = useState(false);
 
   if (state.status !== 'signedIn') return null;
-  if (state.user.lab_consent) return <Redirect href="/lab/new" />;
+  if (state.user.lab_consent) return <Redirect href={next} />;
 
   const submit = async () => {
     if (!consent || busy) return;
@@ -37,7 +40,7 @@ export default function LabConsentScreen() {
     setError(null);
     try {
       await agreeToLabReports();
-      router.replace('/lab/new');
+      router.replace(next);
     } catch (e) {
       setError(authErrorMessage(t, e));
       setBusy(false);

@@ -8,43 +8,46 @@ import { AppHeader } from '@/components/app-header';
 import { Avatar } from '@/components/avatar';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { CaseStatusChip } from '@/components/case-status-chip';
 import { Chip } from '@/components/chip';
+import { Icon } from '@/components/icon';
 import { Logo } from '@/components/logo';
+import { CheckABill, CheckALabReport } from '@/components/scan-cards';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
-import { caseStatus } from '@/data/case-status';
-import { listCases, type ScannedPage } from '@/data/cases-api';
-import { listLabReports, type LabReportRow } from '@/data/lab-api';
-import { stagePages } from '@/data/page-inbox';
-import type { Case } from '@/data/types';
+import { listMembers, listUnfiled, type Unfiled } from '@/data/members-api';
+import type { MemberSummary } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
-import { usePagePicker } from '@/hooks/use-page-picker';
 import { usePalette } from '@/hooks/use-palette';
-import { formatDayMonth, formatMonthYear } from '@/i18n/dates';
 import { formatPhone } from '@/lib/phone';
 
-export default function YourCasesScreen() {
+/**
+ * Home: the way in to checking a bill or a report, and the people whose
+ * bills and reports are kept here.
+ */
+export default function HomeScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
   const { state, logout } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   const token = state.status === 'signedIn' ? state.token : null;
 
-  const loadCases = useCallback(async () => (token ? listCases(token) : []), [token]);
-  const cases = useAsync(loadCases);
-  const loadLabReports = useCallback(async () => (token ? listLabReports(token) : []), [token]);
-  const labReports = useAsync(loadLabReports);
-  // Coming back from a scan, the case's chip should already be up to date,
-  // and a report just explained (or deleted) should already be in the list.
-  const { reload } = cases;
-  const { reload: reloadLab } = labReports;
+  const loadMembers = useCallback(async () => (token ? listMembers(token) : []), [token]);
+  const members = useAsync(loadMembers);
+  const loadUnfiled = useCallback(
+    async (): Promise<Unfiled> => (token ? listUnfiled(token) : { cases: [], labReports: [] }),
+    [token],
+  );
+  const unfiled = useAsync(loadUnfiled);
+  // Coming back from a scan, a member's counts should already be up to date,
+  // and something just filed should already have left the waiting list.
+  const { reload } = members;
+  const { reload: reloadUnfiled } = unfiled;
   useFocusEffect(
     useCallback(() => {
       reload();
-      reloadLab();
-    }, [reload, reloadLab]),
+      reloadUnfiled();
+    }, [reload, reloadUnfiled]),
   );
 
   // The root layout only shows this screen to signed-in people.
@@ -108,47 +111,45 @@ export default function YourCasesScreen() {
       <CheckABill />
       <CheckALabReport consented={user.lab_consent === true} />
 
+      {unfiled.status === 'ready' ? <WaitingToBeFiled unfiled={unfiled.value} /> : null}
+
       <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
-        {t('home.yourCases')}
+        {t('home.yourMembers')}
       </Text>
-      {cases.status === 'loading' ? <Text color="ink2">{t('common.loading')}</Text> : null}
-      {cases.status === 'error' ? (
+      {members.status === 'loading' ? <Text color="ink2">{t('common.loading')}</Text> : null}
+      {members.status === 'error' ? (
         <Card style={styles.account}>
           <Text color="ink2">{t('common.loadFailed')}</Text>
-          <Button variant="secondary" label={t('common.tryAgain')} onPress={cases.reload} />
+          <Button variant="secondary" label={t('common.tryAgain')} onPress={members.reload} />
         </Card>
       ) : null}
-      {(cases.status === 'ready' ? cases.value : []).map((c) => (
-        <CaseCard
-          key={c.id}
-          item={c}
-          // A closed admission opens like any other: its reports stay
-          // readable, and the only way to delete it is from inside it.
-          onPress={() => router.push({ pathname: '/cases/[caseId]', params: { caseId: c.id } })}
+      {members.status === 'ready' && members.value.length === 0 ? (
+        <Text color="ink2" style={styles.empty}>
+          {t('home.membersEmpty')}
+        </Text>
+      ) : null}
+      {(members.status === 'ready' ? members.value : []).map((member) => (
+        <MemberCard
+          key={member.id}
+          member={member}
+          onPress={() => router.push({ pathname: '/members/[memberId]', params: { memberId: member.id } })}
         />
       ))}
 
-      <Button
-        variant="secondary"
-        icon="plus"
-        label={t('home.startNewCase')}
-        onPress={() => router.push('/cases/new')}
-      />
-
-      {labReports.status === 'ready' && labReports.value.length > 0 ? (
-        <>
-          <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
-            {t('lab.yourReports')}
-          </Text>
-          {labReports.value.map((row) => (
-            <LabReportCard
-              key={row.id}
-              row={row}
-              onPress={() => router.push({ pathname: '/lab/[reportId]', params: { reportId: row.id } })}
-            />
-          ))}
-        </>
-      ) : null}
+      <View style={styles.memberActions}>
+        <Button
+          variant="secondary"
+          icon="user-plus"
+          label={t('home.addMember')}
+          onPress={() => router.push('/members/new')}
+        />
+        <Button
+          variant="quiet"
+          icon="users"
+          label={t('home.joinWithCode')}
+          onPress={() => router.push('/members/join')}
+        />
+      </View>
 
       <View style={[styles.tip, { borderColor: palette.line }]}>
         <Text weight="bold">{t('home.planningTitle')}</Text>
@@ -159,149 +160,86 @@ export default function YourCasesScreen() {
   );
 }
 
-/**
- * The way in, first thing on the screen.
- *
- * A family arrives holding a bill, not wanting to fill in a form about an
- * admission they are living through. Everything a case needs -- the hospital,
- * the patient, the IP number, the admission date -- is printed on the page in
- * their hand, so the bill opens the case and they correct it later if they
- * like. Starting a case by hand is still there, below their cases, for anyone
- * setting one up before the first bill arrives.
- *
- * The picker opens here, on the tap, so nothing stands between wanting a bill
- * checked and photographing it. The pages go to the scan screen, where the
- * rest of a multi-page bill is added.
- */
-function CheckABill() {
+/** Someone looked after, with what is under them at a glance. */
+function MemberCard({ member, onPress }: { member: MemberSummary; onPress: () => void }) {
   const { t } = useTranslation();
-  const palette = usePalette();
-  const picker = usePagePicker();
-
-  const pick = async (choose: () => Promise<ScannedPage[]>) => {
-    const pages = await choose();
-    // Cancelled: they are still on their own cases, which is where they were.
-    if (pages.length === 0) return;
-    stagePages(pages);
-    router.push('/scan');
-  };
+  const counts = [
+    member.admissionCount > 0 ? t('members.admissions', { count: member.admissionCount }) : null,
+    member.labReportCount > 0 ? t('members.labReports', { count: member.labReportCount }) : null,
+  ].filter((part): part is string => part !== null);
 
   return (
-    <View style={[styles.checkBill, { backgroundColor: palette.indigoSoft, borderColor: palette.line }]}>
-      <Text weight="bold" style={styles.checkBillTitle}>
-        {t('home.checkBillTitle')}
-      </Text>
-      <Text color="ink2">{t('home.checkBillBody')}</Text>
-      <View style={styles.checkBillButtons}>
-        <Button
-          icon="camera"
-          label={t('home.photographBill')}
-          loading={picker.preparing}
-          onPress={() => void pick(picker.takePhoto)}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('home.uploadBill')}
-          onPress={() => void pick(picker.choosePages)}
-        />
-      </View>
-    </View>
-  );
-}
-
-/**
- * The other page a family is handed in hospital.
- *
- * Under the bill, not beside it: the bill is what this app is for, and this
- * is the second thing it does. Its own consent comes first -- the one given
- * at sign-up covers bills -- so until it is given, either button goes there.
- */
-function CheckALabReport({ consented }: { consented: boolean }) {
-  const { t } = useTranslation();
-  const palette = usePalette();
-  const picker = usePagePicker();
-
-  const pick = async (choose: () => Promise<ScannedPage[]>) => {
-    if (!consented) {
-      router.push('/lab/consent');
-      return;
-    }
-    const pages = await choose();
-    if (pages.length === 0) return;
-    stagePages(pages);
-    router.push('/lab/new');
-  };
-
-  return (
-    <View style={[styles.checkBill, { backgroundColor: palette.card, borderColor: palette.line }]}>
-      <Text weight="bold" style={styles.checkBillTitle}>
-        {t('lab.cardTitle')}
-      </Text>
-      <Text color="ink2">{t('lab.cardBody')}</Text>
-      <View style={styles.checkBillButtons}>
-        <Button
-          variant="secondary"
-          icon="camera"
-          label={t('lab.photograph')}
-          loading={picker.preparing}
-          onPress={() => void pick(picker.takePhoto)}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('lab.upload')}
-          onPress={() => void pick(picker.choosePages)}
-        />
-      </View>
-    </View>
-  );
-}
-
-function LabReportCard({ row, onPress }: { row: LabReportRow; onPress: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <Card onPress={onPress} style={styles.case}>
-      <View style={styles.caseText}>
-        <Text weight="bold" style={styles.caseTitle}>
-          {row.labName || t('lab.unnamedLab')}
+    <Card onPress={onPress} style={styles.member}>
+      <Avatar name={member.name} />
+      <View style={styles.memberText}>
+        <Text weight="bold" style={styles.memberName}>
+          {member.name}
         </Text>
-        <Text color="ink2">
-          {row.outsideRange > 0 ? t('lab.outsideRange', { count: row.outsideRange }) : t('lab.noneOutside')}
-        </Text>
-        {row.reportDate ? <Text variant="faint">{row.reportDate}</Text> : null}
+        {member.openAdmissionCount > 0 ? (
+          <Text variant="small" weight="semibold" color="indigoInk">
+            {t('members.inHospital')}
+          </Text>
+        ) : null}
+        <Text variant="faint">{counts.length > 0 ? counts.join(' · ') : t('members.nothingYet')}</Text>
       </View>
-      {row.urgent ? <Chip tone="amber" label={t('lab.urgentTitle')} /> : null}
+      {member.openFlagCount > 0 ? (
+        <Chip tone="amber" label={t('caseStatus.toAsk', { count: member.openFlagCount })} />
+      ) : null}
     </Card>
   );
 }
 
-function CaseCard({ item, onPress }: { item: Case; onPress: () => void }) {
+/**
+ * Scans nobody has said whose they are yet.
+ *
+ * The app asks as soon as a scan is read, so this is normally empty. It is
+ * where one lands if the app was closed before the answer, so it is never
+ * lost and never seen by anyone else.
+ */
+function WaitingToBeFiled({ unfiled }: { unfiled: Unfiled }) {
   const { t } = useTranslation();
-  // Nothing invented: a bill that printed no admission date leaves the case
-  // without one, and saying so is what gets it filled in.
-  const when = item.closedOn
-    ? t('home.closed', { date: formatMonthYear(t, item.closedOn) })
-    : item.admittedOn
-      ? t('home.admitted', { date: formatDayMonth(t, item.admittedOn) })
-      : t('home.admittedUnknown');
+  const palette = usePalette();
+  if (unfiled.cases.length === 0 && unfiled.labReports.length === 0) return null;
+
+  const rows = [
+    ...unfiled.cases.map((item) => ({
+      key: `bill-${item.id}`,
+      title: item.hospital.name
+        ? t('home.unfiledBill', { hospital: item.hospital.name })
+        : t('home.unfiledBillUnnamed'),
+      name: item.patient.name,
+      icon: 'file-text' as const,
+      open: () => router.push({ pathname: '/file', params: { kind: 'bill', id: item.id } }),
+    })),
+    ...unfiled.labReports.map((row) => ({
+      key: `lab-${row.id}`,
+      title: row.labName ? t('home.unfiledLab', { lab: row.labName }) : t('home.unfiledLabUnnamed'),
+      name: row.patientName,
+      icon: 'activity' as const,
+      open: () => router.push({ pathname: '/file', params: { kind: 'lab', id: row.id } }),
+    })),
+  ];
 
   return (
-    <Card onPress={onPress} style={styles.case}>
-      <View style={styles.caseText}>
-        <Text weight="bold" style={styles.caseTitle}>
-          {item.title}
-        </Text>
-        <Text color="ink2">
-          {t('common.place', {
-            name: item.hospital.name,
-            area: item.hospital.area,
-          })}
-        </Text>
-        <Text variant="faint">{when}</Text>
-      </View>
-      <CaseStatusChip status={caseStatus(item)} />
-    </Card>
+    <>
+      <Text variant="small" weight="semibold" color="ink2" style={styles.sectionTitle}>
+        {t('home.unfiledTitle')}
+      </Text>
+      {rows.map((row) => (
+        <Pressable
+          key={row.key}
+          accessibilityRole="button"
+          onPress={row.open}
+          style={[styles.unfiled, { backgroundColor: palette.marigoldSoft, borderColor: palette.line }]}>
+          <Icon name={row.icon} size={18} color="marigoldInk" />
+          <View style={styles.memberText}>
+            <Text weight="semibold">{row.title}</Text>
+            {row.name ? <Text variant="faint">{t('home.onPage', { name: row.name })}</Text> : null}
+          </View>
+          <Icon name="chevron-right" size={18} color="ink3" />
+        </Pressable>
+      ))}
+    </>
   );
 }
 
@@ -311,27 +249,28 @@ const styles = StyleSheet.create({
   account: { padding: 16, gap: 8, marginBottom: 8 },
   hello: { marginTop: 6, marginBottom: 2 },
   sectionTitle: { marginTop: 22, marginBottom: 8 },
-  checkBill: {
-    marginTop: 18,
-    borderWidth: 1,
-    borderRadius: Radius.card,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 6,
-  },
-  checkBillTitle: { fontSize: 16, lineHeight: 22 },
-  checkBillButtons: { marginTop: 10, gap: 10 },
-  case: {
+  empty: { marginBottom: 6 },
+  member: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 10,
   },
-  caseText: { flex: 1 },
-  caseTitle: { fontSize: 16, lineHeight: 22, marginBottom: 2 },
+  memberText: { flex: 1 },
+  memberName: { fontSize: 16, lineHeight: 22 },
+  memberActions: { gap: 6, marginTop: 4 },
+  unfiled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: Radius.card,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
   tip: {
     marginTop: 22,
     borderWidth: 1,

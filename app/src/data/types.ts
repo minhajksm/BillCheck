@@ -1,10 +1,14 @@
 /** Dates are calendar dates in "YYYY-MM-DD" form. Amounts are whole rupees. */
 
-export type Member = {
+/** An account following a member. */
+export type Follower = {
   id: string;
   name: string;
   isYou: boolean;
 };
+
+/** Whose an admission or a report is, for a heading. */
+export type MemberRef = { id: string; name: string };
 
 export type DailyBill = {
   id: string;
@@ -25,7 +29,8 @@ export type Case = {
   /** Missing where the bill printed no admission date and nobody has said. */
   admittedOn?: string;
   closedOn?: string;
-  members: Member[];
+  /** Whose admission it is. Missing only between a bill being read and the family saying. */
+  member?: MemberRef;
   /** Whether you started this case. Only you can delete it. */
   isOwner: boolean;
   /** Oldest first. */
@@ -172,4 +177,22 @@ export type Bill = {
   balance?: number;
   lineItems: LineItem[];
   flags: Flag[];
+};
+
+/**
+ * Someone the account looks after: Papa, Mummy, a friend, or themselves.
+ * Their admissions and lab reports belong to them, and family follow the
+ * member rather than one admission.
+ */
+export type MemberSummary = {
+  id: string;
+  name: string;
+  /** Whether you added them. Only you can delete them or remove a follower. */
+  isOwner: boolean;
+  followers: Follower[];
+  admissionCount: number;
+  /** Admissions with no discharge yet: someone is in hospital. */
+  openAdmissionCount: number;
+  openFlagCount: number;
+  labReportCount: number;
 };

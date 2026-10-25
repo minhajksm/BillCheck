@@ -6,9 +6,9 @@
  */
 
 import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
-import type { Bill, Case, Check, DailyBill, Flag, LineItem, Member, Payment } from './types';
+import type { Bill, Case, Check, DailyBill, Flag, Follower, LineItem, MemberRef, Payment } from './types';
 
-type ApiMember = { id: string; name: string; is_you: boolean };
+export type ApiFollower = { id: string; name: string; is_you: boolean };
 
 type ApiDailyBill = {
   id: string;
@@ -19,7 +19,7 @@ type ApiDailyBill = {
   open_flag_count: number;
 };
 
-type ApiCase = {
+export type ApiCase = {
   id: string;
   title: string;
   hospital_name: string;
@@ -29,7 +29,7 @@ type ApiCase = {
   bed: string | null;
   admitted_on: string | null;
   closed_on: string | null;
-  members: ApiMember[];
+  member: MemberRef | null;
   is_owner: boolean;
   bills: ApiDailyBill[];
   recovered_amount: number;
@@ -91,10 +91,10 @@ type ApiBill = {
   flags: ApiFlag[];
 };
 
-const toMember = (m: ApiMember): Member => ({
-  id: m.id,
-  name: m.name,
-  isYou: m.is_you,
+export const toFollower = (f: ApiFollower): Follower => ({
+  id: f.id,
+  name: f.name,
+  isYou: f.is_you,
 });
 
 const toDailyBill = (b: ApiDailyBill): DailyBill => ({
@@ -113,7 +113,7 @@ export const toCase = (c: ApiCase): Case => ({
   patient: { name: c.patient_name, ipNumber: c.ip_number, bed: c.bed ?? '' },
   admittedOn: c.admitted_on ?? undefined,
   closedOn: c.closed_on ?? undefined,
-  members: c.members.map(toMember),
+  member: c.member ?? undefined,
   isOwner: c.is_owner,
   bills: c.bills.map(toDailyBill),
   recoveredAmount: c.recovered_amount,
@@ -193,11 +193,13 @@ export async function readCase(token: string, caseId: string): Promise<Case> {
   return toCase(await apiFetch<ApiCase>(`/cases/${caseId}`, { token }));
 }
 
-export async function createCase(token: string, body: NewCase): Promise<Case> {
+/** Opens an admission by hand, under a member. */
+export async function createCase(token: string, memberId: string, body: NewCase): Promise<Case> {
   const created = await apiFetch<ApiCase>('/cases', {
     method: 'POST',
     token,
     body: {
+      member_id: memberId,
       title: body.title,
       hospital_name: body.hospitalName,
       hospital_area: body.hospitalArea,
@@ -239,29 +241,22 @@ export async function deleteCase(token: string, caseId: string): Promise<void> {
   await apiFetch<void>(`/cases/${caseId}`, { method: 'DELETE', token });
 }
 
-/** A new invite code to share with family. Shown once; valid for 7 days. */
-export async function createInvite(
-  token: string,
-  caseId: string,
-): Promise<{ code: string; expiresAt: string }> {
-  const invite = await apiFetch<{
-    id: string;
-    code: string;
-    expires_at: string;
-  }>(`/cases/${caseId}/invites`, {
-    method: 'POST',
-    token,
-  });
-  return { code: invite.code, expiresAt: invite.expires_at };
-}
+/**
+ * Whose a scan is: someone already there, or someone new, usually named as
+ * the page names them. Exactly one.
+ */
+export type FileUnder = { memberId: string } | { newMemberName: string };
 
-/** Joins with a code from a family member. The code goes in the body, never the URL. */
-export async function joinCase(token: string, code: string): Promise<Case> {
+export const fileUnderBody = (answer: FileUnder) =>
+  'memberId' in answer ? { member_id: answer.memberId } : { new_member_name: answer.newMemberName };
+
+/** Says whose admission this is. Family following that member see it from now on. */
+export async function fileCase(token: string, caseId: string, answer: FileUnder): Promise<Case> {
   return toCase(
-    await apiFetch<ApiCase>('/cases/join', {
+    await apiFetch<ApiCase>(`/cases/${caseId}/member`, {
       method: 'POST',
       token,
-      body: { code },
+      body: fileUnderBody(answer),
     }),
   );
 }
@@ -294,7 +289,7 @@ export async function sendPages(
   token: string,
   path: string,
   pages: ScannedPage[],
-  billDate?: string,
+  fields: Record<string, string | undefined> = {},
   onProgress?: OnProgress,
 ): Promise<unknown> {
   const form = new FormData();
@@ -308,7 +303,9 @@ export async function sendPages(
       form.append('pages', { uri: page.uri, name: page.name, type: page.type } as unknown as Blob);
     }
   }
-  if (billDate) form.append('bill_date', billDate);
+  for (const [name, value] of Object.entries(fields)) {
+    if (value) form.append(name, value);
+  }
 
   // XHR rather than fetch, for one reason: `upload.onprogress`. Reading a bill
   // takes most of a minute and the screen says which part it is on, so the one
@@ -354,10 +351,10 @@ async function postPages(
   token: string,
   path: string,
   pages: ScannedPage[],
-  billDate?: string,
+  fields: Record<string, string | undefined>,
   onProgress?: OnProgress,
 ): Promise<Bill> {
-  return toBill((await sendPages(token, path, pages, billDate, onProgress)) as ApiBill);
+  return toBill((await sendPages(token, path, pages, fields, onProgress)) as ApiBill);
 }
 
 /**
@@ -371,7 +368,7 @@ export async function uploadBill(
   billDate?: string,
   onProgress?: OnProgress,
 ): Promise<Bill> {
-  return postPages(token, `/cases/${caseId}/bills`, pages, billDate, onProgress);
+  return postPages(token, `/cases/${caseId}/bills`, pages, { bill_date: billDate }, onProgress);
 }
 
 /**
@@ -381,12 +378,15 @@ export async function uploadBill(
  * admission date, the patient and the IP number are all printed on it. The
  * case comes back on `bill.caseId`, and the family can correct its details
  * whenever they like.
+ *
+ * Scanned from a member, the case is theirs. Without one it waits to be
+ * filed with `fileCase`, so the patient name on the bill can be offered.
  */
 export async function checkFirstBill(
   token: string,
   pages: ScannedPage[],
-  billDate?: string,
+  memberId?: string,
   onProgress?: OnProgress,
 ): Promise<Bill> {
-  return postPages(token, '/bills', pages, billDate, onProgress);
+  return postPages(token, '/bills', pages, { member_id: memberId }, onProgress);
 }
