@@ -63,8 +63,20 @@ def new_member(db: Session, name: str, user: User) -> Member:
 
 
 def member_to_file_under(db: Session, body: FileUnder, user: User) -> Member:
-    """Someone the caller follows, or someone new they are adding now."""
+    """Someone the caller follows, or someone new they are adding now, with
+    whatever details the family accepted from the page.
+
+    Someone new takes all of them. Someone already there gains only the ones
+    they don't have yet: a page read off a photograph never replaces what the
+    family typed in themselves.
+    """
     if body.member_id is not None:
-        return load_member(db, body.member_id, user)
-    assert body.new_member_name is not None  # FileUnder takes exactly one
-    return new_member(db, body.new_member_name, user)
+        member = load_member(db, body.member_id, user)
+    else:
+        assert body.new_member_name is not None  # FileUnder takes exactly one
+        member = new_member(db, body.new_member_name, user)
+    if body.details is not None:
+        for field, value in body.details.model_dump().items():
+            if value is not None and getattr(member, field) is None:
+                setattr(member, field, value)
+    return member

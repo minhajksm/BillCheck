@@ -236,6 +236,16 @@ class BillHeader(BaseModel):
         description="What the bill says is still due; 0 for a nil balance. Null when not printed.",
     )
     patient_name: Text = Field(description="As printed. Empty when not readable.")
+    # The patient's own details, as printed: offered as a member's details
+    # when the family files the bill. Empty where the bill prints none, and
+    # never the hospital's own phone, email or address.
+    patient_age: Text = Field(default="", description="As printed, e.g. '68 Yrs'. Empty when none.")
+    patient_dob: Text = Field(default="", description="Date of birth as printed. Empty when none.")
+    patient_phone: Text = Field(default="", description="The patient's number as printed. Empty when none.")
+    patient_email: Text = Field(default="", description="The patient's email as printed. Empty when none.")
+    patient_address: Text = Field(
+        default="", description="The patient's address as printed. Empty when none."
+    )
     ip_number: Text = Field(
         description="The IP, admission or registration number as printed. Empty when not readable."
     )

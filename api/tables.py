@@ -170,6 +170,10 @@ class Case(Base):
     member_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("members.id", ondelete="CASCADE"), index=True
     )
+    # The patient's age, date of birth, phone, email and address as the bill
+    # printed them, kept only until the case is filed: they are offered as the
+    # member's details, then dropped. See printed_patient.py.
+    printed_patient: Mapped[dict | None] = mapped_column(JSON)
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
@@ -412,6 +416,8 @@ class LabReport(Base):
     member_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("members.id", ondelete="CASCADE"), index=True
     )
+    # As on a case: the patient's details as printed, kept only until filed.
+    printed_patient: Mapped[dict | None] = mapped_column(JSON)
     # As printed. The date in particular is never parsed: lab reports print
     # it every way there is, nothing here computes with it, and a parse that
     # guessed the day and month the wrong way round would be an invention.

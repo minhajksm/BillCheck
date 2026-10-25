@@ -86,7 +86,8 @@ Return a single JSON object and nothing else:
   "bill": { "hospital", "bill_no", "bill_date", "admission_date",
             "discharge_date", "room_category",
             "subtotal", "discount", "total", "amount_paid", "balance",
-            "patient_name", "ip_number",
+            "patient_name", "patient_age", "patient_dob", "patient_phone",
+            "patient_email", "patient_address", "ip_number",
             "pages_processed", "extraction_confidence": 0.0-1.0 },
   "payments": [ { "date", "mode", "amount" } ],
   "lines": [ { "line_id", "description_verbatim", "category",
@@ -126,6 +127,14 @@ every deposit, advance or receipt the bill lists, each with its date, its mode
 bill's own figure for the total paid, and "balance" what it says is still due
 -- 0 where it prints a nil balance. Each is null, and "payments" empty, where
 the bill does not print it. Transcribe them; never add them up.
+
+"patient_age", "patient_dob", "patient_phone", "patient_email" and
+"patient_address" are the patient's own details, transcribed as printed: the
+age as the bill writes it ("68 Yrs"), the date of birth, the mobile number,
+the email and the address. Each is empty where the bill does not print it.
+The hospital's own phone, email and address, in its letterhead or footer, are
+not the patient's: leave the field empty rather than copy them. Never work
+one out from another -- an age is not a date of birth.
 
 "requires_reference_price" lists every consumable, disposable and device line
 whose rate cannot be assessed from the bill alone. That list is the handoff to
