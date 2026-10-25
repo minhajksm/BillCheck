@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/auth-context';
 import { AppHeader } from '@/components/app-header';
+import { AddPagesButton } from '@/components/add-pages';
 import { Button } from '@/components/button';
 import { PagePreview } from '@/components/page-preview';
 import { Text } from '@/components/text';
@@ -107,23 +108,10 @@ export default function NewLabReportScreen() {
         {ready ? (
           <Button icon="file-text" label={t('lab.explain')} onPress={explain} loading={preparing} />
         ) : null}
-        <Button
+        <AddPagesButton
           variant={ready ? 'secondary' : 'primary'}
-          icon="camera"
-          label={t('scan.takePhoto')}
-          onPress={() => void picker.takePhoto()}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('scan.choosePages')}
-          onPress={() => void picker.choosePages()}
-        />
-        <Button
-          variant="secondary"
-          icon="file-text"
-          label={t('scan.choosePdf')}
-          onPress={() => void picker.choosePdf()}
+          label={pages.length > 0 ? t('scan.addAnotherPage') : t('scan.addPages')}
+          picker={picker}
         />
       </View>
     </SafeAreaView>

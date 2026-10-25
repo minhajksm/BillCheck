@@ -84,14 +84,13 @@ describe('starting from the home screen', () => {
     renderRouter(routes, { initialUrl: '/' });
 
     expect(await screen.findByText('Got a lab report?')).toBeVisible();
-    expect(screen.getByText('Photograph report')).toBeVisible();
-    expect(screen.getByText('Upload report')).toBeVisible();
+    expect(screen.getByText('Scan or upload report')).toBeVisible();
   });
 
   it('asks for its own consent first, because sign-up consent covers bills', async () => {
     signedIn(false);
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
 
     expect(await screen.findByText('Before your first lab report')).toBeVisible();
     expect(mockCamera).not.toHaveBeenCalled();
@@ -126,7 +125,8 @@ describe('explaining a report', () => {
   async function explainOne() {
     signedIn(true);
     renderRouter(routes, { initialUrl: '/members/m-papa' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     await screen.findByText('Explain a lab report');
     await act(async () => fireEvent.press(await screen.findByText('Explain report')));
   }
@@ -134,7 +134,8 @@ describe('explaining a report', () => {
   it('leads with explaining it once there is a page', async () => {
     signedIn(true);
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
 
     const explain = await screen.findByRole('button', { name: 'Explain report' });
     expect(explain).toHaveStyle({ backgroundColor: Colors.light.indigo });
@@ -170,7 +171,8 @@ describe('explaining a report', () => {
     signedIn(true);
     server.failUpload = 'unreadable_lab_report';
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     await act(async () => fireEvent.press(await screen.findByText('Explain report')));
 
     expect(await screen.findByText(/This report couldn't be read/)).toBeOnTheScreen();
@@ -228,7 +230,8 @@ describe('whose report it is', () => {
   it('is theirs from the start when started from a member', async () => {
     signedIn(true);
     renderRouter(routes, { initialUrl: '/members/m-papa' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     await act(async () => fireEvent.press(await screen.findByText('Explain report')));
 
     expect(await screen.findByText('Sample Diagnostics')).toBeVisible();
@@ -238,7 +241,8 @@ describe('whose report it is', () => {
   it('is asked once it is read, when started from the home screen', async () => {
     signedIn(true);
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph report'));
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     await act(async () => fireEvent.press(await screen.findByText('Explain report')));
 
     // The name the report prints is offered for someone new.
@@ -249,6 +253,20 @@ describe('whose report it is', () => {
 
     expect(await screen.findByText('Sample Diagnostics')).toBeVisible();
     expect(server.labReports[0].member).toEqual({ id: 'm-mummy', name: 'Mummy' });
+  });
+});
+
+describe('who the report is about, offered from the page', () => {
+  it('fills someone new in with the name and says the age the report printed', async () => {
+    signedIn(true);
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
+    await act(async () => fireEvent.press(await screen.findByText('Explain report')));
+
+    fireEvent.press(await screen.findByText('Someone new'));
+    expect(screen.getByDisplayValue('TEST PATIENT')).toBeVisible();
+    expect(screen.getByText('The page gives their age as 45.')).toBeVisible();
   });
 });
 

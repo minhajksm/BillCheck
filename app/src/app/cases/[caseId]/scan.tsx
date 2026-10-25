@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/auth/auth-context';
 import { AppHeader } from '@/components/app-header';
+import { AddPagesButton } from '@/components/add-pages';
 import { Button } from '@/components/button';
 import { PagePreview } from '@/components/page-preview';
 import { ReadingBill } from '@/components/reading-bill';
@@ -115,28 +116,15 @@ export default function ScanScreen() {
       </ScrollView>
 
       {/* Once there is a page to check, checking it is what the family came
-          to do: it leads, and photographing another drops to a secondary. */}
+          to do: it leads, and adding another drops to a secondary. */}
       <View style={styles.controls}>
         {ready ? (
           <Button icon="check" label={t('scan.checkBill')} onPress={checkBill} loading={preparing} />
         ) : null}
-        <Button
+        <AddPagesButton
           variant={ready ? 'secondary' : 'primary'}
-          icon="camera"
-          label={t('scan.takePhoto')}
-          onPress={() => void picker.takePhoto()}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('scan.choosePages')}
-          onPress={() => void picker.choosePages()}
-        />
-        <Button
-          variant="secondary"
-          icon="file-text"
-          label={t('scan.choosePdf')}
-          onPress={() => void picker.choosePdf()}
+          label={pages.length > 0 ? t('scan.addAnotherPage') : t('scan.addPages')}
+          picker={picker}
         />
       </View>
     </SafeAreaView>

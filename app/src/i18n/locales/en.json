@@ -41,8 +41,6 @@
     "nextVersion": "In the next version",
     "checkBillTitle": "Have a hospital bill?",
     "checkBillBody": "Photograph the itemized bill. We'll read it, then you choose whose it is.",
-    "photographBill": "Photograph bill",
-    "uploadBill": "Upload photo or PDF",
     "yourMembers": "Your members",
     "membersEmpty": "Add the people you look after (Papa, Mummy, yourself) and keep each one's hospital bills and lab reports together.",
     "addMember": "Add a member",
@@ -53,7 +51,8 @@
     "unfiledLab": "Lab report from {{lab}}",
     "unfiledLabUnnamed": "A lab report you scanned",
     "onPage": "The page says: {{name}}",
-    "discharged": "Discharged {{date}}"
+    "discharged": "Discharged {{date}}",
+    "addBill": "Scan or upload bill"
   },
   "caseStatus": {
     "toAsk_one": "{{count}} to ask",
@@ -153,8 +152,6 @@
     "hintEmpty": "Fit one page inside the frame. Handwritten bills work too.",
     "hintCaptured_one": "{{count}} page added. Add the next page, or check the bill.",
     "hintCaptured_other": "{{count}} pages added. Add the next page, or check the bill.",
-    "takePhoto": "Take photo",
-    "choosePages": "Choose pages",
     "checkBill": "Check bill",
     "remove": "Remove page {{number}}",
     "cameraDenied": "BillCheck needs the camera to photograph the bill. Allow it in Settings, or choose pages instead.",
@@ -170,9 +167,10 @@
     "errorTooMany": "A bill can have up to {{max}} pages. Remove some and check them as a second bill.",
     "errorLimit": "You've checked a lot of bills today. Try again tomorrow.",
     "errorUnknown": "Something went wrong. Your pages are still here. Try again.",
-    "choosePdf": "Upload PDF",
     "titleFirst": "Check a bill",
-    "hintFirstEmpty": "Fit one page inside the frame. We'll read the hospital, the patient and the dates off the bill itself."
+    "hintFirstEmpty": "Fit one page inside the frame. We'll read the hospital, the patient and the dates off the bill itself.",
+    "addPages": "Add pages",
+    "addAnotherPage": "Add another page"
   },
   "reading": {
     "title": "Checking your bill",
@@ -439,8 +437,6 @@
   "lab": {
     "cardTitle": "Got a lab report?",
     "cardBody": "Photograph it and we'll explain each result in plain words, in English or Hindi.",
-    "photograph": "Photograph report",
-    "upload": "Upload report",
     "yourReports": "Your lab reports",
     "outsideRange_one": "{{count}} result outside the report’s range",
     "outsideRange_other": "{{count}} results outside the report’s ranges",
@@ -480,7 +476,8 @@
     "errors": {
       "unreadable_lab_report": "This report couldn't be read. Try again in better light, one page at a time.",
       "lab_consent_required": "Agree to lab reports being explained first."
-    }
+    },
+    "add": "Scan or upload report"
   },
   "members": {
     "inHospital": "In hospital now",
@@ -546,9 +543,17 @@
     "titleLab": "Whose lab report is this?",
     "subtitle": "Choose who it belongs to. Everyone following them will see it too.",
     "someoneNew": "Someone new",
-    "newNameLabel": "Their name",
     "continue": "Continue",
     "failed": "Couldn't save that. Try again.",
-    "pickOne": "Choose someone, or add someone new."
+    "pickOne": "Choose someone, or add someone new.",
+    "pageAge": "The page gives their age as {{age}}.",
+    "addToMember": "Add what the page shows to {{name}}'s details",
+    "addToMemberNote": "Only what {{name}} doesn't have yet. Nothing already saved is changed."
+  },
+  "pages": {
+    "takePhoto": "Take a photo",
+    "gallery": "Choose from gallery",
+    "file": "Choose a file",
+    "fileHint": "A PDF or a photo saved on the phone"
   }
 }

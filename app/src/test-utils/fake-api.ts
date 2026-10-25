@@ -107,6 +107,16 @@ export const SAMPLE_BILL = {
   ] as SampleFlag[],
 };
 
+/** Who the sample bill says it is about, as the API offers it while it waits to be filed. */
+export const SUGGESTED_FROM_BILL = {
+  name: 'Ramesh Sharma',
+  date_of_birth: null as string | null,
+  age: 68 as number | null,
+  phone: '+919876543210' as string | null,
+  email: null as string | null,
+  address: '12 Example Road, Andheri, Mumbai 400058' as string | null,
+};
+
 /** One open case, as the API would return it. */
 export const SAMPLE_CASE = {
   id: 'papa-admission',
@@ -119,6 +129,7 @@ export const SAMPLE_CASE = {
   admitted_on: '2026-10-09',
   closed_on: null,
   member: { id: 'm-papa', name: 'Papa' } as { id: string; name: string } | null,
+  suggested_member: null as typeof SUGGESTED_FROM_BILL | null,
   is_owner: true,
   bills: [
     {
@@ -153,6 +164,7 @@ export const CLOSED_CASE = {
   admitted_on: '2026-03-12',
   closed_on: '2026-03-13',
   member: { id: 'm-mummy', name: 'Mummy' } as { id: string; name: string } | null,
+  suggested_member: null as typeof SUGGESTED_FROM_BILL | null,
   is_owner: true,
   bills: [
     {
@@ -171,6 +183,7 @@ export const CLOSED_CASE = {
 export const SAMPLE_LAB = {
   id: 'lab-1',
   member: null as { id: string; name: string } | null,
+  suggested_member: null as typeof SUGGESTED_FROM_BILL | null,
   lab_name: 'Sample Diagnostics',
   patient_name: 'TEST PATIENT',
   report_date: '06/05/2025',
@@ -303,15 +316,30 @@ export function installFakeApi() {
   });
 
   /** Someone already there, or someone new: what POST .../member answers with. */
-  const fileUnder = (body: { member_id?: string; new_member_name?: string }) => {
+  /**
+   * Someone already there, or someone new: what POST .../member answers with.
+   * Details from the page go to someone new whole, and to someone already
+   * there only where they have none, as the real API does.
+   */
+  const fileUnder = (body: {
+    member_id?: string;
+    new_member_name?: string;
+    details?: Partial<Details> | null;
+  }) => {
+    const details = pickDetails(body.details ?? {});
     if (body.member_id) {
       const found = server.members.find((m) => m.id === body.member_id);
-      return found ? { id: found.id, name: found.name } : null;
+      if (!found) return null;
+      for (const [key, value] of Object.entries(details) as [keyof Details, string | null][]) {
+        if (value && !found[key]) found[key] = value as never;
+      }
+      return { id: found.id, name: found.name };
     }
     const made = {
       id: `m-${server.members.length + 1}`,
       name: body.new_member_name ?? '',
       ...NO_DETAILS,
+      ...details,
       is_owner: true,
       followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
     };
@@ -413,6 +441,9 @@ export function installFakeApi() {
             ...structuredClone(SAMPLE_LAB),
             id: `lab-${server.labReports.length + 1}`,
             member: member ? { id: member.id, name: member.name } : null,
+            suggested_member: member
+              ? null
+              : { ...SUGGESTED_FROM_BILL, name: 'TEST PATIENT', age: 45, phone: null, address: null },
           };
           server.labReports.unshift(report);
           return json(201, report);
@@ -426,6 +457,7 @@ export function installFakeApi() {
           const member = fileUnder(body);
           if (!found || !member) return fail(404, 'lab_report_not_found');
           found.member = member;
+          found.suggested_member = null;
           return json(200, found);
         }
 
@@ -523,6 +555,7 @@ export function installFakeApi() {
           const member = fileUnder(body);
           if (!found || !member) return fail(404, 'case_not_found');
           found.member = member;
+          found.suggested_member = null;
           return json(200, found);
         }
 
@@ -565,6 +598,7 @@ export function installFakeApi() {
             id: `case-from-bill-${server.cases.length}`,
             title: 'Ramesh Sharma',
             member: member ? { id: member.id, name: member.name } : null,
+            suggested_member: member ? null : structuredClone(SUGGESTED_FROM_BILL),
             bills: [],
           };
           server.cases.unshift(opened);

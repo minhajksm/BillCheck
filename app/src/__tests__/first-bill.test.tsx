@@ -26,7 +26,7 @@ type Picked = {
 };
 
 /** What the document picker hands back for a PDF. */
-type PickedFile = { canceled: boolean; assets: { uri: string; name: string }[] };
+type PickedFile = { canceled: boolean; assets: { uri: string; name: string; mimeType?: string }[] };
 
 // Prefixed `mock` so the factories below may reach them: jest hoists
 // `jest.mock` above the file, and only these names are allowed through.
@@ -102,7 +102,8 @@ beforeEach(async () => {
 async function withOnePage() {
   mockCamera.mockResolvedValue(PICKED);
   renderRouter(routes, { initialUrl: '/' });
-  fireEvent.press(await screen.findByText('Photograph bill'));
+  fireEvent.press(await screen.findByText('Scan or upload bill'));
+  fireEvent.press(await screen.findByText('Take a photo'));
   await screen.findByText('Check bill');
 }
 
@@ -119,15 +120,16 @@ describe('checking a bill from the home screen', () => {
     renderRouter(routes, { initialUrl: '/' });
 
     expect(await screen.findByText('Have a hospital bill?')).toBeVisible();
-    expect(screen.getByText('Photograph bill')).toBeVisible();
-    expect(screen.getByText('Upload photo or PDF')).toBeVisible();
+    // One button: the camera, the gallery and the phone's files are chosen after the tap.
+    expect(screen.getByText('Scan or upload bill')).toBeVisible();
   });
 
   it('opens the camera on the tap, with no screen in between', async () => {
     mockCamera.mockResolvedValue(PICKED);
     renderRouter(routes, { initialUrl: '/' });
 
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
 
     await waitFor(() => expect(mockCamera).toHaveBeenCalledTimes(1));
   });
@@ -135,7 +137,8 @@ describe('checking a bill from the home screen', () => {
   it('carries the page through to the scan screen', async () => {
     mockCamera.mockResolvedValue(PICKED);
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
 
     // Staged, counted, and ready to check: the page is not photographed twice.
     expect(await screen.findByText('1 page added. Add the next page, or check the bill.')).toBeVisible();
@@ -145,7 +148,8 @@ describe('checking a bill from the home screen', () => {
   it('stays put when the picker is cancelled', async () => {
     mockCamera.mockResolvedValue({ canceled: true, assets: [] });
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
 
     await waitFor(() => expect(mockCamera).toHaveBeenCalled());
     expect(screen.getByText('Have a hospital bill?')).toBeVisible();
@@ -163,7 +167,8 @@ describe('checking a bill from the home screen', () => {
 
   async function checkFromHome() {
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     fireEvent.press(await screen.findByText('Check bill'));
     return screen.findByText('Whose bill is this?');
   }
@@ -226,7 +231,8 @@ describe('checking a bill from the home screen', () => {
   it('needs no question when the bill was scanned from a member', async () => {
     const server = await readFromHome();
     renderRouter(routes, { initialUrl: '/members/m-papa' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     fireEvent.press(await screen.findByText('Check bill'));
 
     expect(await screen.findByText('Bill total')).toBeVisible();
@@ -244,7 +250,8 @@ describe('checking a bill from the home screen', () => {
     server.stallUpload = true;
 
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     fireEvent.press(await screen.findByText('Check bill'));
 
     expect(await screen.findByText('Checking your bill')).toBeVisible();
@@ -274,7 +281,8 @@ describe('checking a bill from the home screen', () => {
     } as unknown as typeof XMLHttpRequest;
 
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     fireEvent.press(await screen.findByText('Check bill'));
 
     // The one figure on the screen that is measured rather than estimated.
@@ -290,7 +298,8 @@ describe('checking a bill from the home screen', () => {
     server.failUpload = 'unreadable_bill';
 
     renderRouter(routes, { initialUrl: '/' });
-    fireEvent.press(await screen.findByText('Photograph bill'));
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
     fireEvent.press(await screen.findByText('Check bill'));
 
     // The toast fades in through Animated, which the test renderer does not
@@ -311,6 +320,116 @@ describe('checking a bill from the home screen', () => {
 
     // For anyone setting a case up before the first bill arrives.
     expect(await screen.findByText('Add an admission by hand')).toBeVisible();
+  });
+});
+
+describe('one button for every way a page arrives', () => {
+  it("offers the camera, the gallery and the phone's files after one tap", async () => {
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+
+    expect(await screen.findByText('Take a photo')).toBeVisible();
+    expect(screen.getByText('Choose from gallery')).toBeVisible();
+    expect(screen.getByText('Choose a file')).toBeVisible();
+    expect(screen.getByText('A PDF or a photo saved on the phone')).toBeVisible();
+    // Nothing is opened until they choose.
+    expect(mockCamera).not.toHaveBeenCalled();
+    expect(mockLibrary).not.toHaveBeenCalled();
+  });
+
+  it('closes without picking anything when cancelled', async () => {
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Cancel'));
+
+    await waitFor(() => expect(screen.queryByText('Take a photo')).toBeNull());
+    expect(mockCamera).not.toHaveBeenCalled();
+  });
+
+  it('takes pages from the gallery', async () => {
+    mockLibrary.mockResolvedValue(PICKED);
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Choose from gallery'));
+
+    expect(await screen.findByText('1 page added. Add the next page, or check the bill.')).toBeVisible();
+    expect(mockLibrary).toHaveBeenCalledTimes(1);
+  });
+
+  it("takes a photo saved in the phone's files, not only a PDF", async () => {
+    mockDocument.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///Download/bill-photo.jpg', name: 'bill-photo.jpg', mimeType: 'image/jpeg' }],
+    });
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Choose a file'));
+
+    expect(await screen.findByText('1 page added. Add the next page, or check the bill.')).toBeVisible();
+    // A photo, shown as one, rather than a PDF shown by name.
+    const [preview] = screen.UNSAFE_getAllByType(Image);
+    expect(preview.props.source).toEqual({ uri: 'file:///Download/bill-photo.jpg' });
+  });
+});
+
+describe('who the bill is about, offered from the page', () => {
+  async function readFromHome() {
+    mockCamera.mockResolvedValue(PICKED);
+    const server = installFakeApi();
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
+    fireEvent.press(await screen.findByText('Check bill'));
+    await screen.findByText('Whose bill is this?');
+    return server;
+  }
+
+  it('fills someone new in from the page, every field editable', async () => {
+    const server = await readFromHome();
+    fireEvent.press(screen.getByText('Someone new'));
+
+    expect(screen.getByDisplayValue('Ramesh Sharma')).toBeVisible();
+    expect(screen.getByDisplayValue('9876543210')).toBeVisible();
+    expect(screen.getByDisplayValue('12 Example Road, Andheri, Mumbai 400058')).toBeVisible();
+    // The age the bill printed is said, never turned into a date of birth.
+    expect(screen.getByText('The page gives their age as 68.')).toBeVisible();
+    expect(screen.getByLabelText('Date of birth (optional)')).toHaveDisplayValue('');
+
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    expect(await screen.findByText('Bill total')).toBeVisible();
+    const added = server.members.find((m) => m.name === 'Ramesh Sharma');
+    expect(added).toMatchObject({
+      phone: '+919876543210',
+      address: '12 Example Road, Andheri, Mumbai 400058',
+    });
+  });
+
+  it("offers to add the page's details to someone already there", async () => {
+    const server = await readFromHome();
+    fireEvent.press(screen.getByText('Papa'));
+
+    const add = screen.getByRole('checkbox', { name: "Add what the page shows to Papa's details" });
+    expect(add).toBeChecked();
+    expect(screen.getByText('+91 98765 43210')).toBeVisible();
+    expect(screen.getByText(/Nothing already saved is changed/)).toBeVisible();
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    await screen.findByText('Bill total');
+    expect(server.members[0]).toMatchObject({ name: 'Papa', phone: '+919876543210' });
+  });
+
+  it('adds nothing to them when told not to', async () => {
+    const server = await readFromHome();
+    fireEvent.press(screen.getByText('Papa'));
+    fireEvent.press(screen.getByRole('checkbox', { name: "Add what the page shows to Papa's details" }));
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    await screen.findByText('Bill total');
+    expect(server.members[0]).toMatchObject({ phone: null, address: null });
   });
 });
 
@@ -338,7 +457,8 @@ describe('the page waiting to be checked', () => {
       assets: [{ uri: 'file:///final-bill.pdf', name: 'final-bill.pdf' }],
     });
     renderRouter(routes, { initialUrl: '/scan' });
-    fireEvent.press(await screen.findByText('Upload PDF'));
+    fireEvent.press(await screen.findByText('Add pages'));
+    fireEvent.press(await screen.findByText('Choose a file'));
 
     expect(await screen.findByText('final-bill.pdf')).toBeVisible();
     expect(screen.UNSAFE_queryAllByType(Image)).toEqual([]);
@@ -349,7 +469,7 @@ describe('what to do next on the scan screen', () => {
   it('leads with the camera while there is nothing to check', async () => {
     renderRouter(routes, { initialUrl: '/scan' });
 
-    const photo = await screen.findByRole('button', { name: 'Take photo' });
+    const photo = await screen.findByRole('button', { name: 'Add pages' });
     expect(photo).toHaveStyle({ backgroundColor: Colors.light.indigo });
     expect(screen.queryByText('Check bill')).toBeNull();
   });
@@ -360,7 +480,7 @@ describe('what to do next on the scan screen', () => {
     // "Check bill" used to be the fourth button down and the quietest of
     // them, under three ways to add another page.
     const check = screen.getByRole('button', { name: 'Check bill' });
-    const photo = screen.getByRole('button', { name: 'Take photo' });
+    const photo = screen.getByRole('button', { name: 'Add another page' });
     expect(check).toHaveStyle({ backgroundColor: Colors.light.indigo });
     expect(photo).not.toHaveStyle({ backgroundColor: Colors.light.indigo });
   });

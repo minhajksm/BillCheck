@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -6,18 +7,28 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/auth-context';
 import { Avatar } from '@/components/avatar';
 import { Button } from '@/components/button';
+import { Checkbox } from '@/components/checkbox';
 import { FormScreen } from '@/components/form-screen';
 import { Icon } from '@/components/icon';
+import {
+  MemberFields,
+  memberDetails,
+  memberValues,
+  validateMember,
+  type MemberErrors,
+  type MemberValues,
+} from '@/components/member-fields';
 import { Text } from '@/components/text';
-import { TextField } from '@/components/text-field';
 import { useToast } from '@/components/toast';
 import { Radius } from '@/constants/theme';
 import { fileCase, readCase, type FileUnder } from '@/data/cases-api';
 import { fileLabReport, readLabReport } from '@/data/lab-api';
 import { listMembers } from '@/data/members-api';
-import type { MemberSummary } from '@/data/types';
+import type { MemberSummary, SuggestedMember } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
+import { formatDate } from '@/i18n/dates';
+import { formatPhone } from '@/lib/phone';
 
 type Kind = 'bill' | 'lab';
 
@@ -47,13 +58,16 @@ export default function FileScreen() {
 
   const load = useCallback(async () => {
     if (!token) throw new Error('signed out');
-    const [members, onPage] = await Promise.all([
+    const [members, page] = await Promise.all([
       listMembers(token),
       kind === 'lab'
-        ? readLabReport(token, id).then((report) => report.patientName)
-        : readCase(token, id).then((item) => item.patient.name),
+        ? readLabReport(token, id).then((report) => ({
+            name: report.patientName,
+            suggested: report.suggestedMember,
+          }))
+        : readCase(token, id).then((item) => ({ name: item.patient.name, suggested: item.suggestedMember })),
     ]);
-    return { members, onPage };
+    return { members, onPage: page.name, suggested: page.suggested };
   }, [token, kind, id]);
   const loaded = useAsync(load);
 
@@ -80,6 +94,7 @@ export default function FileScreen() {
       billId={billId}
       members={loaded.value.members}
       onPage={loaded.value.onPage}
+      suggested={loaded.value.suggested}
     />
   );
 }
@@ -91,6 +106,7 @@ function Choose({
   billId,
   members,
   onPage,
+  suggested,
 }: {
   token: string;
   kind: Kind;
@@ -98,6 +114,7 @@ function Choose({
   billId?: string;
   members: MemberSummary[];
   onPage: string;
+  suggested?: SuggestedMember;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -107,25 +124,32 @@ function Choose({
   const [choice, setChoice] = useState<string | 'new' | null>(
     matched ? matched.id : members.length === 0 ? 'new' : null,
   );
-  const [newName, setNewName] = useState(onPage);
-  const [error, setError] = useState<string | null>(null);
+  // Someone new starts as the page describes them, every field editable.
+  const [newMember, setNewMember] = useState<MemberValues>(
+    memberValues({ ...suggested, name: suggested?.name || onPage }),
+  );
+  const [errors, setErrors] = useState<MemberErrors>({});
+  // For someone already there: whether to add what the page shows to theirs.
+  const [addFromPage, setAddFromPage] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const fromPage = pageDetails(suggested);
+  const chosen = members.find((member) => member.id === choice);
 
   const submit = async () => {
     let answer: FileUnder;
     if (choice === 'new') {
-      if (!newName.trim()) {
-        setError(t('newCase.required'));
-        return;
-      }
-      answer = { newMemberName: newName.trim() };
+      const found = validateMember(newMember, t);
+      setErrors(found);
+      if (Object.keys(found).length > 0) return;
+      const { name, ...details } = memberDetails(newMember);
+      answer = { newMemberName: name, details };
     } else if (choice) {
-      answer = { memberId: choice };
+      answer = { memberId: choice, details: addFromPage && fromPage ? fromPage : undefined };
     } else {
       toast(t('file.pickOne'));
       return;
     }
-    setError(null);
     setSaving(true);
     try {
       if (kind === 'lab') {
@@ -175,19 +199,51 @@ function Choose({
           onPress={() => setChoice('new')}
         />
       </View>
+
       {choice === 'new' ? (
-        <TextField
-          label={t('file.newNameLabel')}
-          placeholder={t('members.namePlaceholder')}
-          value={newName}
-          onChangeText={setNewName}
-          error={error}
-          autoCapitalize="words"
-          maxLength={80}
+        <MemberFields
+          values={newMember}
+          errors={errors}
+          onChange={setNewMember}
+          ageHint={suggested?.age !== undefined ? t('file.pageAge', { age: suggested.age }) : undefined}
         />
+      ) : null}
+
+      {chosen && fromPage ? (
+        <View style={styles.fromPage}>
+          <Checkbox
+            checked={addFromPage}
+            onChange={setAddFromPage}
+            label={t('file.addToMember', { name: chosen.name })}
+          />
+          <View style={styles.fromPageList}>
+            {pageLines(t, fromPage).map((line) => (
+              <Text key={line} variant="small" color="ink2">
+                {line}
+              </Text>
+            ))}
+            <Text variant="faint">{t('file.addToMemberNote', { name: chosen.name })}</Text>
+          </View>
+        </View>
       ) : null}
     </FormScreen>
   );
+}
+
+/** What the page printed that a member can hold, or nothing. */
+function pageDetails(suggested?: SuggestedMember): FileUnder['details'] {
+  if (!suggested) return undefined;
+  const { dateOfBirth, phone, email, address } = suggested;
+  return dateOfBirth || phone || email || address ? { dateOfBirth, phone, email, address } : undefined;
+}
+
+function pageLines(t: TFunction, details: NonNullable<FileUnder['details']>): string[] {
+  return [
+    details.dateOfBirth ? t('members.born', { date: formatDate(t, details.dateOfBirth) }) : null,
+    details.phone ? formatPhone(details.phone) : null,
+    details.email ?? null,
+    details.address ?? null,
+  ].filter((line): line is string => line !== null);
 }
 
 function Option({
@@ -233,6 +289,8 @@ function Option({
 
 const styles = StyleSheet.create({
   onPage: { marginTop: 8 },
+  fromPage: { marginTop: 6, gap: 6 },
+  fromPageList: { paddingLeft: 34, gap: 2 },
   options: { gap: 8 },
   option: {
     flexDirection: 'row',
