@@ -288,6 +288,8 @@ export function installFakeApi() {
     bills: [structuredClone(SAMPLE_BILL)],
     /** Set to an error code to make the next bill upload fail with it. */
     failUpload: null as string | null,
+    /** With `failUpload`, the title of the wrong document the reader saw. */
+    failUploadDocument: '',
     /** Set to hold an upload open, for testing what is shown while waiting. */
     stallUpload: false,
     labReports: [] as (typeof SAMPLE_LAB)[],
@@ -683,7 +685,9 @@ export function installFakeApi() {
         if (server.failUpload) {
           this.upload.onload?.();
           this.status = 422;
-          this.responseText = JSON.stringify({ detail: { code: server.failUpload } });
+          this.responseText = JSON.stringify({
+            detail: { code: server.failUpload, document: server.failUploadDocument },
+          });
           this.onload?.();
           return;
         }

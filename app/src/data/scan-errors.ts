@@ -9,9 +9,26 @@ import type { TFunction } from 'i18next';
 
 import { ApiError } from '@/lib/api';
 
+/** The heading over the message: which kind of failure this is. */
+export function scanErrorTitle(t: TFunction, error: unknown, kind: 'bill' | 'lab'): string {
+  if (error instanceof ApiError && error.code === 'not_a_bill') return t('scan.notABillTitle');
+  if (error instanceof ApiError && error.code === 'not_a_lab_report')
+    return t('lab.errors.notALabReportTitle');
+  return kind === 'lab' ? t('lab.errors.title') : t('scan.errorTitle');
+}
+
 export function scanErrorMessage(t: TFunction, error: unknown, maxPages: number): string {
   if (!(error instanceof ApiError)) return t('scan.errorUnknown');
   switch (error.code) {
+    // The pages were fine and are something else, so the advice is where
+    // this page does belong -- never to take the photo again. The page's own
+    // title is quoted where the reader found one.
+    case 'not_a_bill':
+      return error.document ? t('scan.notABillNamed', { document: error.document }) : t('scan.notABill');
+    case 'not_a_lab_report':
+      return error.document
+        ? t('lab.errors.notALabReportNamed', { document: error.document })
+        : t('lab.errors.not_a_lab_report');
     case 'network':
       return t('scan.errorNetwork');
     case 'page_too_large':

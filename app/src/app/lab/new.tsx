@@ -7,14 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/auth/auth-context';
 import { AppHeader } from '@/components/app-header';
 import { AddPagesButton } from '@/components/add-pages';
+import { Banner } from '@/components/banner';
 import { Button } from '@/components/button';
 import { PagePreview } from '@/components/page-preview';
 import { Text } from '@/components/text';
-import { useToast } from '@/components/toast';
 import { Gutter } from '@/constants/theme';
 import { uploadLabReport } from '@/data/lab-api';
 import { takeStagedPages } from '@/data/page-inbox';
-import { scanErrorMessage } from '@/data/scan-errors';
+import { scanErrorMessage, scanErrorTitle } from '@/data/scan-errors';
 import { MAX_PAGES, usePagePicker } from '@/hooks/use-page-picker';
 import { usePalette } from '@/hooks/use-palette';
 
@@ -32,11 +32,12 @@ export default function NewLabReportScreen() {
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
-  const toast = useToast();
   const { state } = useAuth();
   // Whatever the home screen picked on the way here.
   const picker = usePagePicker(takeStagedPages);
   const [reading, setReading] = useState(false);
+  // Why the last read failed, shown until the pages change.
+  const [failure, setFailure] = useState<{ title: string; body: string } | null>(null);
 
   if (state.status !== 'signedIn') return null;
   // Nothing is read before they have agreed to it.
@@ -50,6 +51,7 @@ export default function NewLabReportScreen() {
 
   const explain = async () => {
     if (pages.length === 0) return;
+    setFailure(null);
     setReading(true);
     try {
       const report = await uploadLabReport(token, pages, memberId);
@@ -61,7 +63,7 @@ export default function NewLabReportScreen() {
     } catch (error) {
       // The pages stay, so a retry doesn't mean photographing them again.
       setReading(false);
-      toast(scanErrorMessage(t, error, MAX_PAGES));
+      setFailure({ title: scanErrorTitle(t, error, 'lab'), body: scanErrorMessage(t, error, MAX_PAGES) });
     }
   };
 
@@ -88,6 +90,13 @@ export default function NewLabReportScreen() {
       <AppHeader title={t('lab.newTitle')} showBack />
 
       <ScrollView contentContainerStyle={styles.body}>
+        {/* Stays until the pages change, unlike a toast: a family reading
+            "this looks like a scan report" needs time to read where it goes. */}
+        {failure ? (
+          <View style={styles.failure}>
+            <Banner tone="amber" icon="alert-circle" title={failure.title} body={failure.body} />
+          </View>
+        ) : null}
         <Text color="ink2" style={styles.hint}>
           {pages.length > 0 ? t('lab.hintCaptured', { count: pages.length }) : t('lab.hintEmpty')}
         </Text>
@@ -98,7 +107,10 @@ export default function NewLabReportScreen() {
               page={page}
               number={index + 1}
               alone={pages.length === 1}
-              onRemove={() => picker.removePage(index)}
+              onRemove={() => {
+                setFailure(null);
+                picker.removePage(index);
+              }}
             />
           ))}
         </View>
@@ -112,6 +124,7 @@ export default function NewLabReportScreen() {
           variant={ready ? 'secondary' : 'primary'}
           label={pages.length > 0 ? t('scan.addAnotherPage') : t('scan.addPages')}
           picker={picker}
+          onPicked={() => setFailure(null)}
         />
       </View>
     </SafeAreaView>
@@ -120,6 +133,7 @@ export default function NewLabReportScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  failure: { marginTop: 14 },
   waiting: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: Gutter, gap: 8 },
   waitingTitle: { marginTop: 12 },
   centred: { textAlign: 'center' },

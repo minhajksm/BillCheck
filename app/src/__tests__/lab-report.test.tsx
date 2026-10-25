@@ -180,6 +180,37 @@ describe('explaining a report', () => {
   });
 });
 
+describe('a page that is not a lab report', () => {
+  it('says what it looks like and keeps the pages, rather than blaming the photo', async () => {
+    signedIn(true);
+    server.failUpload = 'not_a_lab_report';
+    server.failUploadDocument = 'OB 2/3 Trimester Scan Report';
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
+    await act(async () => fireEvent.press(await screen.findByText('Explain report')));
+
+    expect(await screen.findByText("This doesn't look like a lab report")).toBeVisible();
+    expect(screen.getByText(/It looks like “OB 2\/3 Trimester Scan Report”/)).toBeVisible();
+    expect(screen.queryByText(/better light/)).toBeNull();
+    expect(screen.getByLabelText('Remove page 1')).toBeVisible();
+  });
+
+  it('clears the message once the pages change', async () => {
+    signedIn(true);
+    server.failUpload = 'not_a_lab_report';
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+    fireEvent.press(await screen.findByText('Scan or upload report'));
+    fireEvent.press(await screen.findByText('Take a photo'));
+    await act(async () => fireEvent.press(await screen.findByText('Explain report')));
+    await screen.findByText("This doesn't look like a lab report");
+
+    fireEvent.press(screen.getByLabelText('Remove page 1'));
+
+    expect(screen.queryByText("This doesn't look like a lab report")).toBeNull();
+  });
+});
+
 describe('the two languages', () => {
   beforeEach(() => {
     signedIn(true);

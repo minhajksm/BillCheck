@@ -32,6 +32,9 @@ export type ApiErrorCode =
   | 'lab_consent_required'
   | 'lab_report_not_found'
   | 'unreadable_lab_report'
+  // The pages read fine and are something else; `document` says what.
+  | 'not_a_bill'
+  | 'not_a_lab_report'
   | 'network'
   | 'unknown';
 
@@ -40,6 +43,8 @@ export class ApiError extends Error {
     readonly code: ApiErrorCode,
     readonly status: number,
     readonly retryAfterSeconds?: number,
+    /** For a page that is the wrong kind of document: the title it prints, if any. */
+    readonly document?: string,
   ) {
     super(code);
   }

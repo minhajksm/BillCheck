@@ -30,7 +30,7 @@ from db import utcnow
 from lab_analysis import LabAnalysis, recheck
 from lab_prompt import PROMPT_DIGEST
 from models import FileUnder, LabConsent, LabReportOut, LabReportSummaryOut, LabTestOut, MemberRef
-from ocr import OcrError, OcrProvider, get_ocr_provider
+from ocr import OcrError, OcrProvider, WrongDocument, get_ocr_provider
 from printed_patient import printed, suggestion
 from settings import get_settings
 from tables import LabReport, MemberFollower, User
@@ -49,12 +49,13 @@ ERRORS = {
     "no_pages": "Add at least one page of the report.",
     "too_many_pages": f"A report can have up to {MAX_PAGES} pages.",
     "unreadable_lab_report": "This report couldn't be read. Try again in better light, one page at a time.",
+    "not_a_lab_report": "This doesn't look like a lab report.",
 }
 
 ERROR_RESPONSES: dict[int | str, dict] = {
     403: {"description": "lab_consent_required"},
     404: {"description": "lab_report_not_found"},
-    422: {"description": "unreadable_lab_report"},
+    422: {"description": "unreadable_lab_report, or not_a_lab_report with the page's own title"},
 }
 
 
@@ -169,6 +170,18 @@ async def upload_lab_report(
     try:
         # As with a bill, a blocking call that can take most of a minute.
         analysis: LabAnalysis = await run_in_threadpool(ocr.read_lab_report, images)
+    except WrongDocument as exc:
+        # Readable, and not a lab report: a scan report, a prescription. The
+        # family is told what it looks like, not to take the photo again.
+        logger.warning("Not a lab report, for user %s: %s", user.id, exc)
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "code": "not_a_lab_report",
+                "message": ERRORS["not_a_lab_report"],
+                "document": exc.document,
+            },
+        ) from exc
     except OcrError as exc:
         logger.warning("Couldn't read a lab report for user %s: %s", user.id, exc)
         raise lab_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "unreadable_lab_report") from exc

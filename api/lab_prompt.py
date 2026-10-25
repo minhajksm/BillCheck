@@ -81,8 +81,12 @@ Return a single JSON object and nothing else:
 lab's own phone, email and address are not the patient's: leave the field
 empty rather than copy them. Never work one out from another.
 
-If the document is not a laboratory report, or is too degraded to read,
-return {"error": "..."} and stop.
+If the document is not a laboratory report -- a scan or imaging report, a
+prescription, a bill, a discharge summary -- return
+{"error": "not_a_lab_report", "document": "..."} and stop, where "document"
+is the title the document prints for itself, as printed (for example "USG
+Abdomen Report"), or empty if it prints none. If it is too degraded to read,
+return {"error": "unreadable"} and stop.
 """
 
 # Which prompt an explanation came from, as for the bill reader: exact enough

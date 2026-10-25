@@ -170,7 +170,11 @@
     "titleFirst": "Check a bill",
     "hintFirstEmpty": "Fit one page inside the frame. We'll read the hospital, the patient and the dates off the bill itself.",
     "addPages": "Add pages",
-    "addAnotherPage": "Add another page"
+    "addAnotherPage": "Add another page",
+    "errorTitle": "Couldn't check this bill",
+    "notABillTitle": "This doesn't look like a hospital bill",
+    "notABill": "FairCare checks itemised hospital bills: the list of charges, with an amount on each line. If this is a lab report, use “Scan or upload report” instead.",
+    "notABillNamed": "It looks like “{{document}}”. FairCare checks itemised hospital bills: the list of charges, with an amount on each line. If this is a lab report, use “Scan or upload report” instead."
   },
   "reading": {
     "title": "Checking your bill",
@@ -475,7 +479,11 @@
     "notFound": "We couldn't find this report.",
     "errors": {
       "unreadable_lab_report": "This report couldn't be read. Try again in better light, one page at a time.",
-      "lab_consent_required": "Agree to lab reports being explained first."
+      "lab_consent_required": "Agree to lab reports being explained first.",
+      "title": "Couldn't explain this report",
+      "notALabReportTitle": "This doesn't look like a lab report",
+      "not_a_lab_report": "FairCare explains lab test reports, such as blood and urine tests. Scan and X-ray reports, prescriptions and discharge summaries aren't explained yet: the doctor who asked for it can go through it with you. If this is a hospital bill, use “Scan or upload bill” instead.",
+      "notALabReportNamed": "It looks like “{{document}}”. FairCare explains lab test reports, such as blood and urine tests. Scan and X-ray reports, prescriptions and discharge summaries aren't explained yet: the doctor who asked for it can go through it with you. If this is a hospital bill, use “Scan or upload bill” instead."
     },
     "add": "Scan or upload report"
   },

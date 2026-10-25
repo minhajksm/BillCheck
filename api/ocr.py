@@ -64,6 +64,41 @@ class OcrError(Exception):
         self.retryable = retryable
 
 
+class WrongDocument(OcrError):
+    """The pages read fine and are something else: a scan report sent as a
+    lab report, a prescription sent as a bill.
+
+    Different from a page that couldn't be read, because the fix is
+    different: retaking the photo in better light gets the same answer. The
+    family is told what it looks like instead.
+
+    `document` is the title the page prints for itself, as the reader
+    transcribed it, or empty.
+    """
+
+    def __init__(self, message: str, *, document: str = "") -> None:
+        super().__init__(message)
+        self.document = document
+
+
+# A reader that writes a sentence instead of the code still says what it saw:
+# "This document is an obstetric ultrasound scan report ..., not a laboratory
+# report." Recognised so the family still hears the right thing.
+_NOT_A_BILL = re.compile(r"\bnot (?:a|an) (?:hospital |itemi[sz]ed |medical |patient )?bill\b", re.IGNORECASE)
+_NOT_A_LAB_REPORT = re.compile(
+    r"\bnot (?:a|an) (?:laboratory|lab|pathology|blood test)(?: test)? report\b", re.IGNORECASE
+)
+
+
+def _refusal(raw: dict, code: str, says_so: re.Pattern[str]) -> OcrError:
+    """What the reader's {"error": ...} means: the wrong document, or unreadable."""
+    message = str(raw["error"])
+    if message == code or says_so.search(message):
+        document = str(raw.get("document") or "").strip()[:120]
+        return WrongDocument(message, document=document)
+    return OcrError(message)
+
+
 class OcrProvider(Protocol):
     def read_bill(self, pages: list[BillPage]) -> BillAnalysis: ...
 
@@ -496,7 +531,7 @@ def _parse(text: str) -> BillAnalysis:
     # field of the analysis: not a hospital bill, or too degraded to read.
     # Asking again would get the same answer.
     if raw.get("error"):
-        raise OcrError(str(raw["error"]))
+        raise _refusal(raw, "not_a_bill", _NOT_A_BILL)
 
     try:
         analysis = BillAnalysis.model_validate(raw)
@@ -525,7 +560,7 @@ def _parse_lab(text: str) -> LabAnalysis:
 
     raw = json.loads(_json_object(text))
     if raw.get("error"):
-        raise OcrError(str(raw["error"]))
+        raise _refusal(raw, "not_a_lab_report", _NOT_A_LAB_REPORT)
     try:
         analysis = LabAnalysis.model_validate(raw)
     except pydantic.ValidationError as exc:
