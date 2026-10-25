@@ -87,6 +87,48 @@ describe('correcting the admission details', () => {
   });
 });
 
+describe('the discharge date', () => {
+  it('shows the stay on the case, still open until someone says otherwise', async () => {
+    renderRouter(routes, { initialUrl: '/cases/papa-admission' });
+
+    expect(await screen.findByText('Admitted 9 Oct 2026 · Still in hospital')).toBeVisible();
+  });
+
+  it('can be entered, and closes the stay', async () => {
+    await openEdit();
+
+    fireEvent.changeText(screen.getByLabelText('Discharged on (optional)'), '2026-10-12');
+    await act(async () => fireEvent.press(screen.getByText('Save changes')));
+
+    expect(server.cases[0].closed_on).toBe('2026-10-12');
+  });
+
+  it('will not end a stay before it began', async () => {
+    await openEdit();
+
+    fireEvent.changeText(screen.getByLabelText('Discharged on (optional)'), '2026-10-01');
+    await act(async () => fireEvent.press(screen.getByText('Save changes')));
+
+    expect(screen.getByText('This is before the admission date.')).toBeVisible();
+    expect(server.calls).not.toContain('PATCH /cases/papa-admission');
+  });
+
+  it('cleared, says the patient is still in hospital', async () => {
+    server.cases[0].closed_on = '2026-10-12' as unknown as null;
+    // A discharged case offers no more questions or bills, so open it by its edit button.
+    renderRouter(routes, { initialUrl: '/cases/papa-admission' });
+    const details = await screen.findByLabelText('Case details');
+    await act(async () => fireEvent.press(details));
+    await screen.findByText('Save changes');
+
+    expect(screen.getByDisplayValue('2026-10-12')).toBeVisible();
+    fireEvent.changeText(screen.getByDisplayValue('2026-10-12'), '');
+    await act(async () => fireEvent.press(screen.getByText('Save changes')));
+
+    expect(server.cases[0].closed_on).toBeNull();
+  });
+});
+
 describe('deleting a case', () => {
   // It takes the bills away from everyone following the case and cannot be
   // undone, so it asks first, in words, rather than deleting on one tap.

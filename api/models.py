@@ -2,9 +2,18 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    EmailStr,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from analysis import Category
+from db import india_today
 from flag_kinds import FlagKind
 from phone import normalize_indian_mobile
 
@@ -122,6 +131,14 @@ class CaseCreate(BaseModel):
     ip_number: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=40)]
     bed: Annotated[str, StringConstraints(strip_whitespace=True, max_length=20)] | None = None
     admitted_on: date
+    closed_on: date | None = None
+    """The discharge date, where it is known already."""
+
+    @model_validator(mode="after")
+    def _discharged_after_admission(self) -> Self:
+        if self.closed_on is not None and self.closed_on < self.admitted_on:
+            raise ValueError("The discharge date can't be before the admission date.")
+        return self
 
 
 class CaseUpdate(BaseModel):
@@ -358,12 +375,59 @@ class LabReportSummaryOut(BaseModel):
 MemberName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
 
 
+def _blank_is_none(value: object) -> object:
+    """An emptied field clears the value rather than being refused."""
+    return None if isinstance(value, str) and not value.strip() else value
+
+
+def _past_birth_date(value: date | None) -> date | None:
+    # India's today: a child born this morning in Pune is born today.
+    if value is not None and not (date(1900, 1, 1) <= value <= india_today()):
+        raise ValueError("Enter a date of birth in the past.")
+    return value
+
+
+BirthDate = Annotated[date | None, BeforeValidator(_blank_is_none), AfterValidator(_past_birth_date)]
+OptionalMobile = Annotated[IndianMobile | None, BeforeValidator(_blank_is_none)]
+OptionalEmail = Annotated[
+    EmailStr | None, BeforeValidator(_blank_is_none), AfterValidator(lambda v: v.lower() if v else v)
+]
+OptionalAddress = Annotated[
+    Annotated[str, StringConstraints(strip_whitespace=True, max_length=300)] | None,
+    BeforeValidator(_blank_is_none),
+]
+
+
 class MemberCreate(BaseModel):
+    """Only the name is needed. The rest is filled in where the family knows it."""
+
     name: MemberName
+    date_of_birth: BirthDate = None
+    phone: OptionalMobile = None
+    email: OptionalEmail = None
+    address: OptionalAddress = None
 
 
 class MemberUpdate(BaseModel):
-    name: MemberName
+    """What is sent is what changes. A field sent empty or null is cleared;
+    a field left out keeps its value."""
+
+    name: MemberName | None = None
+    date_of_birth: BirthDate = None
+    phone: OptionalMobile = None
+    email: OptionalEmail = None
+    address: OptionalAddress = None
+
+
+class MemberDetails(BaseModel):
+    """The optional details of a member, as the app shows them."""
+
+    date_of_birth: date | None
+    age: int | None
+    """Whole years on today's date in India, from the date of birth. Never stored."""
+    phone: str | None
+    email: str | None
+    address: str | None
 
 
 class MemberSummaryOut(BaseModel):
@@ -371,6 +435,7 @@ class MemberSummaryOut(BaseModel):
 
     id: uuid.UUID
     name: str
+    age: int | None
     is_owner: bool
     followers: list[FollowerOut]
     admission_count: int
@@ -380,8 +445,8 @@ class MemberSummaryOut(BaseModel):
     lab_report_count: int
 
 
-class MemberOut(BaseModel):
-    """A member and everything under them."""
+class MemberOut(MemberDetails):
+    """A member, their details, and everything under them."""
 
     id: uuid.UUID
     name: str

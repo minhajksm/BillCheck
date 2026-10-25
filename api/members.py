@@ -14,7 +14,7 @@ join, since ids show up in links and logs.
 import hashlib
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func, select
@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, selectinload
 from access import load_member, new_member
 from auth import CurrentUser, Db
 from cases import NEWEST_FIRST, case_out
-from db import utcnow
+from db import india_today, utcnow
 from lab import summary_out
 from models import (
     FollowerOut,
@@ -60,6 +60,13 @@ def followers_out(member: Member, user: User) -> list[FollowerOut]:
     ]
 
 
+def age_on(born: date | None, today: date) -> int | None:
+    """Whole years: a birthday not yet reached this year doesn't count."""
+    if born is None:
+        return None
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+
 def summary(db: Session, member: Member, user: User) -> MemberSummaryOut:
     def count(query) -> int:
         return db.scalar(query) or 0
@@ -67,6 +74,7 @@ def summary(db: Session, member: Member, user: User) -> MemberSummaryOut:
     return MemberSummaryOut(
         id=member.id,
         name=member.name,
+        age=age_on(member.date_of_birth, india_today()),
         is_owner=member.created_by == user.id,
         followers=followers_out(member, user),
         admission_count=count(select(func.count()).select_from(Case).where(Case.member_id == member.id)),
@@ -104,6 +112,11 @@ def member_out(db: Session, member: Member, user: User) -> MemberOut:
     return MemberOut(
         id=member.id,
         name=member.name,
+        date_of_birth=member.date_of_birth,
+        age=age_on(member.date_of_birth, india_today()),
+        phone=member.phone,
+        email=member.email,
+        address=member.address,
         is_owner=member.created_by == user.id,
         followers=followers_out(member, user),
         cases=[case_out(db, case, user) for case in cases],
@@ -115,6 +128,8 @@ def member_out(db: Session, member: Member, user: User) -> MemberOut:
 def create_member(body: MemberCreate, db: Db, user: CurrentUser) -> MemberOut:
     """Adds someone to look after. Whoever adds them is their first follower."""
     member = new_member(db, body.name, user)
+    for field, value in body.model_dump(exclude={"name"}).items():
+        setattr(member, field, value)
     db.commit()
     return member_out(db, load_member(db, member.id, user), user)
 
@@ -186,10 +201,16 @@ def read_member(member_id: uuid.UUID, db: Db, user: CurrentUser) -> MemberOut:
 
 
 @router.patch("/members/{member_id}", response_model=MemberOut)
-def rename_member(member_id: uuid.UUID, body: MemberUpdate, db: Db, user: CurrentUser) -> MemberOut:
-    """Any follower can: "Papa" to one of them is "Ramesh Sharma" on a bill."""
+def update_member(member_id: uuid.UUID, body: MemberUpdate, db: Db, user: CurrentUser) -> MemberOut:
+    """Corrects the name and details. Any follower can: "Papa" to one of them
+    is "Ramesh Sharma" on a bill, and whoever is with him knows his number."""
     member = load_member(db, member_id, user)
-    member.name = body.name
+    changes = body.model_dump(exclude_unset=True)
+    # A name can be changed but never cleared.
+    if changes.get("name", "") is None:
+        del changes["name"]
+    for field, value in changes.items():
+        setattr(member, field, value)
     db.commit()
     return member_out(db, member, user)
 

@@ -57,6 +57,7 @@ function EditCase({ item, token }: { item: Case; token: string }) {
     ipNumber: item.patient.ipNumber,
     bed: item.patient.bed,
     admittedOn: item.admittedOn ?? '',
+    dischargedOn: item.closedOn ?? '',
   });
   const [errors, setErrors] = useState<CaseFormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -70,7 +71,12 @@ function EditCase({ item, token }: { item: Case; token: string }) {
 
     setSaving(true);
     try {
-      await updateCase(token, item.id, { ...values, bed: values.bed.trim() || undefined });
+      // Emptying the discharge date says the patient is still in hospital.
+      await updateCase(token, item.id, {
+        ...values,
+        bed: values.bed.trim() || undefined,
+        dischargedOn: values.dischargedOn.trim() || undefined,
+      });
       router.back();
     } catch {
       setSaving(false);

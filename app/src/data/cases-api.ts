@@ -182,6 +182,8 @@ export type NewCase = {
   ipNumber: string;
   bed?: string;
   admittedOn: string;
+  /** The discharge date, where it is known. Empty while still in hospital. */
+  dischargedOn?: string;
 };
 
 export async function listCases(token: string): Promise<Case[]> {
@@ -207,6 +209,7 @@ export async function createCase(token: string, memberId: string, body: NewCase)
       ip_number: body.ipNumber,
       bed: body.bed || null,
       admitted_on: body.admittedOn,
+      closed_on: body.dischargedOn || null,
     },
   });
   return toCase(created);
@@ -228,6 +231,7 @@ export async function updateCase(token: string, caseId: string, body: NewCase): 
       ip_number: body.ipNumber,
       bed: body.bed || null,
       admitted_on: body.admittedOn,
+      closed_on: body.dischargedOn || null,
     },
   });
   return toCase(updated);

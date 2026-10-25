@@ -27,7 +27,8 @@
       "October",
       "November",
       "December"
-    ]
+    ],
+    "dayMonthYear": "{{day}} {{month}} {{year}}"
   },
   "home": {
     "greeting": "Welcome, {{name}}",
@@ -35,7 +36,6 @@
     "intro": "Keep every hospital bill in your family checked and explained.",
     "admitted": "Admitted {{date}}",
     "admittedUnknown": "Admission date not on the bill",
-    "closed": "Closed {{date}}",
     "planningTitle": "Planning an admission?",
     "planningBody": "Get a cost estimate and compare package rates before you're admitted.",
     "nextVersion": "In the next version",
@@ -52,7 +52,8 @@
     "unfiledBillUnnamed": "A bill you scanned",
     "unfiledLab": "Lab report from {{lab}}",
     "unfiledLabUnnamed": "A lab report you scanned",
-    "onPage": "The page says: {{name}}"
+    "onPage": "The page says: {{name}}",
+    "discharged": "Discharged {{date}}"
   },
   "caseStatus": {
     "toAsk_one": "{{count}} to ask",
@@ -89,7 +90,10 @@
     "notFound": "We couldn't find this case.",
     "noBillsYet": "No bills added yet.",
     "editDetails": "Case details",
-    "billOn": "{{date}} bill"
+    "billOn": "{{date}} bill",
+    "admittedOn": "Admitted {{date}}",
+    "dischargedOn": "Discharged {{date}}",
+    "stillIn": "Still in hospital"
   },
   "auth": {
     "welcomeTagline": "Check every hospital bill, and ask the right questions.",
@@ -417,7 +421,10 @@
     "create": "Start case",
     "required": "Fill this in to continue.",
     "badDate": "Use the form YYYY-MM-DD, e.g. 2026-10-09.",
-    "failed": "Couldn't start the case. Try again."
+    "failed": "Couldn't start the case. Try again.",
+    "dischargedOn": "Discharged on (optional)",
+    "dischargedPlaceholder": "YYYY-MM-DD, empty if still in hospital",
+    "dischargeBeforeAdmission": "This is before the admission date."
   },
   "editCase": {
     "title": "Case details",
@@ -483,15 +490,13 @@
     "labReports_other": "{{count}} lab reports",
     "nothingYet": "Nothing added yet",
     "newTitle": "Add a member",
-    "newSubtitle": "Someone whose hospital bills and lab reports you'll keep here: a parent, a child, a friend, or yourself.",
+    "newSubtitle": "Someone whose hospital bills and lab reports you'll keep here: a parent, a child, a friend, or yourself. Only the name is needed.",
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Papa, or Ramesh Sharma",
     "add": "Add member",
     "addFailed": "Couldn't add them. Try again.",
-    "renameTitle": "Rename",
     "save": "Save",
     "saveFailed": "Couldn't save. Try again.",
-    "rename": "Rename",
     "scanTitle": "Add a bill or report",
     "admissions": "Admissions",
     "noAdmissions": "No admissions yet. Scan a bill and we'll open one from what it says.",
@@ -521,7 +526,20 @@
     "join": "Join",
     "joinFailed": "That code has expired or was withdrawn. Ask for a new one.",
     "joined": "You now follow {{name}}",
-    "codeShown": "Invite code for family. It works for 7 days."
+    "codeShown": "Invite code for family. It works for 7 days.",
+    "age": "Age {{age}}",
+    "born": "Born {{date}}",
+    "dobLabel": "Date of birth (optional)",
+    "dobPlaceholder": "YYYY-MM-DD",
+    "badDob": "Use the form YYYY-MM-DD, with a date in the past.",
+    "phoneLabel": "Mobile number (optional)",
+    "badPhone": "Enter a 10-digit mobile number.",
+    "emailLabel": "Email (optional)",
+    "badEmail": "Enter an email address like name@example.com.",
+    "addressLabel": "Address (optional)",
+    "editTitle": "Edit details",
+    "editDetails": "Edit details",
+    "addDetails": "Add date of birth, phone, email or address"
   },
   "file": {
     "titleBill": "Whose bill is this?",

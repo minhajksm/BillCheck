@@ -187,6 +187,8 @@ export type Bill = {
 export type MemberSummary = {
   id: string;
   name: string;
+  /** From the date of birth, where it is known. */
+  age?: number;
   /** Whether you added them. Only you can delete them or remove a follower. */
   isOwner: boolean;
   followers: Follower[];

@@ -12,13 +12,18 @@ export type CaseFormValues = {
   ipNumber: string;
   bed: string;
   admittedOn: string;
+  /** Empty while still in hospital. */
+  dischargedOn: string;
 };
 
 export type CaseFormErrors = Partial<Record<keyof CaseFormValues, string>>;
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Everything but the bed has to be filled in; the date has to be a date. */
+/**
+ * Everything but the bed and the discharge date has to be filled in; the
+ * dates have to be dates, and a stay can't end before it starts.
+ */
 export function validateCase(values: CaseFormValues, t: TFunction): CaseFormErrors {
   const required: (keyof CaseFormValues)[] = [
     'title',
@@ -32,6 +37,12 @@ export function validateCase(values: CaseFormValues, t: TFunction): CaseFormErro
     if (!values[key].trim()) found[key] = t('newCase.required');
   }
   if (!ISO_DATE.test(values.admittedOn)) found.admittedOn = t('newCase.badDate');
+  const discharged = values.dischargedOn.trim();
+  if (discharged && !ISO_DATE.test(discharged)) found.dischargedOn = t('newCase.badDate');
+  // ISO dates compare as text.
+  else if (discharged && !found.admittedOn && discharged < values.admittedOn) {
+    found.dischargedOn = t('newCase.dischargeBeforeAdmission');
+  }
   return found;
 }
 
@@ -97,6 +108,14 @@ export function CaseFields({
         value={values.admittedOn}
         onChangeText={set('admittedOn')}
         error={errors.admittedOn}
+        autoCapitalize="none"
+      />
+      <TextField
+        label={t('newCase.dischargedOn')}
+        placeholder={t('newCase.dischargedPlaceholder')}
+        value={values.dischargedOn}
+        onChangeText={set('dischargedOn')}
+        error={errors.dischargedOn}
         autoCapitalize="none"
       />
     </>

@@ -26,6 +26,7 @@ export default function NewCaseScreen() {
     ipNumber: '',
     bed: '',
     admittedOn: new Date().toISOString().slice(0, 10),
+    dischargedOn: '',
   });
   const [errors, setErrors] = useState<CaseFormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -40,7 +41,11 @@ export default function NewCaseScreen() {
 
     setSaving(true);
     try {
-      const created = await createCase(token, memberId, { ...values, bed: values.bed.trim() || undefined });
+      const created = await createCase(token, memberId, {
+        ...values,
+        bed: values.bed.trim() || undefined,
+        dischargedOn: values.dischargedOn.trim() || undefined,
+      });
       router.replace({ pathname: '/cases/[caseId]', params: { caseId: created.id } });
     } catch {
       setSaving(false);

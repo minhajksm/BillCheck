@@ -1,5 +1,7 @@
 import { jest } from '@jest/globals';
 
+import { ageOn } from '@/lib/age';
+
 /**
  * A flag as the API sends one. Written out rather than inferred from the two
  * samples below, so a test can add a kind they don't cover -- a finding about
@@ -202,11 +204,21 @@ export const SAMPLE_LAB = {
   created_at: '2026-10-24T08:00:00Z',
 };
 
+/** A member's optional details, as the API stores them. */
+type Details = {
+  date_of_birth: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+};
+const NO_DETAILS: Details = { date_of_birth: null, phone: null, email: null, address: null };
+
 /** The people the signed-in account follows, as GET /members/{id} answers minus what is under them. */
 export const SAMPLE_MEMBERS = [
   {
     id: 'm-papa',
     name: 'Papa',
+    ...NO_DETAILS,
     is_owner: true,
     followers: [
       { id: 'u1', name: 'Rohan Sharma', is_you: true },
@@ -216,10 +228,21 @@ export const SAMPLE_MEMBERS = [
   {
     id: 'm-mummy',
     name: 'Mummy',
+    ...NO_DETAILS,
     is_owner: true,
     followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
   },
 ];
+
+/** The details a request sent, phone and email as the real API normalises them. */
+function pickDetails(body: Partial<Details>): Partial<Details> {
+  const picked: Partial<Details> = {};
+  for (const key of ['date_of_birth', 'phone', 'email', 'address'] as const) {
+    if (key in body) picked[key] = body[key] || null;
+  }
+  if (picked.email) picked.email = picked.email.toLowerCase();
+  return picked;
+}
 
 /** A field of a multipart upload, from whichever FormData the test runs with. */
 function formField(body: unknown, name: string): string | undefined {
@@ -274,6 +297,7 @@ export function installFakeApi() {
 
   const memberOut = (m: (typeof server.members)[number]) => ({
     ...m,
+    age: m.date_of_birth ? (ageOn(m.date_of_birth, new Date()) ?? null) : null,
     cases: server.cases.filter((c) => c.member?.id === m.id),
     lab_reports: server.labReports.filter((r) => r.member?.id === m.id).map(labRow),
   });
@@ -287,6 +311,7 @@ export function installFakeApi() {
     const made = {
       id: `m-${server.members.length + 1}`,
       name: body.new_member_name ?? '',
+      ...NO_DETAILS,
       is_owner: true,
       followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
     };
@@ -413,6 +438,7 @@ export function installFakeApi() {
               return {
                 id: m.id,
                 name: m.name,
+                age: m.date_of_birth ? (ageOn(m.date_of_birth, new Date()) ?? null) : null,
                 is_owner: m.is_owner,
                 followers: m.followers,
                 admission_count: cases.length,
@@ -429,6 +455,8 @@ export function installFakeApi() {
           const made = {
             id: `m-${server.members.length + 1}`,
             name: body.name,
+            ...NO_DETAILS,
+            ...pickDetails(body),
             is_owner: true,
             followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
           };
@@ -463,7 +491,11 @@ export function installFakeApi() {
           if (at < 0) return fail(404, 'member_not_found');
           if (method === 'GET') return json(200, memberOut(server.members[at]));
           if (method === 'PATCH') {
-            server.members[at].name = body.name;
+            Object.assign(
+              server.members[at],
+              { name: body.name ?? server.members[at].name },
+              pickDetails(body),
+            );
             return json(200, memberOut(server.members[at]));
           }
           if (method === 'DELETE') {
