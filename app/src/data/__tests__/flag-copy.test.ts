@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from '@jest/globals';
 
 import i18n from '@/i18n';
-import { flagCopy } from '../flag-copy';
+import { flagAmountLine, flagCopy, flagTag } from '../flag-copy';
 import type { Flag, FlagKind } from '../types';
 
 beforeAll(async () => {
@@ -124,5 +124,83 @@ describe('the lines a flag is about', () => {
     // a line number would send a family to the wrong row at the counter.
     const copy = flagCopy(i18n.getFixedT('en'), onLines(''));
     expect(copy.why).toBe('The same room charge appears twice.');
+  });
+});
+
+describe("a sum on the bill's own figures", () => {
+  // Raised by the API's arithmetic: the reference is the bill itself.
+  const billFlag = (kind: FlagKind, detail: Record<string, string>, excess = 300): Flag =>
+    ({
+      ...readerFlag(kind),
+      referenceSource: 'bill',
+      referenceDetail: detail,
+      excess,
+    }) as Flag;
+
+  const lineMath = billFlag('line_math', {
+    line_numbers: '4',
+    quantity: '3',
+    rate: '500.00',
+    computed: '1500.00',
+    stated: '1800.00',
+    difference: '300.00',
+  });
+
+  it('shows the sum, says to check the paper, and names the line', () => {
+    const copy = flagCopy(i18n.getFixedT('en'), lineMath);
+
+    expect(copy.short).toBe('3 × ₹500 comes to ₹1,500, but the line shows ₹1,800.');
+    expect(copy.why).toMatch(/₹300 more/);
+    expect(copy.why).toMatch(/check the line against the paper bill/);
+    expect(copy.why).toMatch(/\(Line 4\)$/);
+    expect(copy.referenceLabel).toBe("Worked out from the bill's own figures.");
+  });
+
+  it('is a sum to check, and never "noticed" or "over reference"', () => {
+    const t = i18n.getFixedT('en');
+
+    expect(flagTag(t, lineMath)).toBe('Sum to check');
+    expect(flagAmountLine(t, lineMath)).toBe('A difference of ₹300');
+  });
+
+  it('names the discount when the payable is what failed', () => {
+    const copy = flagCopy(
+      i18n.getFixedT('en'),
+      billFlag('total_mismatch', {
+        summed: '35000.00',
+        stated: '35500.00',
+        difference: '500.00',
+        discount: '8300.00',
+      }),
+    );
+    expect(copy.short).toBe(
+      'The sub-total less the ₹8,300 discount comes to ₹35,000, but the bill asks for ₹35,500.',
+    );
+  });
+
+  it('tells deposits not credited apart from a balance that is too high', () => {
+    const t = i18n.getFixedT('en');
+    const deposits = flagCopy(
+      t,
+      billFlag('advance_not_deducted', { deposits: '35000.00', credited: '30000.00', count: '3' }),
+    );
+    const balance = flagCopy(
+      t,
+      billFlag('advance_not_deducted', { due: '5000.00', expected_due: '0.00', paid: '35000.00' }),
+    );
+
+    expect(deposits.short).toBe(
+      'The 3 deposits listed come to ₹35,000, but the bill credits ₹30,000 as paid.',
+    );
+    expect(deposits.why).toMatch(/^₹5,000 paid may not have been taken off/);
+    expect(balance.short).toBe('The bill shows ₹5,000 still due, but its own figures leave ₹0.');
+  });
+
+  it.each(['hi', 'mr'])('says it in %s, with the figures and none of the English', (language) => {
+    const copy = flagCopy(i18n.getFixedT(language), lineMath);
+
+    expect(copy.short).toContain('₹1,500');
+    expect(copy.short).toContain('₹1,800');
+    expect(copy.short.replace(/[\d\s×₹,.:]/g, '')).not.toMatch(/[a-z]/i);
   });
 });

@@ -21,7 +21,8 @@ from references import (
     parse_quantity,
 )
 
-REFERENCES = load_reference_data(Path(__file__).resolve().parents[2] / "data/samples/reference-prices.json")
+SAMPLES = Path(__file__).resolve().parents[2] / "data/samples/reference-prices.json"
+REFERENCES = load_reference_data(SAMPLES, allow_sample_prices=True)
 
 
 def row(position: int, name: str, detail: str | None, amount: str, quantity: str | None = None) -> BillRow:
@@ -475,3 +476,70 @@ def test_a_printed_year_beats_the_caller_s(printed: str = "23-Oct-18"):
 def test_a_quantity_is_still_not_a_date(quantity: str):
     """These sit in the same column as a date on most bills."""
     assert parse_bill_date(quantity, 2026) is None
+
+
+# --- sample prices stay out of real bills ----------------------------------
+
+
+def test_sample_prices_are_left_out_unless_asked_for():
+    """The sample list is figures made up for development. A red "above the
+    NPPA ceiling" flag computed from one would tell a family their hospital
+    broke the law on the strength of a number nobody published."""
+    real_use = load_reference_data(SAMPLES)
+
+    assert real_use.prices == ()
+    assert real_use.price_for("Inj. Meropenem 1g") is None
+    assert real_use.norm_for("Surgical gloves") is not None, "quantity norms are not affected"
+
+
+def test_a_price_that_names_its_source_is_kept(tmp_path: Path):
+    path = tmp_path / "prices.json"
+    path.write_text(
+        '{"prices": [{"name": "Meropenem 1g injection", "aliases": ["meropenem"], "unit": "vial",'
+        ' "strength": "1g", "form": "injection", "nppa_ceiling": 1000, "source": "nppa"}]}'
+    )
+    assert load_reference_data(path).price_for("Inj. Meropenem 1g") is not None
+
+
+def test_a_price_that_names_no_source_counts_as_a_sample(tmp_path: Path):
+    """Unlabelled is untrusted: nothing is a real price by default."""
+    path = tmp_path / "prices.json"
+    path.write_text(
+        '{"prices": [{"name": "Meropenem 1g injection", "aliases": ["meropenem"], "unit": "vial",'
+        ' "strength": "1g", "form": "injection", "mrp": 1840}]}'
+    )
+    assert load_reference_data(path).prices == ()
+
+
+def test_a_malformed_sample_is_still_refused(tmp_path: Path):
+    """Left out or not, the file has to be right."""
+    path = tmp_path / "prices.json"
+    path.write_text(
+        '{"prices": [{"name": "Meropenem", "aliases": ["meropenem"], "unit": "vial", "mrp": 1840}]}'
+    )
+    with pytest.raises(ValueError, match="strength"):
+        load_reference_data(path)
+
+
+def test_a_real_bill_raises_no_price_flag_from_the_samples(
+    client, auth_headers: dict, monkeypatch: pytest.MonkeyPatch
+):
+    """What production does now. The sample bill's Meropenem is billed well
+    above the sample "MRP", and used to come back red."""
+    from references import get_reference_data
+    from settings import get_settings
+    from tests.test_cases_and_bills import page
+
+    monkeypatch.setenv("ALLOW_SAMPLE_PRICES", "false")
+    get_settings.cache_clear()
+    get_reference_data.cache_clear()
+    try:
+        response = client.post("/bills", files=[page()], headers=auth_headers)
+    finally:
+        get_settings.cache_clear()
+        get_reference_data.cache_clear()
+
+    assert response.status_code == 201, response.text
+    kinds = {flag["kind"] for flag in response.json()["flags"]}
+    assert "above_mrp" not in kinds
+    assert "analysis_finding" in kinds, "the reader's own findings carry on"

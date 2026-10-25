@@ -89,6 +89,7 @@ def test_the_model_carries_exactly_the_prompt_s_fields():
     parses have to be the same document, or the prompt stops being the spec."""
     assert list(BillAnalysis.model_fields) == [
         "bill",
+        "payments",
         "lines",
         "findings",
         "requires_reference_price",

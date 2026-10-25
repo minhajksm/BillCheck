@@ -20,10 +20,11 @@ from sqlalchemy.orm import Session, selectinload
 import audit
 from analysis import AnalysedLine, BillAnalysis, BillHeader
 from analysis_prompt import PROMPT_DIGEST
+from arithmetic import Arithmetic, check_bill
 from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
-from models import BillOut, FlagOut, FlagUpdate, LineItemOut
+from models import BillOut, CheckOut, FlagOut, FlagUpdate, LineItemOut, PaymentOut
 from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
 from references import ReferenceData, get_reference_data, parse_bill_date
 from review import Reviewed, flags_from_findings, review_findings
@@ -174,6 +175,7 @@ def store_bill(
     flags: list[audit.Flag],
     bill: Bill,
     reviewed: list[Reviewed] | None = None,
+    arithmetic: Arithmetic | None = None,
 ) -> Bill:
     """Writes the line items and their flags, and totals the bill.
 
@@ -205,6 +207,11 @@ def store_bill(
     # nothing on the lines gives it.
     bill.discount = bill_discount(analysis, subtotal)
     bill.total = subtotal - (bill.discount or Decimal("0"))
+    if arithmetic is not None:
+        bill.checks = [check.as_dict() for check in arithmetic.checks]
+        bill.payments = arithmetic.payments
+        bill.paid = arithmetic.paid
+        bill.balance = arithmetic.balance
     db.flush()
 
     # Keyed by the finding each came from, so the record of the reading can
@@ -301,6 +308,10 @@ def bill_out(bill: Bill) -> BillOut:
         subtotal=float(bill.total + (bill.discount or Decimal("0"))),
         discount=float(bill.discount) if bill.discount is not None else None,
         total=float(bill.total),
+        checks=[CheckOut.model_validate(check) for check in bill.checks or []],
+        payments=[PaymentOut.model_validate(payment) for payment in bill.payments or []],
+        paid=float(bill.paid) if bill.paid is not None else None,
+        balance=float(bill.balance) if bill.balance is not None else None,
         line_items=[
             LineItemOut(
                 id=item.id,
@@ -497,7 +508,9 @@ def check_and_store(
         for position, line in enumerate(analysis.lines, start=1)
     ]
     keep_all = get_settings().review_keep_all
-    reference_flags = audit.audit_bill(rows, references)
+    # The bill's own sums, worked out here rather than asked of the reader.
+    arithmetic = check_bill(analysis)
+    reference_flags = audit.audit_bill(rows, references) + arithmetic.flags
     flags = flags_from_findings(
         analysis,
         reference_flags,
@@ -517,7 +530,7 @@ def check_and_store(
     )
     db.add(bill)
     db.flush()
-    store_bill(db, case, analysis, flags, bill, reviewed)
+    store_bill(db, case, analysis, flags, bill, reviewed, arithmetic)
     db.commit()
     return bill
 

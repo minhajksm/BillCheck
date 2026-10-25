@@ -40,6 +40,7 @@ ReaderFlagKind = Literal[
     "analysis_finding",
     # Contradictions on the page itself.
     "total_mismatch",
+    "line_math",
     "duplicate_line",
     "equipment_hours_exceed_stay",
     "date_outside_stay",
@@ -89,6 +90,11 @@ READER_KINDS: dict[ReaderFlagKind, KindSpec] = {
     # --- Contradictions on the page -----------------------------------------
     "total_mismatch": KindSpec(
         "the rows you transcribed don't add up to the printed total.",
+        "contradiction",
+    ),
+    "line_math": KindSpec(
+        "a line's amount is more than its quantity times its rate, with or without GST. "
+        "Raised by arithmetic.py from the figures transcribed, never by the reader.",
         "contradiction",
     ),
     "duplicate_line": KindSpec(

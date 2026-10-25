@@ -1,3 +1,4 @@
+import os
 from collections.abc import Iterator
 
 import pytest
@@ -6,7 +7,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import tables  # noqa: F401  (registers the tables on Base.metadata)
+# The audit is tested against the illustrative price list on purpose; outside
+# the tests, sample prices raise no flag. Set before settings are first read.
+os.environ.setdefault("ALLOW_SAMPLE_PRICES", "true")
+
+import tables  # noqa: E402, F401  (registers the tables on Base.metadata)
 from db import Base, get_db
 from main import app
 from sms import get_sms_sender

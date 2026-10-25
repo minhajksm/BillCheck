@@ -12,6 +12,7 @@ so every flag can show the family what it was checked against.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date
@@ -20,6 +21,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from settings import get_settings
+
+logger = logging.getLogger("billcheck.references")
 
 _PUNCTUATION = re.compile(r"[^\w\s]")
 _SPACES = re.compile(r"\s+")
@@ -339,22 +342,38 @@ def _price(entry: dict) -> ReferencePrice:
         unit=entry["unit"],
         mrp=_decimal(entry.get("mrp")),
         nppa_ceiling=_decimal(entry.get("nppa_ceiling")),
-        source=entry.get("source", "sample"),
+        source=entry.get("source", SAMPLE),
         strength=strength,
         form=form,
     )
 
 
-def load_reference_data(path: Path) -> ReferenceData:
+SAMPLE = "sample"
+
+
+def load_reference_data(path: Path, *, allow_sample_prices: bool = False) -> ReferenceData:
+    """The lists at `path`. Prices marked "sample" -- or not marked at all,
+    which reads as sample -- are left out unless `allow_sample_prices`.
+
+    Every entry is still checked first, so a malformed sample is refused
+    rather than quietly skipped: the file has to be right either way.
+    """
     raw = json.loads(path.read_text(encoding="utf-8"))
-    prices = tuple(_price(entry) for entry in raw.get("prices", []))
+    every_price = tuple(_price(entry) for entry in raw.get("prices", []))
+    prices = tuple(price for price in every_price if allow_sample_prices or price.source != SAMPLE)
+    if len(prices) < len(every_price):
+        logger.warning(
+            "Left out %d sample price(s) from %s: illustrative figures raise no flag here",
+            len(every_price) - len(prices),
+            path,
+        )
     norms = tuple(
         QuantityNorm(
             name=entry["name"],
             aliases=tuple(sorted((normalize(a) for a in entry["aliases"]), key=len, reverse=True)),
             unit=entry["unit"],
             usual_max_per_day=Decimal(str(entry["usual_max_per_day"])),
-            source=entry.get("source", "sample"),
+            source=entry.get("source", SAMPLE),
         )
         for entry in raw.get("quantity_norms", [])
     )
@@ -364,4 +383,7 @@ def load_reference_data(path: Path) -> ReferenceData:
 @lru_cache
 def get_reference_data() -> ReferenceData:
     """FastAPI dependency. Loaded once; the lists only change on deploy."""
-    return load_reference_data(Path(get_settings().reference_data_path))
+    settings = get_settings()
+    return load_reference_data(
+        Path(settings.reference_data_path), allow_sample_prices=settings.allow_sample_prices
+    )

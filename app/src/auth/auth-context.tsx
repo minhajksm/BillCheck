@@ -45,9 +45,15 @@ type AuthContextValue = {
 const SIGNED_OUT = { status: 'signedOut', phone: null, signupToken: null } as const;
 
 /**
- * How long launch waits to hear whether signing in is optional. The welcome
- * screen needs the answer before it draws, but a cold or unreachable API must
- * not hold the splash screen: the two sign-in buttons always work.
+ * How long launch waits to hear whether signing in is optional, before
+ * drawing the welcome screen without the answer. A cold or unreachable API
+ * must not hold the splash screen: the two sign-in buttons always work.
+ *
+ * Waiting this long is not the same as giving up. A Cloud Run instance waking
+ * from idle takes longer than this, and the answer it then sends still
+ * counts: the option appears on the welcome screen when it arrives. It used
+ * to be thrown away, which hid the option for the whole of any launch that
+ * happened to wake the server.
  */
 const HEALTH_TIMEOUT_MS = 3000;
 
@@ -73,19 +79,29 @@ async function restoreSession(): Promise<AuthState> {
   }
 }
 
+/** Whether the API lets people in without a number. Never rejects. */
 async function askIfSignInIsOptional(): Promise<boolean> {
+  try {
+    const health = await apiFetch<Health>('/health');
+    return health.anonymous_accounts === true;
+  } catch (error) {
+    // Offline, or an older API that doesn't answer this, so signing in it is.
+    // Said out loud, because the only other sign is a button that isn't there.
+    console.warn('Could not ask the API whether signing in is optional:', error);
+    return false;
+  }
+}
+
+/** The answer if it arrives within `ms`, or null if it is still on its way. */
+async function within<T>(answer: Promise<T>, ms: number): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const health = await Promise.race([
-      apiFetch<Health>('/health'),
+    return await Promise.race([
+      answer,
       new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), HEALTH_TIMEOUT_MS);
+        timer = setTimeout(() => resolve(null), ms);
       }),
     ]);
-    return health?.anonymous_accounts ?? false;
-  } catch {
-    // Offline, or an older API that doesn't answer this. Signing in it is.
-    return false;
   } finally {
     clearTimeout(timer);
   }
@@ -99,10 +115,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [allowed, restored] = await Promise.all([askIfSignInIsOptional(), restoreSession()]);
+      const optional = askIfSignInIsOptional();
+      const [allowed, restored] = await Promise.all([within(optional, HEALTH_TIMEOUT_MS), restoreSession()]);
       if (cancelled) return;
-      setAnonymousAllowed(allowed);
+      setAnonymousAllowed(allowed ?? false);
       setState(restored);
+      if (allowed === null) {
+        // Too slow for launch, not too slow to count.
+        const late = await optional;
+        if (!cancelled) setAnonymousAllowed(late);
+      }
     })();
     return () => {
       cancelled = true;

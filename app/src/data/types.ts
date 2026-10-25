@@ -84,6 +84,9 @@ export type ReaderFlagKind =
   | 'implant_without_identity'
   | 'rounded_amounts'
   | 'advance_not_deducted'
+  // A line charging more than its own quantity x rate. Raised by the API's
+  // arithmetic, never by the reader.
+  | 'line_math'
   // What an experienced eye notices. Nothing can confirm these.
   | 'unit_price_high'
   | 'branded_drug_margin'
@@ -123,6 +126,31 @@ export type Flag = {
   excess: number;
 };
 
+/**
+ * One sum on the bill, worked out by the API from the bill's own figures.
+ * Only the fields its kind uses are set. Must match `CheckOut` in
+ * `api/models.py`.
+ */
+export type Check = {
+  kind: 'lines' | 'subtotal' | 'discount' | 'payable' | 'rounding' | 'paid' | 'balance';
+  /** "mismatch": the bill asks for more than its own numbers give. "note": never a question. */
+  status: 'ok' | 'mismatch' | 'note';
+  amount?: number;
+  expected?: number;
+  printed?: number;
+  checked?: number;
+  of?: number;
+  count?: number;
+  percent?: number;
+  /** For a discount: the same rate taken off every line. */
+  uniform?: boolean;
+  /** The lines a "lines" check found over quantity x rate, as the bill numbers them. */
+  positions: number[];
+};
+
+/** A deposit, advance or receipt, as the bill lists it. */
+export type Payment = { date: string; mode: string; amount: number };
+
 /** One day's bill with everything on it. */
 export type Bill = {
   id: string;
@@ -135,6 +163,13 @@ export type Bill = {
   discount?: number;
   /** What the hospital is asking for: the sub-total less the discount. */
   total: number;
+  /** The bill's own arithmetic. Empty on bills read before it was checked. */
+  checks: Check[];
+  payments: Payment[];
+  /** What has been paid, where the bill or its deposits say. */
+  paid?: number;
+  /** Still due. 0 is "nothing left to pay"; missing, the bill doesn't say. */
+  balance?: number;
   lineItems: LineItem[];
   flags: Flag[];
 };

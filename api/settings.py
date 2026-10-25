@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     # data/samples is illustrative; point this at the real NPPA and CGHS
     # lists before any flag is shown to a real family.
     reference_data_path: str = "../data/samples/reference-prices.json"
+    # Whether a price marked "sample" may raise a flag. The sample list is
+    # illustrative numbers made up for development: a red "above the NPPA
+    # ceiling" flag computed from one tells a family their hospital broke the
+    # law on the strength of a figure nobody published. Off everywhere but the
+    # tests, which set it, so production raises no price flag at all until a
+    # real, sourced list is loaded. Quantity norms are not affected.
+    allow_sample_prices: bool = False
     # Bills one person can send to be read in 24 hours. Every read is a paid
     # Claude call, so this caps what one account can run up. A family adding
     # one bill a day per case stays far below it.

@@ -6,7 +6,7 @@
  */
 
 import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
-import type { Bill, Case, DailyBill, Flag, LineItem, Member } from './types';
+import type { Bill, Case, Check, DailyBill, Flag, LineItem, Member, Payment } from './types';
 
 type ApiMember = { id: string; name: string; is_you: boolean };
 
@@ -60,6 +60,20 @@ type ApiFlag = {
   excess: number;
 };
 
+type ApiCheck = {
+  kind: Check['kind'];
+  status: Check['status'];
+  amount?: number | null;
+  expected?: number | null;
+  printed?: number | null;
+  checked?: number | null;
+  of?: number | null;
+  count?: number | null;
+  percent?: number | null;
+  uniform?: boolean | null;
+  positions?: number[];
+};
+
 type ApiBill = {
   id: string;
   case_id: string;
@@ -68,6 +82,11 @@ type ApiBill = {
   subtotal: number;
   discount: number | null;
   total: number;
+  // Missing from an API older than the arithmetic checks.
+  checks?: ApiCheck[];
+  payments?: Payment[];
+  paid?: number | null;
+  balance?: number | null;
   line_items: ApiLineItem[];
   flags: ApiFlag[];
 };
@@ -125,6 +144,20 @@ const toFlag = (f: ApiFlag): Flag => ({
   excess: f.excess,
 });
 
+const toCheck = (c: ApiCheck): Check => ({
+  kind: c.kind,
+  status: c.status,
+  amount: c.amount ?? undefined,
+  expected: c.expected ?? undefined,
+  printed: c.printed ?? undefined,
+  checked: c.checked ?? undefined,
+  of: c.of ?? undefined,
+  count: c.count ?? undefined,
+  percent: c.percent ?? undefined,
+  uniform: c.uniform ?? undefined,
+  positions: c.positions ?? [],
+});
+
 export const toBill = (b: ApiBill): Bill => ({
   id: b.id,
   caseId: b.case_id,
@@ -133,6 +166,10 @@ export const toBill = (b: ApiBill): Bill => ({
   subtotal: b.subtotal,
   discount: b.discount ?? undefined,
   total: b.total,
+  checks: (b.checks ?? []).map(toCheck),
+  payments: b.payments ?? [],
+  paid: b.paid ?? undefined,
+  balance: b.balance ?? undefined,
   lineItems: b.line_items.map(toLineItem),
   flags: b.flags.map(toFlag),
 });
