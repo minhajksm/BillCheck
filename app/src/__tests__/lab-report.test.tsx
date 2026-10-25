@@ -5,7 +5,9 @@ import { act, fireEvent, renderRouter, screen, waitFor } from 'expo-router/testi
 import LabReportScreen from '@/app/lab/[reportId]';
 import LabConsentScreen from '@/app/lab/consent';
 import NewLabReportScreen from '@/app/lab/new';
-import YourCasesScreen from '@/app/index';
+import FileScreen from '@/app/file';
+import HomeScreen from '@/app/index';
+import MemberScreen from '@/app/members/[memberId]';
 import { AuthProvider } from '@/auth/auth-context';
 import { ToastProvider } from '@/components/toast';
 import { Colors } from '@/constants/theme';
@@ -40,7 +42,9 @@ function TestLayout() {
 
 const routes = {
   _layout: TestLayout,
-  index: YourCasesScreen,
+  index: HomeScreen,
+  file: FileScreen,
+  'members/[memberId]': MemberScreen,
   'lab/consent': LabConsentScreen,
   'lab/new': NewLabReportScreen,
   'lab/[reportId]': LabReportScreen,
@@ -118,9 +122,10 @@ describe('starting from the home screen', () => {
 });
 
 describe('explaining a report', () => {
+  /** Started from Papa, so it is his from the start and opens straight away. */
   async function explainOne() {
     signedIn(true);
-    renderRouter(routes, { initialUrl: '/' });
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
     fireEvent.press(await screen.findByText('Photograph report'));
     await screen.findByText('Explain a lab report');
     await act(async () => fireEvent.press(await screen.findByText('Explain report')));
@@ -219,13 +224,41 @@ describe('a report the lab marked urgent', () => {
   });
 });
 
-describe('keeping it', () => {
-  it('lists it on the home screen to open again', async () => {
+describe('whose report it is', () => {
+  it('is theirs from the start when started from a member', async () => {
     signedIn(true);
-    server.labReports.push(structuredClone(SAMPLE_LAB));
-    renderRouter(routes, { initialUrl: '/' });
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+    fireEvent.press(await screen.findByText('Photograph report'));
+    await act(async () => fireEvent.press(await screen.findByText('Explain report')));
 
-    expect(await screen.findByText('Your lab reports')).toBeVisible();
+    expect(await screen.findByText('Sample Diagnostics')).toBeVisible();
+    expect(server.labReports[0].member).toEqual({ id: 'm-papa', name: 'Papa' });
+  });
+
+  it('is asked once it is read, when started from the home screen', async () => {
+    signedIn(true);
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Photograph report'));
+    await act(async () => fireEvent.press(await screen.findByText('Explain report')));
+
+    // The name the report prints is offered for someone new.
+    expect(await screen.findByText('Whose lab report is this?')).toBeVisible();
+    expect(screen.getByText('The page says: TEST PATIENT')).toBeVisible();
+    fireEvent.press(screen.getByText('Mummy'));
+    await act(async () => fireEvent.press(screen.getByText('Continue')));
+
+    expect(await screen.findByText('Sample Diagnostics')).toBeVisible();
+    expect(server.labReports[0].member).toEqual({ id: 'm-mummy', name: 'Mummy' });
+  });
+});
+
+describe('keeping it', () => {
+  it("lists it under the member's lab reports to open again", async () => {
+    signedIn(true);
+    server.labReports.push({ ...structuredClone(SAMPLE_LAB), member: { id: 'm-papa', name: 'Papa' } });
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+
+    expect(await screen.findByText('Lab reports')).toBeVisible();
     expect(screen.getByText('1 result outside the report’s range')).toBeVisible();
     fireEvent.press(screen.getByText('Sample Diagnostics'));
     expect(await screen.findByText('Report range: 12.0 - 15.0')).toBeVisible();

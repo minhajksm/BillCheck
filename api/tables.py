@@ -76,8 +76,73 @@ class AuthSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
+class Member(Base):
+    """Someone an account looks after: a parent, a child, a friend, or the
+    account holder themselves.
+
+    Everything health-related hangs off a member: their admissions and their
+    lab reports. Family share the person rather than one admission at a time,
+    so whoever joins "Papa" sees every stay and every report of his, including
+    the ones still to come.
+    """
+
+    __tablename__ = "members"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(80))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    followers: Mapped[list["MemberFollower"]] = relationship(
+        back_populates="member", cascade="all, delete-orphan", order_by="MemberFollower.joined_at"
+    )
+    cases: Mapped[list["Case"]] = relationship(back_populates="member", cascade="all, delete-orphan")
+    lab_reports: Mapped[list["LabReport"]] = relationship(
+        back_populates="member", cascade="all, delete-orphan"
+    )
+
+
+class MemberFollower(Base):
+    """An account that can see and add to everything about a member."""
+
+    __tablename__ = "member_followers"
+    __table_args__ = (UniqueConstraint("member_id", "user_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    joined_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    member: Mapped[Member] = relationship(back_populates="followers")
+    user: Mapped[User] = relationship()
+
+
+class MemberInvite(Base):
+    """A code a follower shares so family can follow the member too.
+
+    Separate from the member id on purpose: the id shows up in links and logs,
+    while a code can expire and be withdrawn. Only its hash is kept.
+    """
+
+    __tablename__ = "member_invites"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    member_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("members.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
 class Case(Base):
-    """One hospital admission, followed by one or more family members."""
+    """One hospital admission of one member.
+
+    `member_id` is null only between a bill being read and the family saying
+    whose it is: a bill scanned before choosing anyone is read first, so the
+    name printed on it can be offered as the answer. Until then only whoever
+    scanned it can see it.
+    """
 
     __tablename__ = "cases"
 
@@ -94,48 +159,16 @@ class Case(Base):
     # the stay check stays off until they give it.
     admitted_on: Mapped[date | None] = mapped_column(Date)
     closed_on: Mapped[date | None] = mapped_column(Date)
+    member_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("members.id", ondelete="CASCADE"), index=True
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
-    members: Mapped[list["CaseMember"]] = relationship(
-        back_populates="case", cascade="all, delete-orphan", order_by="CaseMember.joined_at"
-    )
+    member: Mapped[Member | None] = relationship(back_populates="cases")
     bills: Mapped[list["Bill"]] = relationship(
         back_populates="case", cascade="all, delete-orphan", order_by="Bill.bill_date"
     )
-
-
-class CaseMember(Base):
-    """A family member who can see and add to a case."""
-
-    __tablename__ = "case_members"
-    __table_args__ = (UniqueConstraint("case_id", "user_id"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    joined_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
-
-    case: Mapped[Case] = relationship(back_populates="members")
-    user: Mapped[User] = relationship()
-
-
-class CaseInvite(Base):
-    """A code a member shares so family can join the case.
-
-    Separate from the case id on purpose: the id shows up in links and logs,
-    while a code can expire and be withdrawn. Only its hash is kept.
-    """
-
-    __tablename__ = "case_invites"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id", ondelete="CASCADE"), index=True)
-    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
-    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
-    revoked_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class Bill(Base):
@@ -352,8 +385,8 @@ class LabReport(Base):
 
     The pages are never kept, as with bills: what is stored is the results as
     printed and the explanation of them, so the family can open it again and
-    read it in the other language. It belongs to the account that uploaded it
-    and goes when that account does.
+    read it in the other language. It belongs to the member it is about, is
+    seen by everyone following them, and goes when the member does.
 
     `tests` is a document read back whole and never queried by test, so it is
     JSON: each result verbatim -- name, value, unit, the range the report
@@ -365,7 +398,12 @@ class LabReport(Base):
     __tablename__ = "lab_reports"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # Whoever uploaded it.
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Whose report it is. Null until the family says, as with a case.
+    member_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("members.id", ondelete="CASCADE"), index=True
+    )
     # As printed. The date in particular is never parsed: lab reports print
     # it every way there is, nothing here computes with it, and a parse that
     # guessed the day and month the wrong way round would be an invention.
@@ -385,3 +423,5 @@ class LabReport(Base):
     effort: Mapped[str] = mapped_column(String(10))
     prompt_digest: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
+
+    member: Mapped[Member | None] = relationship(back_populates="lab_reports")

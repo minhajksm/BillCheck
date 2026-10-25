@@ -5,6 +5,7 @@ import { Text } from 'react-native';
 import CaseDashboardScreen from '@/app/cases/[caseId]';
 import RootLayout from '@/app/_layout';
 import YourCasesScreen from '@/app/index';
+import MemberScreen from '@/app/members/[memberId]';
 import i18n from '@/i18n';
 import { installFakeApi } from '@/test-utils/fake-api';
 import { resetTokenStore } from '@/test-utils/memory-token-store';
@@ -25,6 +26,7 @@ const EditStub = () => <Text>Edit screen</Text>;
 const routes = {
   _layout: RootLayout,
   index: YourCasesScreen,
+  'members/[memberId]': MemberScreen,
   'cases/[caseId]': CaseDashboardScreen,
   'cases/[caseId]/scan': ScanStub,
   'cases/[caseId]/edit': EditStub,
@@ -83,9 +85,9 @@ describe('a bill that printed no admission date', () => {
     server.cases[0].admitted_on = null as unknown as string;
   }
 
-  it('says so on the case list rather than showing a date nobody printed', async () => {
+  it('says so on the list of admissions rather than showing a date nobody printed', async () => {
     noAdmissionDate();
-    renderRouter(routes, { initialUrl: '/' });
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
 
     // It used to show the bill's own date here, as "Admitted 4 May".
     expect(await screen.findByText('Admission date not on the bill')).toBeVisible();

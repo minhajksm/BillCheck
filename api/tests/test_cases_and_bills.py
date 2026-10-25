@@ -21,7 +21,16 @@ def page(name: str = "page1.jpg") -> tuple[str, tuple[str, io.BytesIO, str]]:
     return ("pages", (name, io.BytesIO(JPEG), "image/jpeg"))
 
 
+def new_member(client: TestClient, headers: dict, name: str = "Papa") -> dict:
+    response = client.post("/members", json={"name": name}, headers=headers)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def new_case(client: TestClient, headers: dict, **overrides) -> dict:
+    """An admission, under a new member unless `member_id` names one."""
+    if "member_id" not in overrides:
+        overrides["member_id"] = new_member(client, headers)["id"]
     body = {
         "title": "Papa's admission",
         "hospital_name": "City Care Hospital",
@@ -39,14 +48,25 @@ def new_case(client: TestClient, headers: dict, **overrides) -> dict:
 # --- cases -------------------------------------------------------------------
 
 
-def test_creates_a_case_with_its_creator_as_a_member(client: TestClient, auth_headers: dict):
-    created = new_case(client, auth_headers)
+def test_creates_a_case_under_a_member(client: TestClient, auth_headers: dict):
+    papa = new_member(client, auth_headers)
+    created = new_case(client, auth_headers, member_id=papa["id"])
 
     assert created["title"] == "Papa's admission"
-    assert [m["name"] for m in created["members"]] == ["Rohan Sharma"]
-    assert created["members"][0]["is_you"] is True
+    assert created["member"] == {"id": papa["id"], "name": "Papa"}
+    assert created["is_owner"] is True
     assert created["bills"] == []
     assert created["recovered_amount"] == 0
+
+
+def test_a_case_needs_a_member_the_caller_follows(client: TestClient, auth_headers: dict, sms: FakeSms):
+    """Opening an admission under someone else's member would put it in front
+    of their family."""
+    theirs = new_member(client, headers_for(sign_up(client, sms, phone="+919123456780", name="Other")))
+
+    with pytest.raises(AssertionError):
+        new_case(client, auth_headers, member_id=theirs["id"])
+    assert client.post("/cases", json={"title": "x"}, headers=auth_headers).status_code == 422
 
 
 def test_lists_only_your_own_cases(client: TestClient, auth_headers: dict, sms: FakeSms):
@@ -74,134 +94,10 @@ def headers_for(body: dict) -> dict:
     return {"Authorization": f"Bearer {body['token']}"}
 
 
-def invite(client: TestClient, headers: dict, case_id: str) -> str:
-    response = client.post(f"/cases/{case_id}/invites", headers=headers)
-    assert response.status_code == 201, response.text
-    return response.json()["code"]
-
-
-def test_family_joins_with_an_invite_code(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-
-    joined = client.post("/cases/join", json={"code": code}, headers=anita)
-    assert joined.status_code == 200
-    assert sorted(m["name"] for m in joined.json()["members"]) == ["Anita Sharma", "Rohan Sharma"]
-    # And now she can see it like any other member.
-    assert client.get(f"/cases/{case['id']}", headers=anita).status_code == 200
-
-
-def test_the_case_id_alone_is_not_enough_to_join(client: TestClient, auth_headers: dict, sms: FakeSms):
-    """Ids appear in links and server logs, so knowing one must not let a
-    stranger read who is in hospital."""
-    case = new_case(client, auth_headers)
-    stranger = headers_for(sign_up(client, sms, phone="+919123456780", name="Stranger"))
-
-    assert client.post(f"/cases/{case['id']}/join", headers=stranger).status_code in (404, 405)
-    assert client.post("/cases/join", json={"code": case["id"]}, headers=stranger).status_code == 404
-    assert client.get(f"/cases/{case['id']}", headers=stranger).status_code == 404
-
-
-def test_joining_twice_is_harmless(client: TestClient, auth_headers: dict):
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    again = client.post("/cases/join", json={"code": code}, headers=auth_headers)
-    assert again.status_code == 200
-    assert len(again.json()["members"]) == 1
-
-
-def test_only_members_can_create_invites(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    stranger = headers_for(sign_up(client, sms, phone="+919123456780", name="Stranger"))
-    assert client.post(f"/cases/{case['id']}/invites", headers=stranger).status_code == 404
-
-
-def test_an_invite_expires(
-    client: TestClient, auth_headers: dict, sms: FakeSms, monkeypatch: pytest.MonkeyPatch
-):
-    import cases
-
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-
-    later = cases.utcnow() + cases.INVITE_TTL + timedelta(minutes=1)
-    monkeypatch.setattr(cases, "utcnow", lambda: later)
-    response = client.post("/cases/join", json={"code": code}, headers=anita)
-    assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "invite_invalid"
-
-
-def test_a_withdrawn_invite_stops_working(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    (listed,) = client.get(f"/cases/{case['id']}/invites", headers=auth_headers).json()
-    assert "code" not in listed, "the code is shown once, when it is made"
-
-    revoked = client.post(f"/cases/{case['id']}/invites/{listed['id']}/revoke", headers=auth_headers)
-    assert revoked.status_code == 204
-    assert client.get(f"/cases/{case['id']}/invites", headers=auth_headers).json() == []
-
-    anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-    assert client.post("/cases/join", json={"code": code}, headers=anita).status_code == 404
-
-
-def test_invite_codes_are_not_stored_in_plain_text(client: TestClient, auth_headers: dict):
-    from db import get_db
-    from main import app
-    from tables import CaseInvite
-
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    db = next(app.dependency_overrides[get_db]())
-    stored = db.query(CaseInvite).one().code_hash
-    assert code not in stored and len(stored) == 64
-
-
-def test_a_member_can_leave(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    anita_body = sign_up(client, sms, phone="+919123456780", name="Anita Sharma")
-    anita = headers_for(anita_body)
-    client.post("/cases/join", json={"code": code}, headers=anita)
-
-    left = client.post(f"/cases/{case['id']}/members/{anita_body['user']['id']}/remove", headers=anita)
-    assert left.status_code == 204
-    assert client.get(f"/cases/{case['id']}", headers=anita).status_code == 404
-
-
-def test_the_owner_can_remove_someone_but_others_cannot(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
-    anita_body = sign_up(client, sms, phone="+919123456780", name="Anita Sharma")
-    vijay_body = sign_up(client, sms, phone="+919123456781", name="Vijay Sharma")
-    for body in (anita_body, vijay_body):
-        client.post("/cases/join", json={"code": code}, headers=headers_for(body))
-
-    # Anita can't remove Vijay; only Rohan, who started the case, can.
-    blocked = client.post(
-        f"/cases/{case['id']}/members/{vijay_body['user']['id']}/remove", headers=headers_for(anita_body)
-    )
-    assert blocked.status_code == 403
-    removed = client.post(
-        f"/cases/{case['id']}/members/{vijay_body['user']['id']}/remove", headers=auth_headers
-    )
-    assert removed.status_code == 204
-    assert client.get(f"/cases/{case['id']}", headers=headers_for(vijay_body)).status_code == 404
-
-
-def test_the_owner_cannot_leave_or_be_removed(client: TestClient, auth_headers: dict, sms: FakeSms):
-    case = new_case(client, auth_headers)
-    owner_id = client.get("/auth/me", headers=auth_headers).json()["id"]
-    code = invite(client, auth_headers, case["id"])
-    anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-    client.post("/cases/join", json={"code": code}, headers=anita)
-
-    assert (
-        client.post(f"/cases/{case['id']}/members/{owner_id}/remove", headers=auth_headers).status_code == 409
-    )
-    assert client.post(f"/cases/{case['id']}/members/{owner_id}/remove", headers=anita).status_code == 403
+def follow(client: TestClient, headers: dict, member_id: str, follower: dict) -> None:
+    """`follower` joins the member with a code from `headers`."""
+    code = client.post(f"/members/{member_id}/invites", headers=headers).json()["code"]
+    assert client.post("/members/join", json={"code": code}, headers=follower).status_code == 200
 
 
 def test_closing_a_case_records_the_day_it_ended(client: TestClient, auth_headers: dict):

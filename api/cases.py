@@ -1,46 +1,28 @@
-"""Cases: one hospital admission, shared with family.
+"""Cases: one hospital admission of one member.
 
-Everything about a case is visible to its members and to nobody else. Family
-join with an invite code a member creates: it expires, can be withdrawn, and is
-stored only as a hash. The case id is never enough to join, since ids show up
-in links and logs.
+A case is seen by everyone following its member (see access.py), and shared
+by sharing the member: family follow the person, not one stay at a time.
 """
 
-import hashlib
-import secrets
 import uuid
-from datetime import timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from access import can_see, load_member, member_to_file_under
 from auth import CurrentUser, Db
-from db import india_today, utcnow
-from models import (
-    CaseCreate,
-    CaseOut,
-    CaseUpdate,
-    DailyBillOut,
-    InviteCreated,
-    InviteOut,
-    JoinCase,
-    MemberOut,
-)
+from db import india_today
+from models import CaseCreate, CaseOut, CaseUpdate, DailyBillOut, FileUnder, MemberRef
 from stay import recheck_stay
-from tables import Bill, Case, CaseInvite, CaseMember, Flag, LineItem, User
+from tables import Bill, Case, Flag, LineItem, MemberFollower, User
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
-INVITE_TTL = timedelta(days=7)
-
 ERRORS = {
     "case_not_found": "This case isn't available.",
-    "invite_invalid": "This invite has expired or was withdrawn. Ask for a new one.",
-    "member_not_found": "That person doesn't follow this case.",
-    "not_case_owner": "Only the person who started the case can remove someone.",
-    "owner_cannot_leave": "You started this case, so you can't leave it.",
+    "not_case_owner": "Only the person who started the case can delete it.",
 }
 
 
@@ -49,28 +31,33 @@ def case_error(status_code: int, code: str) -> HTTPException:
 
 
 def load_case(db: Session, case_id: uuid.UUID, user: User) -> Case:
-    """The case, or a 404 if it isn't the caller's.
+    """The case, or a 404 if the caller can't see it.
 
-    A case the caller doesn't follow answers exactly like one that doesn't
-    exist, so an id can't be probed for whether a patient is in hospital.
+    A case the caller can't see answers exactly like one that doesn't exist,
+    so an id can't be probed for whether a patient is in hospital.
     """
     case = db.scalar(
-        select(Case)
-        .where(Case.id == case_id)
-        .options(
-            selectinload(Case.members).selectinload(CaseMember.user),
-            selectinload(Case.bills),
-        )
+        select(Case).where(Case.id == case_id).options(selectinload(Case.member), selectinload(Case.bills))
     )
-    if case is None or not any(member.user_id == user.id for member in case.members):
+    if case is None or not can_see(db, case.member_id, case.created_by, user.id):
         raise case_error(status.HTTP_404_NOT_FOUND, "case_not_found")
     return case
 
 
-def is_member(db: Session, case_id: uuid.UUID, user_id: uuid.UUID) -> bool:
-    return bool(
-        db.scalar(select(exists().where(CaseMember.case_id == case_id, CaseMember.user_id == user_id)))
+def visible_cases(user: User):
+    """Cases under a member the caller follows, and their own not yet filed."""
+    followed = select(MemberFollower.member_id).where(MemberFollower.user_id == user.id)
+    return or_(
+        Case.member_id.in_(followed),
+        (Case.member_id.is_(None)) & (Case.created_by == user.id),
     )
+
+
+# Newest admission first. A case whose bill printed no admission date has
+# none to sort by and is almost always one just opened, so it goes to the
+# top; `created_at` breaks the tie, and both engines agree rather than SQLite
+# and Postgres disagreeing about where nulls land.
+NEWEST_FIRST = (Case.admitted_on.desc().nullsfirst(), Case.created_at.desc())
 
 
 def _counts(db: Session, case_id: uuid.UUID) -> dict[uuid.UUID, tuple[int, int, int]]:
@@ -126,10 +113,7 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
         bed=case.bed,
         admitted_on=case.admitted_on,
         closed_on=case.closed_on,
-        members=[
-            MemberOut(id=member.user_id, name=member.user.name, is_you=member.user_id == user.id)
-            for member in case.members
-        ],
+        member=MemberRef(id=case.member.id, name=case.member.name) if case.member else None,
         is_owner=case.created_by == user.id,
         bills=[
             DailyBillOut(
@@ -148,8 +132,10 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CaseOut)
 def create_case(body: CaseCreate, db: Db, user: CurrentUser) -> CaseOut:
-    """Opens a case. Whoever opens it is its first member."""
+    """Opens an admission under a member the caller follows."""
+    member = load_member(db, body.member_id, user)
     case = Case(
+        member_id=member.id,
         title=body.title,
         hospital_name=body.hospital_name,
         hospital_area=body.hospital_area,
@@ -159,7 +145,6 @@ def create_case(body: CaseCreate, db: Db, user: CurrentUser) -> CaseOut:
         admitted_on=body.admitted_on,
         created_by=user.id,
     )
-    case.members.append(CaseMember(user_id=user.id))
     db.add(case)
     db.commit()
     db.refresh(case)
@@ -168,20 +153,12 @@ def create_case(body: CaseCreate, db: Db, user: CurrentUser) -> CaseOut:
 
 @router.get("", response_model=list[CaseOut])
 def list_cases(db: Db, user: CurrentUser) -> list[CaseOut]:
-    """Every case the caller follows, most recently admitted first."""
+    """Every case the caller can see, most recently admitted first."""
     cases = db.scalars(
         select(Case)
-        .join(CaseMember, CaseMember.case_id == Case.id)
-        .where(CaseMember.user_id == user.id)
-        .options(
-            selectinload(Case.members).selectinload(CaseMember.user),
-            selectinload(Case.bills),
-        )
-        # Newest admission first. A case whose bill printed no admission date
-        # has none to sort by and is almost always one just opened, so it goes
-        # to the top; `created_at` breaks the tie, and both engines agree
-        # rather than SQLite and Postgres disagreeing about where nulls land.
-        .order_by(Case.admitted_on.desc().nullsfirst(), Case.created_at.desc())
+        .where(visible_cases(user))
+        .options(selectinload(Case.member), selectinload(Case.bills))
+        .order_by(*NEWEST_FIRST)
     ).all()
     return [case_out(db, case, user) for case in cases]
 
@@ -195,7 +172,7 @@ def read_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> CaseOut:
 def update_case(case_id: uuid.UUID, body: CaseUpdate, db: Db, user: CurrentUser) -> CaseOut:
     """Corrects the admission details.
 
-    Any member can, as with closing: these are facts about one admission that
+    Any follower can, as with closing: these are facts about one admission that
     whoever is at the hospital that day is best placed to fix, and a wrong bed
     number shouldn't wait for whoever started the case.
 
@@ -226,9 +203,8 @@ def update_case(case_id: uuid.UUID, body: CaseUpdate, db: Db, user: CurrentUser)
 def delete_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
     """Deletes the case and everything under it, for everyone following it.
 
-    Only whoever started the case, as with removing a member: it takes the
-    bills away from the whole family, and someone who only wants out can leave
-    instead.
+    Only whoever started the case: it takes the bills away from the whole
+    family.
 
     The bills, line items and flags go with it, by the foreign keys' own
     cascade. That is the point rather than a side effect — health data is kept
@@ -242,100 +218,21 @@ def delete_case(case_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _hash_code(code: str) -> str:
-    return hashlib.sha256(code.encode()).hexdigest()
+@router.post("/{case_id}/member", response_model=CaseOut)
+def file_case(case_id: uuid.UUID, body: FileUnder, db: Db, user: CurrentUser) -> CaseOut:
+    """Says whose admission this is: someone the caller follows, or someone
+    new, usually named as the bill names them.
 
-
-def _load_case_by_id(db: Session, case_id: uuid.UUID) -> Case | None:
-    return db.scalar(
-        select(Case)
-        .where(Case.id == case_id)
-        .options(selectinload(Case.members).selectinload(CaseMember.user), selectinload(Case.bills))
-    )
-
-
-@router.post("/join", response_model=CaseOut)
-def join_case(body: JoinCase, db: Db, user: CurrentUser) -> CaseOut:
-    """Joins a case with an invite code from a family member.
-
-    An unknown, expired, or withdrawn code all answer the same way, so a code
-    can't be tested for whether it once existed.
+    For a bill scanned before choosing anyone, which is read first so the
+    name on it can be offered. A filed case can be moved the same way, to
+    anyone else the caller follows.
     """
-    invite = db.scalar(select(CaseInvite).where(CaseInvite.code_hash == _hash_code(body.code)))
-    if invite is None or invite.revoked_at is not None or invite.expires_at <= utcnow():
-        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
-    case = _load_case_by_id(db, invite.case_id)
-    if case is None:
-        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
-    if not any(member.user_id == user.id for member in case.members):
-        db.add(CaseMember(case_id=case.id, user_id=user.id))
-        db.commit()
-        db.refresh(case)
+    case = load_case(db, case_id, user)
+    member = member_to_file_under(db, body, user)
+    case.member_id = member.id
+    db.commit()
+    db.refresh(case)
     return case_out(db, case, user)
-
-
-@router.post("/{case_id}/invites", status_code=status.HTTP_201_CREATED, response_model=InviteCreated)
-def create_invite(case_id: uuid.UUID, db: Db, user: CurrentUser) -> InviteCreated:
-    """A new invite code for this case, valid for 7 days. Members only.
-
-    The code is returned once and stored only as a hash; share it, and
-    withdraw it if it goes to the wrong person.
-    """
-    case = load_case(db, case_id, user)
-    code = secrets.token_urlsafe(16)
-    invite = CaseInvite(
-        case_id=case.id, code_hash=_hash_code(code), created_by=user.id, expires_at=utcnow() + INVITE_TTL
-    )
-    db.add(invite)
-    db.commit()
-    return InviteCreated(id=invite.id, code=code, expires_at=invite.expires_at)
-
-
-@router.get("/{case_id}/invites", response_model=list[InviteOut])
-def list_invites(case_id: uuid.UUID, db: Db, user: CurrentUser) -> list[InviteOut]:
-    """The invites still usable, so one sent to the wrong person can be withdrawn."""
-    case = load_case(db, case_id, user)
-    invites = db.scalars(
-        select(CaseInvite)
-        .where(
-            CaseInvite.case_id == case.id, CaseInvite.revoked_at.is_(None), CaseInvite.expires_at > utcnow()
-        )
-        .order_by(CaseInvite.created_at)
-    ).all()
-    return [
-        InviteOut(id=i.id, created_by=i.created_by, created_at=i.created_at, expires_at=i.expires_at)
-        for i in invites
-    ]
-
-
-@router.post("/{case_id}/invites/{invite_id}/revoke", status_code=status.HTTP_204_NO_CONTENT)
-def revoke_invite(case_id: uuid.UUID, invite_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
-    """Withdraws an invite. Anyone who already joined stays a member."""
-    case = load_case(db, case_id, user)
-    invite = db.get(CaseInvite, invite_id)
-    if invite is None or invite.case_id != case.id:
-        raise case_error(status.HTTP_404_NOT_FOUND, "invite_invalid")
-    if invite.revoked_at is None:
-        invite.revoked_at = utcnow()
-        db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post("/{case_id}/members/{member_id}/remove", status_code=status.HTTP_204_NO_CONTENT)
-def remove_member(case_id: uuid.UUID, member_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
-    """Takes someone off the case. Anyone can leave; only whoever started the
-    case can remove someone else, and they can't leave it themselves."""
-    case = load_case(db, case_id, user)
-    member = next((m for m in case.members if m.user_id == member_id), None)
-    if member is None:
-        raise case_error(status.HTTP_404_NOT_FOUND, "member_not_found")
-    if member_id != user.id and user.id != case.created_by:
-        raise case_error(status.HTTP_403_FORBIDDEN, "not_case_owner")
-    if member_id == case.created_by:
-        raise case_error(status.HTTP_409_CONFLICT, "owner_cannot_leave")
-    db.delete(member)
-    db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{case_id}/close", response_model=CaseOut)

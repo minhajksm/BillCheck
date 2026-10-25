@@ -200,13 +200,18 @@ not Supabase, not Docker.
   - `GET /auth/me` returns the signed-in user. `POST /auth/logout` revokes the session.
   - Send the token as `Authorization: Bearer <token>`. Sessions last 30 days.
   - Errors look like `{"detail": {"code": "otp_invalid", "message": "..."}}`. The app turns `code` into translated copy. `sms_failed` (502) means the SMS provider refused or couldn't be reached.
-- **Cases** (`cases.py`), all signed in. A case is one admission, shared with family.
-  - `POST /cases` opens one. Whoever opens it is its first member.
-  - `GET /cases` lists the ones you follow; `GET /cases/{id}` reads one. A case you don't follow answers 404, not 403, so an id can't be used to confirm that someone is in hospital.
-  - `POST /cases/{id}/invites` makes an invite code (members only). It's shown once, stored only as a hash, and expires after 7 days. `GET /cases/{id}/invites` lists the live ones and `POST /cases/{id}/invites/{invite_id}/revoke` withdraws one.
-  - `POST /cases/join` with `{"code"}` joins. The code goes in the body so it never lands in access logs. An unknown, expired or withdrawn code all answer `404 invite_invalid`. The case id alone can't be used to join.
-  - `POST /cases/{id}/members/{user_id}/remove`: anyone can leave; only whoever started the case can remove someone else, and they can't leave it.
+- **Members** (`members.py`), all signed in. A member is a person an account looks after (Papa, Mummy, a friend, yourself). Their admissions and lab reports belong to them, and family follow the member, so whoever follows "Papa" sees every stay and report of his, including later ones.
+  - `POST /members` with `{"name"}` adds one. Whoever adds them is their first follower. `GET /members` lists everyone you follow, anyone with an open admission first. `GET /members/{id}` returns the member with their followers, cases and lab reports. `PATCH /members/{id}` renames (any follower). `DELETE /members/{id}` deletes them and everything under them, for everyone (only whoever added them).
+  - A member you don't follow answers 404, not 403, so an id can't be used to confirm that someone is in hospital.
+  - `POST /members/{id}/invites` makes an invite code (followers only). It's shown once, stored only as a hash, and expires after 7 days. `GET /members/{id}/invites` lists the live ones and `POST /members/{id}/invites/{invite_id}/revoke` withdraws one.
+  - `POST /members/join` with `{"code"}` follows. The code goes in the body so it never lands in access logs. An unknown, expired or withdrawn code all answer `404 invite_invalid`. The member id alone can't be used to join.
+  - `POST /members/{id}/followers/{user_id}/remove`: anyone can stop following; only whoever added the member can remove someone else, and they can't stop following.
+  - `GET /unfiled` lists your scans that nobody has said whose they are yet (see below).
+- **Cases** (`cases.py`), all signed in. A case is one admission of one member.
+  - `POST /cases` with `member_id` opens one by hand. `GET /cases` lists every case you can see; `GET /cases/{id}` reads one.
+  - `POST /cases/{id}/member` with `{"member_id"}` or `{"new_member_name"}` (exactly one) says whose admission it is, adding the member if they're new. It also moves a filed case to anyone else you follow.
   - `POST /cases/{id}/close` marks the stay over. Reports stay readable.
+- **Scanning before choosing anyone.** `POST /bills` and `POST /lab-reports` take an optional `member_id` form field. With it, the scan is that member's from the start. Without it, the scan is read and kept with no member, seen only by whoever scanned it, so the app can offer the name printed on it as the answer; `POST /cases/{id}/member` or `POST /lab-reports/{id}/member` then files it.
 - **Bills and flags** (`bills.py`), all signed in.
   - `POST /cases/{id}/bills` takes the photographed pages as multipart `pages` (JPEG, PNG, WebP or HEIC, up to 15 MB each, 12 pages). It reads them into line items, runs the audit, and returns the bill with its flags. **The photos are never stored** — read in memory, then dropped. Each person can send `BILL_UPLOADS_PER_DAY` bills (default 20) in 24 hours, counting reads that fail, since each is a paid call; past that it answers `429 upload_limit`.
   - `GET /bills/{id}` reads a bill back with its line items and flags.

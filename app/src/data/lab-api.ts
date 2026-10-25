@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api';
 
-import { sendPages, type OnProgress, type ScannedPage } from './cases-api';
+import { fileUnderBody, sendPages, type FileUnder, type OnProgress, type ScannedPage } from './cases-api';
+import type { MemberRef } from './types';
 
 /** Against the range the report itself prints, and nothing else. */
 export type LabStatus = 'low' | 'high' | 'in_range' | 'no_range';
@@ -20,6 +21,8 @@ export type LabTest = {
 
 export type LabReport = {
   id: string;
+  /** Missing until the family says whose report it is. */
+  member?: MemberRef;
   labName: string;
   patientName: string;
   /** As printed. Never parsed: lab reports print dates every way there is. */
@@ -34,7 +37,9 @@ export type LabReport = {
 export type LabReportRow = {
   id: string;
   labName: string;
+  patientName: string;
   reportDate: string;
+  member?: MemberRef;
   testCount: number;
   outsideRange: number;
   urgent: boolean;
@@ -52,6 +57,7 @@ type ApiLabTest = {
 
 type ApiLabReport = {
   id: string;
+  member: MemberRef | null;
   lab_name: string;
   patient_name: string;
   report_date: string;
@@ -63,10 +69,12 @@ type ApiLabReport = {
   urgent: boolean;
 };
 
-type ApiLabReportRow = {
+export type ApiLabReportRow = {
   id: string;
   lab_name: string;
+  patient_name: string;
   report_date: string;
+  member: MemberRef | null;
   test_count: number;
   outside_range: number;
   urgent: boolean;
@@ -74,6 +82,7 @@ type ApiLabReportRow = {
 
 export const toLabReport = (r: ApiLabReport): LabReport => ({
   id: r.id,
+  member: r.member ?? undefined,
   labName: r.lab_name,
   patientName: r.patient_name,
   reportDate: r.report_date,
@@ -90,25 +99,42 @@ export const toLabReport = (r: ApiLabReport): LabReport => ({
   urgent: r.urgent,
 });
 
-const toRow = (r: ApiLabReportRow): LabReportRow => ({
+export const toLabRow = (r: ApiLabReportRow): LabReportRow => ({
   id: r.id,
   labName: r.lab_name,
+  patientName: r.patient_name,
   reportDate: r.report_date,
+  member: r.member ?? undefined,
   testCount: r.test_count,
   outsideRange: r.outside_range,
   urgent: r.urgent,
 });
 
+/** Scanned from a member, it is theirs; without one it waits for `fileLabReport`. */
 export async function uploadLabReport(
   token: string,
   pages: ScannedPage[],
+  memberId?: string,
   onProgress?: OnProgress,
 ): Promise<LabReport> {
-  return toLabReport((await sendPages(token, '/lab-reports', pages, undefined, onProgress)) as ApiLabReport);
+  return toLabReport(
+    (await sendPages(token, '/lab-reports', pages, { member_id: memberId }, onProgress)) as ApiLabReport,
+  );
+}
+
+/** Says whose report this is. */
+export async function fileLabReport(token: string, id: string, answer: FileUnder): Promise<LabReport> {
+  return toLabReport(
+    await apiFetch<ApiLabReport>(`/lab-reports/${id}/member`, {
+      method: 'POST',
+      token,
+      body: fileUnderBody(answer),
+    }),
+  );
 }
 
 export async function listLabReports(token: string): Promise<LabReportRow[]> {
-  return (await apiFetch<ApiLabReportRow[]>('/lab-reports', { token })).map(toRow);
+  return (await apiFetch<ApiLabReportRow[]>('/lab-reports', { token })).map(toLabRow);
 }
 
 export async function readLabReport(token: string, id: string): Promise<LabReport> {

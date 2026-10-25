@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,8 +9,12 @@ import { FormScreen } from '@/components/form-screen';
 import { useToast } from '@/components/toast';
 import { createCase } from '@/data/cases-api';
 
-/** Opening a case: one admission, the details printed on the admission slip. */
+/**
+ * Opening a case by hand: one admission of one member, the details printed on
+ * the admission slip. For a family setting one up before the first bill.
+ */
 export default function NewCaseScreen() {
+  const { memberId } = useLocalSearchParams<{ memberId: string }>();
   const { t } = useTranslation();
   const toast = useToast();
   const { state } = useAuth();
@@ -36,7 +40,7 @@ export default function NewCaseScreen() {
 
     setSaving(true);
     try {
-      const created = await createCase(token, { ...values, bed: values.bed.trim() || undefined });
+      const created = await createCase(token, memberId, { ...values, bed: values.bed.trim() || undefined });
       router.replace({ pathname: '/cases/[caseId]', params: { caseId: created.id } });
     } catch {
       setSaving(false);

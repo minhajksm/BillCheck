@@ -3,7 +3,8 @@ import { Stack } from 'expo-router';
 import { fireEvent, renderRouter, screen } from 'expo-router/testing-library';
 
 import CaseDashboardScreen from '@/app/cases/[caseId]';
-import YourCasesScreen from '@/app/index';
+import HomeScreen from '@/app/index';
+import MemberScreen from '@/app/members/[memberId]';
 import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { ToastProvider } from '@/components/toast';
 import i18n, { SUPPORTED_LANGUAGES } from '@/i18n';
@@ -32,7 +33,8 @@ function Navigator() {
 
 const routes = {
   _layout: TestLayout,
-  index: YourCasesScreen,
+  index: HomeScreen,
+  'members/[memberId]': MemberScreen,
   'cases/[caseId]': CaseDashboardScreen,
 };
 
@@ -51,33 +53,43 @@ beforeEach(() => {
   resetTokenStore('saved-token');
 });
 
-describe('Your cases', () => {
+describe('home, members and their admissions', () => {
   afterAll(() => i18n.changeLanguage('en'));
 
-  it('greets the signed-in person and lists their cases', async () => {
+  it('greets the signed-in person and lists who they look after', async () => {
     await render('/', 'Welcome, Rohan');
-    expect(screen.getByText('Welcome, Rohan')).toBeVisible();
-    expect(screen.getByText("Papa's admission")).toBeVisible();
-    expect(screen.getByText('Admitted 9 Oct')).toBeVisible();
-    // Two open questions on the latest bill, so the chip asks for them.
+    expect(screen.getByText('Papa')).toBeVisible();
+    // Papa's admission has no discharge yet, and two open questions.
+    expect(screen.getByText('In hospital now')).toBeVisible();
     expect(screen.getByText('2 to ask')).toBeVisible();
-    expect(screen.getByText('Closed March 2026')).toBeVisible();
-    expect(screen.getByText('₹3,200 recovered')).toBeVisible();
+    expect(screen.getByText('Mummy')).toBeVisible();
+    expect(screen.getAllByText('1 admission')).toHaveLength(2);
   });
 
-  it('opens the case dashboard', async () => {
-    const router = await render('/', "Papa's admission");
+  it('opens a member, with who follows them and their admissions', async () => {
+    const router = await render('/', 'Papa');
+    fireEvent.press(screen.getByText('Papa'));
+
+    expect(router.getPathname()).toBe('/members/m-papa');
+    expect(await screen.findByText('Rohan (you) and Anita follow Papa')).toBeVisible();
+    expect(screen.getByText("Papa's admission")).toBeVisible();
+    expect(screen.getByText('Admitted 9 Oct')).toBeVisible();
+  });
+
+  it('opens the case dashboard from the member', async () => {
+    const router = await render('/members/m-papa', "Papa's admission");
     fireEvent.press(screen.getByText("Papa's admission"));
+
     expect(router.getPathname()).toBe('/cases/papa-admission');
     expect(await screen.findByText('Running total')).toBeVisible();
     expect(screen.getByText('₹73,890')).toBeVisible();
-    expect(screen.getByText('Rohan (you) and Anita follow this case')).toBeVisible();
     expect(screen.getByText('10 Oct bill')).toBeVisible();
     expect(screen.getByText('37 items, ₹31,400')).toBeVisible();
   });
 
   it('opens a closed case, so its reports and its delete button stay reachable', async () => {
-    const router = await render('/', 'Closed March 2026');
+    const router = await render('/members/m-mummy', 'Closed March 2026');
+    expect(screen.getByText('₹3,200 recovered')).toBeVisible();
     fireEvent.press(screen.getByText("Mummy's cataract surgery"));
 
     // A closed admission is done, not archived: the bills stay readable, and
@@ -85,6 +97,12 @@ describe('Your cases', () => {
     expect(router.getPathname()).toBe('/cases/mummy-cataract');
     expect(await screen.findByText('Lotus Eye Clinic, Thane')).toBeVisible();
     expect(screen.getByLabelText('Case details')).toBeVisible();
+  });
+
+  it('shows whose admission it is on the case, and goes to them', async () => {
+    const router = await render('/cases/papa-admission', '₹73,890');
+    fireEvent.press(screen.getByText('Papa'));
+    expect(router.getPathname()).toBe('/members/m-papa');
   });
 
   it('shows a message for an unknown case', async () => {
@@ -96,15 +114,26 @@ describe('Your cases', () => {
     await i18n.changeLanguage(lng);
     await render('/cases/papa-admission', '₹73,890');
     expect(
-      screen.queryByText(/^(case|home|common|caseStatus|dates|auth|report|ask|flags|scan|newCase|message)\./),
+      screen.queryByText(
+        /^(case|home|common|caseStatus|dates|auth|report|ask|flags|scan|newCase|message|members|file)\./,
+      ),
     ).toBeNull();
     expect(screen.getByText('₹73,890')).toBeVisible();
   });
 
+  it.each(SUPPORTED_LANGUAGES)('renders the home and member screens in %s without raw keys', async (lng) => {
+    await i18n.changeLanguage(lng);
+    const router = await render('/', 'Papa');
+    expect(screen.queryByText(/^[a-zA-Z]+\.[a-zA-Z_]+$/)).toBeNull();
+    fireEvent.press(screen.getByText('Papa'));
+    await screen.findByText("Papa's admission");
+    expect(router.getPathname()).toBe('/members/m-papa');
+    expect(screen.queryByText(/^[a-zA-Z]+\.[a-zA-Z_]+$/)).toBeNull();
+  });
+
   it('uses Hindi copy when the language is Hindi', async () => {
     await i18n.changeLanguage('hi');
-    // Not the greeting: that reads "Welcome" in every language for now.
-    await render('/', '9 अक्टू॰ को भर्ती');
+    await render('/members/m-papa', '9 अक्टू॰ को भर्ती');
     expect(screen.getByText('9 अक्टू॰ को भर्ती')).toBeVisible();
   });
 });

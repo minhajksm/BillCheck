@@ -116,10 +116,7 @@ export const SAMPLE_CASE = {
   bed: '412',
   admitted_on: '2026-10-09',
   closed_on: null,
-  members: [
-    { id: 'u1', name: 'Rohan Sharma', is_you: true },
-    { id: 'u2', name: 'Anita Sharma', is_you: false },
-  ],
+  member: { id: 'm-papa', name: 'Papa' } as { id: string; name: string } | null,
   is_owner: true,
   bills: [
     {
@@ -153,7 +150,7 @@ export const CLOSED_CASE = {
   bed: '6',
   admitted_on: '2026-03-12',
   closed_on: '2026-03-13',
-  members: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
+  member: { id: 'm-mummy', name: 'Mummy' } as { id: string; name: string } | null,
   is_owner: true,
   bills: [
     {
@@ -171,6 +168,7 @@ export const CLOSED_CASE = {
 /** A lab report as the API returns it, explained. Sample data, not a real patient. */
 export const SAMPLE_LAB = {
   id: 'lab-1',
+  member: null as { id: string; name: string } | null,
   lab_name: 'Sample Diagnostics',
   patient_name: 'TEST PATIENT',
   report_date: '06/05/2025',
@@ -204,6 +202,35 @@ export const SAMPLE_LAB = {
   created_at: '2026-10-24T08:00:00Z',
 };
 
+/** The people the signed-in account follows, as GET /members/{id} answers minus what is under them. */
+export const SAMPLE_MEMBERS = [
+  {
+    id: 'm-papa',
+    name: 'Papa',
+    is_owner: true,
+    followers: [
+      { id: 'u1', name: 'Rohan Sharma', is_you: true },
+      { id: 'u2', name: 'Anita Sharma', is_you: false },
+    ],
+  },
+  {
+    id: 'm-mummy',
+    name: 'Mummy',
+    is_owner: true,
+    followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
+  },
+];
+
+/** A field of a multipart upload, from whichever FormData the test runs with. */
+function formField(body: unknown, name: string): string | undefined {
+  const form = body as {
+    get?: (name: string) => unknown;
+    getParts?: () => { fieldName: string; string?: string }[];
+  } | null;
+  if (form?.get) return (form.get(name) as string | null) ?? undefined;
+  return form?.getParts?.().find((part) => part.fieldName === name)?.string;
+}
+
 /**
  * An in-memory stand-in for api/, installed as global.fetch. Mirrors the real
  * responses closely enough to drive the screens in tests.
@@ -228,6 +255,43 @@ export function installFakeApi() {
     /** Set to hold an upload open, for testing what is shown while waiting. */
     stallUpload: false,
     labReports: [] as (typeof SAMPLE_LAB)[],
+    members: structuredClone(SAMPLE_MEMBERS),
+    /** The last invite code made, so a test can join with it. */
+    lastInvite: '',
+  };
+
+  const labRow = (r: typeof SAMPLE_LAB) => ({
+    id: r.id,
+    lab_name: r.lab_name,
+    patient_name: r.patient_name,
+    report_date: r.report_date,
+    member: r.member,
+    test_count: r.tests.length,
+    outside_range: r.tests.filter((test) => test.status === 'low' || test.status === 'high').length,
+    urgent: r.urgent,
+    created_at: r.created_at,
+  });
+
+  const memberOut = (m: (typeof server.members)[number]) => ({
+    ...m,
+    cases: server.cases.filter((c) => c.member?.id === m.id),
+    lab_reports: server.labReports.filter((r) => r.member?.id === m.id).map(labRow),
+  });
+
+  /** Someone already there, or someone new: what POST .../member answers with. */
+  const fileUnder = (body: { member_id?: string; new_member_name?: string }) => {
+    if (body.member_id) {
+      const found = server.members.find((m) => m.id === body.member_id);
+      return found ? { id: found.id, name: found.name } : null;
+    }
+    const made = {
+      id: `m-${server.members.length + 1}`,
+      name: body.new_member_name ?? '',
+      is_owner: true,
+      followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
+    };
+    server.members.push(made);
+    return { id: made.id, name: made.name };
   };
 
   const json = (status: number, body?: unknown) =>
@@ -318,23 +382,97 @@ export function installFakeApi() {
         }
         if (method === 'POST' && path === '/lab-reports') {
           if (!signedIn?.lab_consent) return fail(403, 'lab_consent_required');
-          const report = { ...structuredClone(SAMPLE_LAB), id: `lab-${server.labReports.length + 1}` };
+          const memberId = formField(init?.body, 'member_id');
+          const member = server.members.find((m) => m.id === memberId);
+          const report = {
+            ...structuredClone(SAMPLE_LAB),
+            id: `lab-${server.labReports.length + 1}`,
+            member: member ? { id: member.id, name: member.name } : null,
+          };
           server.labReports.unshift(report);
           return json(201, report);
         }
         if (method === 'GET' && path === '/lab-reports') {
+          return json(200, server.labReports.map(labRow));
+        }
+        const fileLab = /^\/lab-reports\/([^/]+)\/member$/.exec(path);
+        if (method === 'POST' && fileLab) {
+          const found = server.labReports.find((r) => r.id === fileLab[1]);
+          const member = fileUnder(body);
+          if (!found || !member) return fail(404, 'lab_report_not_found');
+          found.member = member;
+          return json(200, found);
+        }
+
+        // Members: the people this account follows.
+        if (method === 'GET' && path === '/members') {
           return json(
             200,
-            server.labReports.map((r) => ({
-              id: r.id,
-              lab_name: r.lab_name,
-              report_date: r.report_date,
-              test_count: r.tests.length,
-              outside_range: r.tests.filter((test) => test.status === 'low' || test.status === 'high').length,
-              urgent: r.urgent,
-              created_at: r.created_at,
-            })),
+            server.members.map((m) => {
+              const cases = server.cases.filter((c) => c.member?.id === m.id);
+              return {
+                id: m.id,
+                name: m.name,
+                is_owner: m.is_owner,
+                followers: m.followers,
+                admission_count: cases.length,
+                open_admission_count: cases.filter((c) => c.closed_on === null).length,
+                open_flag_count: server.bills
+                  .filter((b) => cases.some((c) => c.id === b.case_id))
+                  .reduce((sum, b) => sum + b.flags.filter((f) => f.status === 'open').length, 0),
+                lab_report_count: server.labReports.filter((r) => r.member?.id === m.id).length,
+              };
+            }),
           );
+        }
+        if (method === 'POST' && path === '/members') {
+          const made = {
+            id: `m-${server.members.length + 1}`,
+            name: body.name,
+            is_owner: true,
+            followers: [{ id: 'u1', name: 'Rohan Sharma', is_you: true }],
+          };
+          server.members.push(made);
+          return json(201, memberOut(made));
+        }
+        if (method === 'POST' && path === '/members/join') {
+          if (body.code !== server.lastInvite) return fail(404, 'invite_invalid');
+          return json(200, memberOut(server.members[0]));
+        }
+        if (method === 'GET' && path === '/unfiled') {
+          return json(200, {
+            cases: server.cases.filter((c) => c.member === null),
+            lab_reports: server.labReports.filter((r) => r.member === null).map(labRow),
+          });
+        }
+        const invite = /^\/members\/([^/]+)\/invites$/.exec(path);
+        if (method === 'POST' && invite) {
+          server.lastInvite = `code-${invite[1]}`;
+          return json(201, { id: 'inv-1', code: server.lastInvite, expires_at: '2026-11-01T00:00:00Z' });
+        }
+        const leave = /^\/members\/([^/]+)\/followers\/([^/]+)\/remove$/.exec(path);
+        if (method === 'POST' && leave) {
+          const at = server.members.findIndex((m) => m.id === leave[1]);
+          if (at < 0) return fail(404, 'member_not_found');
+          server.members.splice(at, 1);
+          return new Response(null, { status: 204 });
+        }
+        const member = /^\/members\/([^/]+)$/.exec(path);
+        if (member) {
+          const at = server.members.findIndex((m) => m.id === member[1]);
+          if (at < 0) return fail(404, 'member_not_found');
+          if (method === 'GET') return json(200, memberOut(server.members[at]));
+          if (method === 'PATCH') {
+            server.members[at].name = body.name;
+            return json(200, memberOut(server.members[at]));
+          }
+          if (method === 'DELETE') {
+            if (!server.members[at].is_owner) return fail(403, 'not_member_owner');
+            const gone = server.members[at].id;
+            server.members.splice(at, 1);
+            server.cases = server.cases.filter((c) => c.member?.id !== gone);
+            return new Response(null, { status: 204 });
+          }
         }
         const labReport = /^\/lab-reports\/([^/]+)$/.exec(path);
         if (labReport) {
@@ -345,6 +483,15 @@ export function installFakeApi() {
             server.labReports.splice(at, 1);
             return new Response(null, { status: 204 });
           }
+        }
+
+        const fileCase = /^\/cases\/([^/]+)\/member$/.exec(path);
+        if (method === 'POST' && fileCase) {
+          const found = server.cases.find((c) => c.id === fileCase[1]);
+          const member = fileUnder(body);
+          if (!found || !member) return fail(404, 'case_not_found');
+          found.member = member;
+          return json(200, found);
         }
 
         const readCase = /^\/cases\/([^/]+)$/.exec(path);
@@ -377,11 +524,15 @@ export function installFakeApi() {
 
         // Checking a bill with no case: the real endpoint reads the pages,
         // opens a case from what the bill says, and returns the bill on it.
+        // From a member it is theirs; otherwise it waits to be filed.
         if (method === 'POST' && path === '/bills') {
+          const memberId = formField(init?.body, 'member_id');
+          const member = server.members.find((m) => m.id === memberId);
           const opened = {
             ...structuredClone(SAMPLE_CASE),
             id: `case-from-bill-${server.cases.length}`,
             title: 'Ramesh Sharma',
+            member: member ? { id: member.id, name: member.name } : null,
             bills: [],
           };
           server.cases.unshift(opened);

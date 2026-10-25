@@ -20,7 +20,7 @@ const papa: Case = {
   hospital: { name: 'City Care Hospital', area: 'Andheri' },
   patient: { name: 'Ramesh Sharma', ipNumber: '20841', bed: '412' },
   admittedOn: '2026-10-09',
-  members: [{ id: 'u1', name: 'Rohan Sharma', isYou: true }],
+  member: { id: 'm-papa', name: 'Papa' },
   isOwner: true,
   bills: [
     bill({ id: 'b-day1', date: '2026-10-09', itemCount: 24, total: 68490 }),

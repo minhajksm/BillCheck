@@ -26,13 +26,15 @@ import { usePalette } from '@/hooks/use-palette';
  * "Check bill" — a half-photographed bill would be audited as if items were
  * missing.
  *
- * Reached two ways. From a case, it adds a day's bill to it. From the home
- * screen, with no case and the first page already picked there, the bill opens
- * its own case: everything a case needs is printed on the page the family is
- * already holding.
+ * Reached three ways. From a case, it adds a day's bill to it. From a
+ * member, or from the home screen, with the first page already picked there,
+ * the bill opens its own case: everything a case needs is printed on the page
+ * the family is already holding. From a member the case is theirs; from the
+ * home screen the family is asked whose it is once the bill is read, with
+ * the name printed on it offered.
  */
 export default function ScanScreen() {
-  const { caseId } = useLocalSearchParams<{ caseId?: string }>();
+  const { caseId, memberId } = useLocalSearchParams<{ caseId?: string; memberId?: string }>();
   const { t } = useTranslation();
   const palette = usePalette();
   const toast = useToast();
@@ -60,11 +62,13 @@ export default function ScanScreen() {
     try {
       const bill = caseId
         ? await uploadBill(token, caseId, pages, undefined, setSent)
-        : await checkFirstBill(token, pages, undefined, setSent);
-      router.replace({
-        pathname: '/bills/[billId]',
-        params: { billId: bill.id },
-      });
+        : await checkFirstBill(token, pages, memberId, setSent);
+      // Scanned before choosing anyone: ask whose it is, then the report.
+      router.replace(
+        caseId || memberId
+          ? { pathname: '/bills/[billId]', params: { billId: bill.id } }
+          : { pathname: '/file', params: { kind: 'bill', id: bill.caseId, billId: bill.id } },
+      );
     } catch (error) {
       // The pages stay, so a retry doesn't mean photographing them again.
       setChecking(false);

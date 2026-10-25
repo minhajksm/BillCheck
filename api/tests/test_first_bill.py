@@ -58,7 +58,7 @@ def test_whoever_checked_the_bill_owns_the_case(client: TestClient, auth_headers
     opened = client.get(f"/cases/{bill['case_id']}", headers=auth_headers).json()
 
     assert opened["is_owner"], "they can delete it, as with any case they started"
-    assert [member["is_you"] for member in opened["members"]] == [True]
+    assert opened["member"] is None, "nobody has said whose it is yet"
 
 
 def test_the_bill_is_checked_as_any_other_would_be(client: TestClient, auth_headers: dict):
