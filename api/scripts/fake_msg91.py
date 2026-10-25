@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
         for recipient in payload.get("recipients", []):
             mobile = recipient.get("mobiles", "?")
             code = recipient.get("otp", "?")
-            print(f"  SMS to +{mobile}: your BillCheck code is {code}", flush=True)
+            print(f"  SMS to +{mobile}: your FairCare code is {code}", flush=True)
 
         self._reply(200, {"type": "success", "message": "fake-request-id"})
 

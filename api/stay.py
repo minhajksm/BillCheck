@@ -25,7 +25,7 @@ from references import parse_bill_date
 from review import date_detail
 from tables import Bill, Case, Flag, LineItem
 
-logger = logging.getLogger("billcheck.stay")
+logger = logging.getLogger("faircare.stay")
 
 KIND = "date_outside_stay"
 

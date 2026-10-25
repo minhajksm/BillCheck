@@ -47,7 +47,7 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_PAGES = 12
 CHUNK_BYTES = 1024 * 1024
 
-logger = logging.getLogger("billcheck.bills")
+logger = logging.getLogger("faircare.bills")
 
 HEIF_BRANDS = {b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1", b"msf1"}
 

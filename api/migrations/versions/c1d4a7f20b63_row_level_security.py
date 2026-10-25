@@ -6,7 +6,7 @@ Create Date: 2026-10-18 11:20:00.000000
 
 A hosted Postgres is not only a database. Supabase also serves every table in
 the `public` schema over HTTP, and the key that reads it is published in client
-apps by design -- that is what it is for. Nothing in BillCheck uses that API:
+apps by design -- that is what it is for. Nothing in FairCare uses that API:
 the app talks to this FastAPI service, which connects as the role that owns
 these tables. So the HTTP side has no business reading them, and the only
 thing standing between an anonymous request and a family's bill is row level

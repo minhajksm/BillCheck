@@ -23,7 +23,7 @@ from analysis import BillAnalysis, Finding
 from audit import Flag, FlagLevel
 from references import parse_bill_date
 
-logger = logging.getLogger("billcheck.review")
+logger = logging.getLogger("faircare.review")
 
 # A finding the bill itself proves is as hard as a price-list flag; the prompt
 # reserves "high" for exactly that. Everything else is a question.

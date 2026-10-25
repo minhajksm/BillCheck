@@ -37,7 +37,7 @@ from lab_analysis import LabAnalysis, LabHeader, LabTest
 from lab_prompt import PROMPT as LAB_PROMPT
 from settings import get_settings
 
-logger = logging.getLogger("billcheck.ocr")
+logger = logging.getLogger("faircare.ocr")
 
 # Images Claude's vision input accepts, plus PDF as a document.
 SUPPORTED_IMAGES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})

@@ -159,7 +159,7 @@ def test_a_bill_that_cannot_be_read_says_why_in_the_log(
 
     monkeypatch.setattr(ocr.StubOcr, "read_bill", staticmethod(explode))
 
-    with caplog.at_level("WARNING", logger="billcheck.bills"):
+    with caplog.at_level("WARNING", logger="faircare.bills"):
         response = upload(client, auth_headers, case_id, JPEG)
 
     assert response.status_code == 422

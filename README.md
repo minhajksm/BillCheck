@@ -1,4 +1,4 @@
-# BillCheck
+# FairCare
 
 A mobile app that helps Indian families check hospital bills during and after an admission. See [CLAUDE.md](CLAUDE.md) for scope and rules, and [docs/prototype.html](docs/prototype.html) for the clickable prototype.
 

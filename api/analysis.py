@@ -42,7 +42,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
-logger = logging.getLogger("billcheck.analysis")
+logger = logging.getLogger("faircare.analysis")
 
 
 def _as_text(value: Any) -> Any:

@@ -1,4 +1,4 @@
-const KEY = 'billcheck.session';
+const KEY = 'faircare.session';
 
 /**
  * Web has no secure store, so the browser build keeps the token in

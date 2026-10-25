@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from analysis import Text
 
-logger = logging.getLogger("billcheck.lab")
+logger = logging.getLogger("faircare.lab")
 
 Status = Literal["low", "high", "in_range", "no_range"]
 STATUSES: frozenset[str] = frozenset({"low", "high", "in_range", "no_range"})

@@ -22,7 +22,7 @@ from pathlib import Path
 
 from settings import get_settings
 
-logger = logging.getLogger("billcheck.references")
+logger = logging.getLogger("faircare.references")
 
 _PUNCTUATION = re.compile(r"[^\w\s]")
 _SPACES = re.compile(r"\s+")

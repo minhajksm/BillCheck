@@ -1,5 +1,5 @@
 {
-  "name": "billcheck-app",
+  "name": "faircare-app",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
