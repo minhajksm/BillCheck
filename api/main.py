@@ -10,7 +10,7 @@ from models import HealthResponse
 from settings import get_settings
 
 app = FastAPI(
-    title="BillCheck API",
+    title="FairCare API",
     description="Checks itemized hospital bills and flags charges worth asking about.",
     version="0.1.0",
 )

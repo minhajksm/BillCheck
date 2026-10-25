@@ -7,7 +7,7 @@ import httpx
 from phone import mask_phone
 from settings import get_settings
 
-logger = logging.getLogger("billcheck.sms")
+logger = logging.getLogger("faircare.sms")
 
 
 class SmsDeliveryError(Exception):

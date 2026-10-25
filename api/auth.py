@@ -40,7 +40,7 @@ from settings import get_settings
 from sms import SmsDeliveryError, SmsSender, get_sms_sender
 from tables import AuthSession, OtpChallenge, User
 
-logger = logging.getLogger("billcheck.auth")
+logger = logging.getLogger("faircare.auth")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -51,7 +51,9 @@ MAX_ATTEMPTS = 5
 SIGNUP_TTL = timedelta(minutes=15)
 SESSION_TTL = timedelta(days=30)
 # Bump when the consent text in the app changes, so we know who agreed to what.
-CONSENT_VERSION = "2026-10"
+# The wording now names FairCare. Those who agreed to the BillCheck wording
+# keep the version they agreed to; nobody is asked again.
+CONSENT_VERSION = "2026-10-faircare"
 
 Db = Annotated[Session, Depends(get_db)]
 

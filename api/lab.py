@@ -37,10 +37,10 @@ from tables import LabReport, MemberFollower, User
 
 router = APIRouter(prefix="/lab-reports", tags=["lab reports"])
 
-logger = logging.getLogger("billcheck.lab")
+logger = logging.getLogger("faircare.lab")
 
 # Which consent text was agreed to. Change it when the words in the app do.
-LAB_CONSENT_VERSION = "2026-10-lab"
+LAB_CONSENT_VERSION = "2026-10-lab-faircare"
 
 ERRORS = {
     "lab_consent_required": "Agree to lab reports being stored and explained first.",

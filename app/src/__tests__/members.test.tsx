@@ -84,7 +84,7 @@ describe('family follow the person', () => {
 
     expect(await screen.findByText('code-m-papa')).toBeVisible();
     expect(share).toHaveBeenCalledWith({ message: expect.stringContaining('code-m-papa') });
-    expect(share.mock.calls[0][0]).toEqual({ message: expect.stringContaining('Follow Papa on BillCheck') });
+    expect(share.mock.calls[0][0]).toEqual({ message: expect.stringContaining('Follow Papa on FairCare') });
   });
 
   it('still shows the code where there is no share sheet', async () => {

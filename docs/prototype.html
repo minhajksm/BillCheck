@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>BillCheck prototype</title>
+<title>FairCare prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -211,7 +211,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 <body>
 <div class="stage">
   <aside class="side">
-    <div class="mark"><span class="logo" aria-hidden="true"></span><h1>BillCheck</h1></div>
+    <div class="mark"><span class="logo" aria-hidden="true"></span><h1>FairCare</h1></div>
     <p class="lead">A clickable prototype of the hospital bill checker. Tap through it the way a family member would on day 3 of an admission.</p>
     <ol class="jump" id="jump">
       <li><button data-a="jump" data-v="home"><span class="n">1</span>Your cases</button></li>
@@ -299,7 +299,7 @@ function composeMsg(){const m=MSG[S.lang];const o=openIds();return m.o+"\n\n"+o.
 
 const SCREENS={
 home(){const o=openIds().length;const chip=!S.scanned?["c-indigo","Add today's bill"]:o?["c-amber",o+" to ask"]:["c-green","Up to date"];
-return `<header class="ah home"><h2><span class="logo" aria-hidden="true"></span>BillCheck</h2><span class="av av1" aria-label="Rohan Sharma">RS</span></header>
+return `<header class="ah home"><h2><span class="logo" aria-hidden="true"></span>FairCare</h2><span class="av av1" aria-label="Rohan Sharma">RS</span></header>
 <div class="pad"><p class="hello">Welcome, Rohan</p><p class="muted">Keep every hospital bill in your family checked and explained.</p>
 <p class="sec-t">Your cases</p>
 <button class="case" data-a="go" data-v="case"><span class="case-l"><b>Papa's admission</b><span class="muted">City Care Hospital, Andheri</span><span class="faint">Admitted 9 Oct, day 3</span></span><span class="chip ${chip[0]}">${chip[1]}</span></button>

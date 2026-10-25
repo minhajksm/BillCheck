@@ -1,18 +1,18 @@
 {
   "expo": {
-    "name": "BillCheck",
-    "slug": "billcheck",
+    "name": "FairCare",
+    "slug": "faircare",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "billcheck",
+    "scheme": "faircare",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.billcheck.app"
+      "bundleIdentifier": "com.faircare.app"
     },
     "android": {
-      "package": "com.billcheck.app",
+      "package": "com.faircare.app",
       "adaptiveIcon": {
         "backgroundColor": "#2E3A8C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

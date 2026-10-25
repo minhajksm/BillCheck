@@ -82,7 +82,7 @@ def engine_options(database_url: str) -> dict[str, Any]:
     connect_args: dict[str, Any] = {
         # Names us in the host's own connection list, so a connection left
         # open is traceable to this service rather than anonymous.
-        "application_name": "billcheck-api",
+        "application_name": "faircare-api",
         # A database that cannot be reached should say so rather than hold a
         # family's upload open until something else times out.
         "connect_timeout": 10,

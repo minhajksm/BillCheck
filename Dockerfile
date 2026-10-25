@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# The BillCheck API, as Cloud Run runs it.
+# The FairCare API, as Cloud Run runs it.
 #
 # At the repository root rather than in api/ for two reasons: the price lists
 # the audit checks against live in data/samples, so the build context has to
 # be the whole repository; and `gcloud run deploy --source .` only looks for a
 # Dockerfile here. The app in app/ is built and shipped by Expo instead.
 #
-#     docker build -t billcheck-api .
+#     docker build -t faircare-api .
 #
 # The image keeps the repository's own shape -- /srv/api beside /srv/data --
 # so REFERENCE_DATA_PATH's default, "../data/samples/reference-prices.json",

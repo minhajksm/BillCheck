@@ -1,7 +1,7 @@
 [project]
-name = "billcheck-api"
+name = "faircare-api"
 version = "0.1.0"
-description = "BillCheck backend: bill upload, OCR, and audit."
+description = "FairCare backend: bill upload, OCR, and audit."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

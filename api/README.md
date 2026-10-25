@@ -1,4 +1,4 @@
-# BillCheck API
+# FairCare API
 
 FastAPI backend with PostgreSQL, managed with [uv](https://docs.astral.sh/uv/).
 
@@ -93,7 +93,7 @@ something stricter, e.g. `?sslmode=verify-full`.
 
 Supabase does not only serve Postgres. It also publishes every table in the
 `public` schema over HTTP, read with a key that client apps are meant to carry
-in the open. BillCheck does not use that API at all — the app talks to this
+in the open. FairCare does not use that API at all — the app talks to this
 service — so migration `c1d4a7f20b63` turns row level security on for all ten
 tables and writes no policies. The role that owns the tables is outside row
 level security, so this API reads and writes as before; a request arriving over
@@ -169,7 +169,7 @@ everything except MSG91's own answer.
    a template registered against your entity. MSG91's dashboard walks through
    it; approval usually takes one to two weeks.
 2. Register a template whose variable is named `otp`, e.g.
-   `Your BillCheck code is ##otp##. It expires in 5 minutes.`
+   `Your FairCare code is ##otp##. It expires in 5 minutes.`
 3. Put the auth key, template id, and sender id in `api/.env` and set
    `OTP_DELIVERY=msg91`.
 

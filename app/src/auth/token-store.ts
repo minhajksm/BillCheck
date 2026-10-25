@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const KEY = 'billcheck.session';
+const KEY = 'faircare.session';
 
 /** The session token lives in the Android Keystore / iOS Keychain. */
 export const tokenStore = {

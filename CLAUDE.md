@@ -1,4 +1,4 @@
-# BillCheck
+# FairCare
 
 A mobile app that helps Indian families check hospital bills during and after an admission. Users photograph itemized bills, the app flags likely overcharges (above MRP, duplicates, unusual quantities), and helps them ask the hospital polite, specific questions.
 
@@ -8,7 +8,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 
 - `app/`: React Native with Expo (SDK 57), TypeScript, Expo Router. Android first.
 - `api/`: Python 3.12+, FastAPI, managed with uv. Deployed as a container on Google Cloud Run, with the custom domain mapped straight to the service.
-- Database: PostgreSQL, hosted on Supabase. Every table has row level security on with no policies, because Supabase also serves the `public` schema over HTTP; nothing in BillCheck uses that API.
+- Database: PostgreSQL, hosted on Supabase. Every table has row level security on with no policies, because Supabase also serves the `public` schema over HTTP; nothing in FairCare uses that API.
 - `data/`: reference price lists (NPPA ceiling prices, CGHS rates). Anonymized samples only.
 
 ## Commands
