@@ -336,6 +336,117 @@ describe('a bill that discounts', () => {
   });
 });
 
+describe('the bill, verified', () => {
+  /** The Olive bill's sums, as the API's arithmetic reports them. */
+  function verified(overrides: Record<string, unknown>[] = []) {
+    Object.assign(server.bills[0], {
+      subtotal: 43300,
+      discount: 8300,
+      total: 35000,
+      checks: [
+        { kind: 'lines', status: 'ok', checked: 9, of: 9, positions: [] },
+        { kind: 'subtotal', status: 'ok', amount: 43300, positions: [] },
+        { kind: 'discount', status: 'ok', amount: 8300, percent: 19, uniform: true, positions: [] },
+        { kind: 'payable', status: 'ok', amount: 35000, positions: [] },
+        { kind: 'rounding', status: 'note', amount: 35000, expected: 34998, positions: [] },
+        { kind: 'paid', status: 'ok', amount: 35000, count: 3, positions: [] },
+        { kind: 'balance', status: 'ok', amount: 0, positions: [] },
+        ...overrides,
+      ],
+      payments: [
+        { date: '04/05/2025', mode: 'Cash', amount: 5000 },
+        { date: '06/05/2025', mode: 'Cash', amount: 25000 },
+        { date: '06/05/2025', mode: 'UPI', amount: 5000 },
+      ],
+      paid: 35000,
+      balance: 0,
+    });
+  }
+
+  it('says the bill adds up, and shows the checks that prove it', async () => {
+    verified();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(await screen.findByText('Everything on this bill adds up')).toBeVisible();
+    expect(screen.getByText('Checked: 9 lines · 4 totals · 3 deposits')).toBeVisible();
+    expect(screen.getByText('Each line: quantity × rate = amount')).toBeVisible();
+    expect(screen.getByText('9 of 9')).toBeVisible();
+    expect(screen.getByText('Discount, 19% on every line')).toBeVisible();
+    expect(screen.getByText('Paid in 3 deposits')).toBeVisible();
+    expect(screen.getByText('Nothing left to pay')).toBeVisible();
+  });
+
+  it('says the two rupees is rounding, and does not make it a question', async () => {
+    verified();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(
+      await screen.findByText(
+        'The line amounts come to ₹2 less than ₹35,000. That is rounding on each line, not an error.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('counts a sum that does not add up as one to check against the paper', async () => {
+    verified();
+    server.bills[0].checks = server.bills[0].checks.map((check) =>
+      check.kind === 'lines' ? { ...check, status: 'mismatch', positions: [4] } : check,
+    );
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(await screen.findByText('1 sum to check against the paper bill')).toBeVisible();
+    expect(screen.getByText('Line 4 comes to more than quantity × rate')).toBeVisible();
+    expect(screen.queryByText('Everything on this bill adds up')).toBeNull();
+  });
+
+  it('says what is still to pay', async () => {
+    verified();
+    server.bills[0].balance = 4200;
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(await screen.findByText('₹4,200 still to pay')).toBeVisible();
+  });
+
+  it('says nothing on a bill read before the checks', async () => {
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    await screen.findByText('Inj. Meropenem 1g');
+    expect(screen.queryByText('Everything on this bill adds up')).toBeNull();
+  });
+
+  it('lists the deposits as the bill prints them, and the balance', async () => {
+    verified();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await openFlags();
+
+    expect(await screen.findByText('What you paid')).toBeVisible();
+    expect(screen.getByText('04/05/2025 · Cash')).toBeVisible();
+    expect(screen.getByText('06/05/2025 · UPI')).toBeVisible();
+    expect(screen.getByText('Paid ₹35,000')).toBeVisible();
+    expect(screen.getByText('Balance ₹0')).toBeVisible();
+  });
+
+  it('shows where the money went before the discount, biggest share first', async () => {
+    verified();
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+    await openFlags();
+
+    expect(await screen.findByText('What it was for, before the discount')).toBeVisible();
+    // Medicines 17,700 of 31,000; room 6,500; consumables 6,800.
+    expect(screen.getByLabelText('Medicines 57%, Consumables 22%, Room and nursing 21%')).toBeVisible();
+  });
+
+  it('keeps the summary on a bill with nothing to ask', async () => {
+    verified();
+    server.bills[0].flags = [];
+    renderRouter(routes, { initialUrl: '/bills/b-day3' });
+
+    expect(await screen.findByText('Nothing to ask about')).toBeVisible();
+    await openFlags();
+    expect(await screen.findByText('What you paid')).toBeVisible();
+  });
+});
+
 describe('asking the billing desk', () => {
   it('offers the message in all three languages', async () => {
     renderRouter(routes, { initialUrl: '/bills/b-day3/ask' });

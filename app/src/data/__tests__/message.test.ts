@@ -19,7 +19,9 @@ describe('the message to the billing desk', () => {
 
     expect(message).toContain('Ramesh Sharma');
     expect(message).toContain('IP no. 20841');
-    expect(message).toContain('1. Inj. Meropenem 1g is billed at ₹2,950 per vial. The listed MRP for it is ₹1,840. Could you show me the MRP printed on the pack?');
+    expect(message).toContain(
+      '1. Inj. Meropenem 1g is billed at ₹2,950 per vial. The listed MRP for it is ₹1,840. Could you show me the MRP printed on the pack?',
+    );
     expect(message).toContain('2. 80 pairs of Surgical gloves are billed for one day.');
     expect(message).toContain('Please share a corrected bill or an explanation.');
   });
@@ -122,5 +124,73 @@ describe('questions the reader noticed', () => {
     const message = composeMessage(i18n.getFixedT(language), item, withReader('non_medical_item')) ?? '';
     expect(message).not.toMatch(/doesn't look like part of the treatment/);
     expect(message.length).toBeGreaterThan(40);
+  });
+});
+
+describe("sums on the bill's own figures", () => {
+  const withBillFlag = (
+    kind: string,
+    detail: Record<string, string>,
+    lineItemId: string | null = null,
+  ): Bill => {
+    const raw = structuredClone(SAMPLE_BILL) as never as { flags: unknown[] };
+    raw.flags = [
+      {
+        id: `f-${kind}`,
+        position: 1,
+        line_item_id: lineItemId,
+        kind,
+        level: 'amber',
+        status: 'open',
+        billed: 0,
+        reference_amount: 0,
+        reference_source: 'bill',
+        reference_detail: detail,
+        excess: 0,
+      },
+    ];
+    return toBill(raw as never);
+  };
+
+  it('asks about a line that comes to more than its quantity and rate', () => {
+    const message =
+      composeMessage(
+        i18n.getFixedT('en'),
+        item,
+        withBillFlag(
+          'line_math',
+          { quantity: '6', rate: '2000.00', computed: '12000.00', stated: '17700.00', difference: '5700.00' },
+          'li-5',
+        ),
+      ) ?? '';
+
+    expect(message).toContain(
+      '1. Inj. Meropenem 1g: 6 × ₹2,000 comes to ₹12,000, but the line shows ₹17,700. Could you check it?',
+    );
+  });
+
+  it('asks that every deposit is credited', () => {
+    const message =
+      composeMessage(
+        i18n.getFixedT('en'),
+        item,
+        withBillFlag('advance_not_deducted', { deposits: '35000.00', credited: '30000.00', count: '3' }),
+      ) ?? '';
+
+    expect(message).toContain('The 3 deposits listed come to ₹35,000, but the bill credits ₹30,000 as paid.');
+    expect(message).toContain('Could you check every receipt is included?');
+  });
+
+  it.each(['hi', 'mr'])('asks in %s too', (language) => {
+    const message =
+      composeMessage(
+        i18n.getFixedT(language),
+        item,
+        withBillFlag('advance_not_deducted', { due: '5000.00', expected_due: '0.00', paid: '35000.00' }),
+      ) ?? '';
+
+    expect(message).toContain('₹5,000');
+    expect(message).toContain('₹35,000');
+    expect(message).not.toMatch(/still due|balance/i);
   });
 });

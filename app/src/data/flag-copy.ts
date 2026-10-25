@@ -39,10 +39,17 @@ export type FlagCopy = {
 /** A flag the reader noticed rather than one a price list decided. */
 export const isReaderFlag = (flag: Flag): boolean => flag.referenceSource === 'reader';
 
+/**
+ * A flag the bill's own arithmetic raised: a sum on the page that asks for
+ * more than its own figures give. The reference is the bill itself.
+ */
+export const isBillFlag = (flag: Flag): boolean => flag.referenceSource === 'bill';
+
 export function flagTag(t: TFunction, flag: Flag): string {
   if (flag.status === 'corrected') return t('flags.tagCorrected');
   if (flag.status === 'explained') return t('flags.tagExplained');
   if (isReaderFlag(flag)) return t('flags.tagNoticed');
+  if (isBillFlag(flag)) return t('flags.tagSum');
   switch (flag.kind) {
     case 'above_mrp':
       return t('flags.tagAboveMrp');
@@ -92,6 +99,7 @@ export function flagCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
 function writtenCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
   const tag = flagTag(t, flag);
   if (isReaderFlag(flag)) return readerCopy(t, flag, tag, item);
+  if (isBillFlag(flag)) return billCopy(t, flag, tag, item);
 
   switch (flag.kind) {
     case 'above_mrp': {
@@ -134,6 +142,77 @@ function writtenCopy(t: TFunction, flag: Flag, item?: LineItem): FlagCopy {
     default:
       // Reader kinds return above.
       return readerCopy(t, flag, tag, item);
+  }
+}
+
+/**
+ * Copy for a sum on the bill that asks for more than its own figures give.
+ *
+ * The sum itself is certain; the figures were read off a photograph. So every
+ * one of these says to check the paper first, and none says the hospital got
+ * it wrong.
+ */
+function billCopy(t: TFunction, flag: Flag, tag: string, item?: LineItem): FlagCopy {
+  const referenceLabel = t('flags.checkedOnBill');
+  const money = (key: string) => formatINR(num(flag, key));
+
+  switch (flag.kind) {
+    case 'line_math':
+      return {
+        tag,
+        short: t('flags.shortLineMath', {
+          quantity: str(flag, 'quantity'),
+          rate: money('rate'),
+          computed: money('computed'),
+          stated: money('stated'),
+        }),
+        why: t('flags.whyLineMath', { difference: money('difference') }),
+        ask: t('flags.askLineMath'),
+        referenceLabel,
+      };
+    case 'total_mismatch':
+      return {
+        tag,
+        // With a discount, the sum that failed is the sub-total less it.
+        short: flag.referenceDetail.discount
+          ? t('flags.shortPayableMismatch', {
+              discount: money('discount'),
+              summed: money('summed'),
+              stated: money('stated'),
+            })
+          : t('flags.shortTotalMismatch', { summed: money('summed'), stated: money('stated') }),
+        why: t('flags.whyTotalMismatch', { difference: money('difference') }),
+        ask: t('flags.askTotalMismatch'),
+        referenceLabel,
+      };
+    case 'advance_not_deducted':
+      // Two sums raise it: the deposits against what the bill credits as
+      // paid, and the balance against the total less what was paid.
+      return flag.referenceDetail.deposits !== undefined
+        ? {
+            tag,
+            short: t('flags.shortDepositsNotCredited', {
+              count: num(flag, 'count'),
+              deposits: money('deposits'),
+              credited: money('credited'),
+            }),
+            why: t('flags.whyDepositsNotCredited', {
+              difference: formatINR(num(flag, 'deposits') - num(flag, 'credited')),
+            }),
+            ask: t('flags.askDepositsNotCredited'),
+            referenceLabel,
+          }
+        : {
+            tag,
+            short: t('flags.shortBalanceHigh', { due: money('due'), expectedDue: money('expected_due') }),
+            why: t('flags.whyBalanceHigh', { paid: money('paid'), expectedDue: money('expected_due') }),
+            ask: t('flags.askBalanceHigh'),
+            referenceLabel,
+          };
+    default:
+      // Nothing else is raised by the arithmetic. Should it ever be, it gets
+      // the neutral wording rather than another kind's.
+      return { ...writtenReaderCopy(t, flag, tag, item), referenceLabel };
   }
 }
 
@@ -286,5 +365,7 @@ export function flagAmountLine(t: TFunction, flag: Flag): string | null {
   const amount = formatINR(flag.excess);
   if (flag.status === 'corrected') return t('flags.recovered', { amount });
   if (flag.status === 'explained') return t('flags.explainedByHospital', { amount });
+  // The bill's own figures are not a reference anyone published.
+  if (isBillFlag(flag)) return t('flags.differenceOf', { amount });
   return t('flags.overReference', { amount });
 }

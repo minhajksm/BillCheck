@@ -28,6 +28,10 @@ export const SAMPLE_BILL = {
   subtotal: 42490,
   discount: null,
   total: 42490,
+  checks: [] as Record<string, unknown>[],
+  payments: [] as { date: string; mode: string; amount: number }[],
+  paid: null as number | null,
+  balance: null as number | null,
   line_items: [
     {
       id: 'li-1',

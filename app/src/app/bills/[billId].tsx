@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import type { TFunction } from 'i18next';
 import { useCallback, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +19,7 @@ import { useToast } from '@/components/toast';
 import { Gutter, Radius, type Palette } from '@/constants/theme';
 import { readBill, readCase, setFlagStatus } from '@/data/cases-api';
 import { flagAmountLine, flagCopy, flagTag } from '@/data/flag-copy';
-import type { Bill, Case, Flag, LineCategory, LineItem } from '@/data/types';
+import type { Bill, Case, Check, Flag, LineCategory, LineItem, Payment } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
 import { formatDayMonth } from '@/i18n/dates';
@@ -94,31 +95,36 @@ function Report({
   return (
     <Screen header={<AppHeader title={t('report.title')} showBack />}>
       <ReportHeader bill={bill} item={item} overcharge={overcharge} recovered={recovered} />
+      <BillChecks bill={bill} />
 
-      {bill.flags.length > 0 ? (
-        <Segmented
-          options={[
-            { value: 'bill', label: t('report.tabBill') },
-            { value: 'flags', label: t('report.tabSummary') },
-          ]}
-          value={view}
-          onChange={setView}
-        />
-      ) : null}
+      {/* Both views on every bill: a bill with nothing to ask still has a
+          money story, and that is most of what a clean bill has to say. */}
+      <Segmented
+        options={[
+          { value: 'bill', label: t('report.tabBill') },
+          { value: 'flags', label: t('report.tabSummary') },
+        ]}
+        value={view}
+        onChange={setView}
+      />
 
-      {bill.flags.length === 0 ? (
-        <Banner
-          tone="green"
-          icon="check"
-          title={t('report.nothingFlagged')}
-          body={t('report.nothingFlaggedBody')}
-        />
-      ) : view === 'bill' ? (
-        <MarkedBill bill={bill} onOpen={setOpenFlag} />
+      {view === 'bill' ? (
+        <>
+          {bill.flags.length === 0 ? (
+            <Banner
+              tone="green"
+              icon="check"
+              title={t('report.nothingFlagged')}
+              body={t('report.nothingFlaggedBody')}
+            />
+          ) : null}
+          <MarkedBill bill={bill} onOpen={setOpenFlag} />
+        </>
       ) : (
         <>
           <WhereItWent bill={bill} />
-          <FlagList bill={bill} items={items} onOpen={setOpenFlag} />
+          <WhatYouPaid bill={bill} />
+          {bill.flags.length > 0 ? <FlagList bill={bill} items={items} onOpen={setOpenFlag} /> : null}
         </>
       )}
 
@@ -297,6 +303,230 @@ function SeverityBar({ shape }: { shape: Shape }) {
   );
 }
 
+/** The totals among the checks, for "Checked: 9 lines, 4 totals, 3 deposits". */
+const TOTAL_KINDS: Check['kind'][] = ['subtotal', 'discount', 'payable', 'balance'];
+
+/**
+ * The bill's own arithmetic, check by check.
+ *
+ * Every bill gets a result here, whatever else it has: the sums on the page
+ * need nothing but the page, so they are checked in code and the ticks are
+ * the proof. A sum that asks for more than its figures give is also a flag
+ * below; here it is one row among the rest. Rounding is said out loud as
+ * rounding, so a family who adds up the net column themselves is not left
+ * wondering about the two rupees.
+ */
+function BillChecks({ bill }: { bill: Bill }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  if (bill.checks.length === 0) return null;
+
+  const byKind = new Map(bill.checks.map((check) => [check.kind, check]));
+  const mismatches = bill.checks.filter((check) => check.status === 'mismatch').length;
+  const lines = byKind.get('lines');
+  const paid = byKind.get('paid');
+  const totals = bill.checks.filter((check) => TOTAL_KINDS.includes(check.kind)).length;
+  const parts = [
+    lines?.checked ? t('report.checks.partLines', { count: lines.checked }) : null,
+    totals ? t('report.checks.partTotals', { count: totals }) : null,
+    paid?.count ? t('report.checks.partDeposits', { count: paid.count }) : null,
+  ].filter((part): part is string => part !== null);
+  // With no discount and no sub-total, the lines were checked against the total.
+  const discounted = byKind.has('discount') || byKind.has('payable');
+  const balance = byKind.get('balance');
+
+  return (
+    <Card style={styles.checks}>
+      <View style={styles.checksHero}>
+        <View
+          style={[
+            styles.checksBadge,
+            { backgroundColor: mismatches ? palette.marigoldSoft : palette.greenSoft },
+          ]}>
+          <Icon
+            name={mismatches ? 'alert-circle' : 'check'}
+            size={20}
+            color={mismatches ? 'marigoldInk' : 'green'}
+          />
+        </View>
+        <View style={styles.checksHeroText}>
+          <Text weight="bold" accessibilityRole="header">
+            {mismatches ? t('report.checks.toCheck', { count: mismatches }) : t('report.checks.addsUp')}
+          </Text>
+          {parts.length > 0 ? (
+            <Text variant="small" color="ink2">
+              {t('report.checks.checkedList', { list: parts.join(' · ') })}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={[styles.checkRows, { borderTopColor: palette.line }]}>
+        {bill.checks
+          .filter((check) => check.kind !== 'balance' || check.status === 'mismatch')
+          .map((check) => (
+            <CheckRow key={check.kind} check={check} discounted={discounted} />
+          ))}
+      </View>
+
+      {balance?.status === 'ok' && bill.balance !== undefined ? (
+        <View
+          style={[
+            styles.balanceStrip,
+            { backgroundColor: bill.balance > 0 ? palette.soft : palette.greenSoft },
+          ]}>
+          <Text weight="semibold" color={bill.balance > 0 ? 'ink' : 'green'}>
+            {bill.balance > 0
+              ? t('report.checks.stillToPay', { amount: formatINR(bill.balance) })
+              : t('report.checks.nothingToPay')}
+          </Text>
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+/** What one check says, and the figure beside it. */
+function checkWords(t: TFunction, check: Check, discounted: boolean): { label: string; figure?: string } {
+  const money = (value?: number) => formatINR(value ?? 0);
+  const difference = money((check.printed ?? 0) - (check.expected ?? 0));
+  const mismatch = check.status === 'mismatch';
+
+  switch (check.kind) {
+    case 'lines':
+      return mismatch
+        ? {
+            label: t('report.checks.linesOver', {
+              count: check.positions.length,
+              lines: check.positions.join(', '),
+            }),
+          }
+        : {
+            label: t('report.checks.linesOk'),
+            figure: t('report.checks.linesFigure', { checked: check.checked, of: check.of }),
+          };
+    case 'subtotal':
+      return mismatch
+        ? {
+            label: t(discounted ? 'report.checks.subtotalMismatch' : 'report.checks.totalMismatch', {
+              difference,
+            }),
+            figure: money(check.printed),
+          }
+        : {
+            label: t(discounted ? 'report.checks.subtotalOk' : 'report.checks.totalOk'),
+            figure: money(check.amount),
+          };
+    case 'discount':
+      return {
+        label: t(check.uniform ? 'report.checks.discountUniform' : 'report.checks.discount', {
+          percent: check.percent,
+        }),
+        figure: t('report.lessAmount', { amount: money(check.amount) }),
+      };
+    case 'payable':
+      return mismatch
+        ? { label: t('report.checks.payableMismatch', { difference }), figure: money(check.printed) }
+        : { label: t('report.checks.payableOk'), figure: money(check.amount) };
+    case 'paid':
+      return mismatch
+        ? {
+            label: t('report.checks.paidMismatch', {
+              expected: money(check.expected),
+              printed: money(check.printed),
+            }),
+          }
+        : { label: t('report.checks.paidOk', { count: check.count ?? 0 }), figure: money(check.amount) };
+    case 'balance':
+      return {
+        label: t('report.checks.balanceMismatch', {
+          expected: money(check.expected),
+          printed: money(check.printed),
+        }),
+      };
+    case 'rounding': {
+      const gap = (check.amount ?? 0) - (check.expected ?? 0);
+      return {
+        label: t(gap > 0 ? 'report.checks.roundingLess' : 'report.checks.roundingMore', {
+          difference: formatINR(Math.abs(gap)),
+          amount: money(check.amount),
+        }),
+      };
+    }
+  }
+}
+
+function CheckRow({ check, discounted }: { check: Check; discounted: boolean }) {
+  const { t } = useTranslation();
+  const { label, figure } = checkWords(t, check, discounted);
+  const icon = check.status === 'ok' ? 'check' : check.status === 'mismatch' ? 'alert-circle' : 'info';
+  const color = check.status === 'ok' ? 'green' : check.status === 'mismatch' ? 'marigoldInk' : 'ink3';
+
+  return (
+    <View style={styles.checkRow}>
+      <View style={styles.checkIcon}>
+        <Icon name={icon} size={16} color={color} />
+      </View>
+      <Text variant="small" color={check.status === 'note' ? 'ink2' : 'ink'} style={styles.checkLabel}>
+        {label}
+      </Text>
+      {figure ? (
+        <Text variant="small" weight="semibold" style={styles.figure}>
+          {figure}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The deposits, as the bill lists them, and what is left.
+ *
+ * The part of a hospital stay families lose track of: cash paid at the desk
+ * at odd hours, a UPI transfer from a cousin. The date and the mode are the
+ * bill's own words, shown as printed.
+ */
+function WhatYouPaid({ bill }: { bill: Bill }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  if (bill.payments.length === 0) return null;
+
+  return (
+    <Card style={styles.whereItWent}>
+      <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
+        {t('report.whatYouPaid')}
+      </Text>
+      <View style={styles.wentRows}>
+        {bill.payments.map((payment, index) => (
+          <View key={index} style={styles.wentRow}>
+            <Text color="ink2" style={styles.wentLabel}>
+              {paymentLabel(t, payment)}
+            </Text>
+            <Text weight="semibold" style={styles.figure}>
+              {formatINR(payment.amount)}
+            </Text>
+          </View>
+        ))}
+      </View>
+      {bill.paid !== undefined ? (
+        <View style={[styles.paidFoot, { borderTopColor: palette.line }]}>
+          <Text weight="bold">{t('report.paidTotal', { amount: formatINR(bill.paid) })}</Text>
+          {bill.balance !== undefined ? (
+            <Text weight="bold" color={bill.balance > 0 ? 'ink' : 'green'}>
+              {t('report.balanceLine', { amount: formatINR(bill.balance) })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </Card>
+  );
+}
+
+function paymentLabel(t: TFunction, payment: Payment): string {
+  const words = [payment.date, payment.mode].map((word) => word.trim()).filter(Boolean);
+  return words.length > 0 ? words.join(' · ') : t('report.deposit');
+}
+
 function LegendItem({ swatch, color, label }: { swatch: string; color: keyof Palette; label: string }) {
   return (
     <View style={styles.legendItem}>
@@ -389,19 +619,22 @@ const CATEGORY_ORDER: LineCategory[] = [
  * flagged, and it is the same figure the reader's own structural check
  * measures. Only categories the bill actually has appear.
  */
-function categoryTotals(rows: LineItem[]): { category: LineCategory; total: number }[] {
-  const totals = new Map<LineCategory, number>();
+function categoryTotals(rows: LineItem[]): { category: LineCategory; total: number; lines: number }[] {
+  const totals = new Map<LineCategory, { total: number; lines: number }>();
   for (const row of rows) {
     // A category this build doesn't know about counts under the catch-all
     // rather than going missing: the strip has to add up to the bill.
     const category = CATEGORY_ORDER.includes(row.category) ? row.category : 'unclassified';
-    totals.set(category, (totals.get(category) ?? 0) + row.amount);
+    const sum = totals.get(category) ?? { total: 0, lines: 0 };
+    totals.set(category, { total: sum.total + row.amount, lines: sum.lines + 1 });
   }
-  return CATEGORY_ORDER.filter((category) => totals.has(category)).map((category) => ({
-    category,
-    total: totals.get(category) ?? 0,
-  }));
+  return CATEGORY_ORDER.filter((category) => totals.has(category))
+    .map((category) => ({ category, total: 0, lines: 0, ...totals.get(category) }))
+    .sort((a, b) => b.total - a.total);
 }
+
+/** Biggest share darkest, one hue: the categories are kinds, not levels of concern. */
+const shade = (index: number) => Math.max(0.18, 1 - index * 0.24);
 
 function MarkedBill({ bill, onOpen }: { bill: Bill; onOpen: (flag: Flag) => void }) {
   const palette = usePalette();
@@ -519,19 +752,49 @@ function WhereItWent({ bill }: { bill: Bill }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const totals = categoryTotals(bill.lineItems);
+  const sum = totals.reduce((all, group) => all + group.total, 0);
+  const percent = (total: number) => (sum > 0 ? Math.round((total * 100) / sum) : 0);
 
   return (
     <Card style={styles.whereItWent}>
       <Text variant="small" weight="semibold" color="ink2" accessibilityRole="header">
-        {t('report.whereItWent')}
+        {t(bill.discount !== undefined ? 'report.whereItWentGross' : 'report.whereItWent')}
       </Text>
+      {sum > 0 ? (
+        <View
+          accessibilityRole="image"
+          accessibilityLabel={totals
+            .map((group) =>
+              t('report.categoryShare', {
+                category: t(`report.categories.${group.category}`),
+                percent: percent(group.total),
+              }),
+            )
+            .join(', ')}
+          style={styles.shareBar}>
+          {totals.map((group, index) =>
+            group.total > 0 ? (
+              <View
+                key={group.category}
+                style={{ flex: group.total, backgroundColor: palette.indigo, opacity: shade(index) }}
+              />
+            ) : null,
+          )}
+        </View>
+      ) : null}
       <View style={styles.wentRows}>
-        {totals.map((group) => (
+        {totals.map((group, index) => (
           <View key={group.category} style={styles.wentRow}>
+            <View style={[styles.shareSwatch, { backgroundColor: palette.indigo, opacity: shade(index) }]} />
             <Text color="ink2" style={styles.wentLabel}>
               {t(`report.categories.${group.category}`)}
             </Text>
-            <Text weight="semibold">{formatINR(group.total)}</Text>
+            <Text variant="small" color="ink3">
+              {t('report.categoryLines', { count: group.lines })}
+            </Text>
+            <Text weight="semibold" style={styles.figure}>
+              {formatINR(group.total)}
+            </Text>
           </View>
         ))}
       </View>
@@ -726,6 +989,38 @@ const styles = StyleSheet.create({
   },
   billNumber: { width: 20, textAlign: 'right' },
   billName: { flex: 1 },
+  checks: { padding: 16, marginBottom: 14 },
+  checksHero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checksBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  checksHeroText: { flex: 1 },
+  checkRows: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, gap: 8 },
+  checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  checkIcon: { paddingTop: 2 },
+  checkLabel: { flex: 1 },
+  figure: { fontVariant: ['tabular-nums'] },
+  balanceStrip: {
+    marginTop: 12,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  paidFoot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  shareBar: {
+    flexDirection: 'row',
+    gap: 2,
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 10,
+  },
+  shareSwatch: { width: 9, height: 9, borderRadius: 2, alignSelf: 'center' },
   whereItWent: { padding: 14, marginBottom: 14 },
   wentRows: { marginTop: 8, gap: 5 },
   wentTotal: { marginTop: 10, borderTopWidth: 1 },

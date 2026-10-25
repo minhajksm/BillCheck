@@ -11,7 +11,7 @@
 
 import type { TFunction } from 'i18next';
 
-import { isReaderFlag, unitWord } from './flag-copy';
+import { isBillFlag, isReaderFlag, unitWord } from './flag-copy';
 import type { Bill, Case, Flag, LineItem } from './types';
 import { formatINR } from '@/lib/format';
 
@@ -25,6 +25,7 @@ export function openFlags(bill: Bill): Flag[] {
 function line(t: TFunction, flag: Flag, item: LineItem | undefined): string {
   const name = item?.name ?? '';
   if (isReaderFlag(flag)) return readerLine(t, flag, name, item);
+  if (isBillFlag(flag)) return billLine(t, flag, name, item);
   switch (flag.kind) {
     case 'above_mrp':
       return t(flag.referenceSource === 'nppa' ? 'message.lineAboveMrpNppa' : 'message.lineAboveMrp', {
@@ -44,6 +45,46 @@ function line(t: TFunction, flag: Flag, item: LineItem | undefined): string {
         quantity: str(flag, 'quantity'),
         unit: unitWord(t, str(flag, 'unit')),
       });
+    default:
+      return readerLine(t, flag, name, item);
+  }
+}
+
+/**
+ * A line for a sum on the bill. It says what the bill's own figures give and
+ * what the bill shows, and asks.
+ */
+function billLine(t: TFunction, flag: Flag, name: string, item: LineItem | undefined): string {
+  const money = (key: string) => formatINR(num(flag, key));
+  switch (flag.kind) {
+    case 'line_math':
+      return t('message.lineLineMath', {
+        name,
+        quantity: str(flag, 'quantity'),
+        rate: money('rate'),
+        computed: money('computed'),
+        stated: money('stated'),
+      });
+    case 'total_mismatch':
+      return flag.referenceDetail.discount
+        ? t('message.linePayableMismatch', {
+            discount: money('discount'),
+            summed: money('summed'),
+            stated: money('stated'),
+          })
+        : t('message.lineTotalMismatch', { summed: money('summed'), stated: money('stated') });
+    case 'advance_not_deducted':
+      return flag.referenceDetail.deposits !== undefined
+        ? t('message.lineDepositsNotCredited', {
+            count: num(flag, 'count'),
+            deposits: money('deposits'),
+            credited: money('credited'),
+          })
+        : t('message.lineBalanceHigh', {
+            due: money('due'),
+            paid: money('paid'),
+            expectedDue: money('expected_due'),
+          });
     default:
       return readerLine(t, flag, name, item);
   }
@@ -86,7 +127,8 @@ export function composeMessage(t: TFunction, item: Case, bill: Bill): string | n
 
   const items = new Map(bill.lineItems.map((row) => [row.id, row]));
   const numbered = open.map(
-    (flag, index) => `${index + 1}. ${line(t, flag, flag.lineItemId ? items.get(flag.lineItemId) : undefined)}`,
+    (flag, index) =>
+      `${index + 1}. ${line(t, flag, flag.lineItemId ? items.get(flag.lineItemId) : undefined)}`,
   );
 
   return [
