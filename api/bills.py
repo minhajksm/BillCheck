@@ -26,7 +26,7 @@ from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, CheckOut, FlagOut, FlagUpdate, LineItemOut, PaymentOut
-from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
+from ocr import BillPage, OcrError, OcrProvider, WrongDocument, get_ocr_provider, to_decimal
 from printed_patient import printed
 from references import ReferenceData, get_reference_data, parse_bill_date
 from review import Reviewed, flags_from_findings, review_findings
@@ -57,6 +57,7 @@ ERRORS = {
     "no_pages": "Add at least one page of the bill.",
     "too_many_pages": f"A bill can have up to {MAX_PAGES} pages.",
     "unreadable_bill": "This bill couldn't be read. Try again in better light, one page at a time.",
+    "not_a_bill": "This doesn't look like a hospital bill.",
     "upload_limit": "That's a lot of bills for one day. Try again tomorrow.",
 }
 
@@ -479,6 +480,14 @@ async def read_pages(
         # blocking call. Run on the event loop, it would stall every other
         # request (sign-ins, other families' cases) until it finished.
         return await run_in_threadpool(ocr.read_bill, images)
+    except WrongDocument as exc:
+        # Readable, and not a bill. Retaking it won't help, so the family is
+        # told what it looks like instead.
+        logger.warning("Not a bill, for case %s: %s", case_id or "(new)", exc)
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={"code": "not_a_bill", "message": ERRORS["not_a_bill"], "document": exc.document},
+        ) from exc
     except OcrError as exc:
         # The family is told one thing -- try again in better light -- because
         # there is nothing useful they can do with the rest. Whoever is running

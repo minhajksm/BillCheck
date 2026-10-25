@@ -150,8 +150,12 @@ about them. An empty "findings" list is the right answer for a clean bill,
 and a finding that reports no discrepancy is worse than no finding at all --
 a family reads it as something to ask about.
 
-If the document is not a hospital bill, or is too degraded to read, return
-{"error": "...", "needs_human_review": true} and stop.
+If the document is not a hospital bill, return
+{"error": "not_a_bill", "document": "...", "needs_human_review": true} and
+stop, where "document" is the title the document prints for itself, as
+printed (for example "Discharge Summary"), or empty if it prints none. If it
+is too degraded to read, return
+{"error": "unreadable", "needs_human_review": true} and stop.
 """
 
 # Which prompt a bill was read by, short enough to put in a column and exact

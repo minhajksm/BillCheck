@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/auth/auth-context';
 import { AppHeader } from '@/components/app-header';
 import { AddPagesButton } from '@/components/add-pages';
+import { Banner } from '@/components/banner';
 import { Button } from '@/components/button';
 import { PagePreview } from '@/components/page-preview';
 import { ReadingBill } from '@/components/reading-bill';
@@ -15,7 +16,7 @@ import { useToast } from '@/components/toast';
 import { Gutter } from '@/constants/theme';
 import { checkFirstBill, uploadBill } from '@/data/cases-api';
 import { takeStagedPages } from '@/data/page-inbox';
-import { scanErrorMessage } from '@/data/scan-errors';
+import { scanErrorMessage, scanErrorTitle } from '@/data/scan-errors';
 import { MAX_PAGES, usePagePicker } from '@/hooks/use-page-picker';
 import { usePalette } from '@/hooks/use-palette';
 
@@ -47,6 +48,8 @@ export default function ScanScreen() {
   // How much of the upload has gone. The waiting screen's first step is the
   // one thing on it that is measured rather than estimated.
   const [sent, setSent] = useState(0);
+  // Why the last check failed, shown until the pages change.
+  const [failure, setFailure] = useState<{ title: string; body: string } | null>(null);
 
   if (state.status !== 'signedIn') return null;
   const token = state.token;
@@ -59,6 +62,7 @@ export default function ScanScreen() {
       return;
     }
     setSent(0);
+    setFailure(null);
     setChecking(true);
     try {
       const bill = caseId
@@ -73,7 +77,7 @@ export default function ScanScreen() {
     } catch (error) {
       // The pages stay, so a retry doesn't mean photographing them again.
       setChecking(false);
-      toast(scanErrorMessage(t, error, MAX_PAGES));
+      setFailure({ title: scanErrorTitle(t, error, 'bill'), body: scanErrorMessage(t, error, MAX_PAGES) });
     }
   };
 
@@ -94,6 +98,13 @@ export default function ScanScreen() {
       <AppHeader title={caseId ? t('scan.title') : t('scan.titleFirst')} showBack />
 
       <ScrollView contentContainerStyle={styles.body}>
+        {/* Stays until the pages change, unlike a toast: a family reading
+            "this looks like a scan report" needs time to read where it goes. */}
+        {failure ? (
+          <View style={styles.failure}>
+            <Banner tone="amber" icon="alert-circle" title={failure.title} body={failure.body} />
+          </View>
+        ) : null}
         <Text color="ink2" style={styles.hint}>
           {pages.length > 0
             ? t('scan.hintCaptured', { count: pages.length })
@@ -109,7 +120,10 @@ export default function ScanScreen() {
               page={page}
               number={index + 1}
               alone={pages.length === 1}
-              onRemove={() => picker.removePage(index)}
+              onRemove={() => {
+                setFailure(null);
+                picker.removePage(index);
+              }}
             />
           ))}
         </View>
@@ -125,6 +139,7 @@ export default function ScanScreen() {
           variant={ready ? 'secondary' : 'primary'}
           label={pages.length > 0 ? t('scan.addAnotherPage') : t('scan.addPages')}
           picker={picker}
+          onPicked={() => setFailure(null)}
         />
       </View>
     </SafeAreaView>
@@ -133,6 +148,7 @@ export default function ScanScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  failure: { marginTop: 14 },
   body: { paddingHorizontal: Gutter, paddingBottom: 18 },
   hint: { textAlign: 'center', marginTop: 14 },
   thumbs: {

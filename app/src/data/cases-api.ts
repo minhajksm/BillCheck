@@ -388,9 +388,11 @@ export async function sendPages(
         data = null;
       }
       if (request.status < 200 || request.status >= 300) {
-        const detail = (data as { detail?: { code?: unknown } } | null)?.detail;
+        const detail = (data as { detail?: { code?: unknown; document?: unknown } } | null)?.detail;
         const code = typeof detail?.code === 'string' ? detail.code : 'unknown';
-        reject(new ApiError(code as ApiErrorCode, request.status));
+        const document =
+          typeof detail?.document === 'string' && detail.document ? detail.document : undefined;
+        reject(new ApiError(code as ApiErrorCode, request.status, undefined, document));
         return;
       }
       resolve(data);

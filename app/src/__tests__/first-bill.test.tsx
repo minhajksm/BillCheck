@@ -323,6 +323,28 @@ describe('checking a bill from the home screen', () => {
   });
 });
 
+describe('a page that is not a hospital bill', () => {
+  it('says what it looks like, where it belongs, and keeps the pages', async () => {
+    mockCamera.mockResolvedValue(PICKED);
+    const server = installFakeApi();
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    server.failUpload = 'not_a_bill';
+    server.failUploadDocument = 'Complete Blood Count';
+
+    renderRouter(routes, { initialUrl: '/' });
+    fireEvent.press(await screen.findByText('Scan or upload bill'));
+    fireEvent.press(await screen.findByText('Take a photo'));
+    fireEvent.press(await screen.findByText('Check bill'));
+
+    expect(await screen.findByText("This doesn't look like a hospital bill")).toBeVisible();
+    expect(screen.getByText(/It looks like “Complete Blood Count”/)).toBeVisible();
+    expect(screen.getByText(/use “Scan or upload report” instead/)).toBeVisible();
+    expect(screen.getByText('Check bill')).toBeVisible();
+  });
+});
+
 describe('one button for every way a page arrives', () => {
   it("offers the camera, the gallery and the phone's files after one tap", async () => {
     renderRouter(routes, { initialUrl: '/' });
