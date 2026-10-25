@@ -10,6 +10,20 @@ export type Follower = {
 /** Whose an admission or a report is, for a heading. */
 export type MemberRef = { id: string; name: string };
 
+/**
+ * Who an unfiled scan is probably about, from what the page printed. Each
+ * field only where the page printed one that holds up; `age` is the printed
+ * age, a hint, never turned into a date of birth.
+ */
+export type SuggestedMember = {
+  name: string;
+  dateOfBirth?: string;
+  age?: number;
+  phone?: string;
+  email?: string;
+  address?: string;
+};
+
 export type DailyBill = {
   id: string;
   date: string;
@@ -31,6 +45,8 @@ export type Case = {
   closedOn?: string;
   /** Whose admission it is. Missing only between a bill being read and the family saying. */
   member?: MemberRef;
+  /** While `member` is missing: who the bill says it is about. */
+  suggestedMember?: SuggestedMember;
   /** Whether you started this case. Only you can delete it. */
   isOwner: boolean;
   /** Oldest first. */

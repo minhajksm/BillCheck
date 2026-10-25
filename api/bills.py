@@ -27,6 +27,7 @@ from cases import load_case
 from db import india_today, utcnow
 from models import BillOut, CheckOut, FlagOut, FlagUpdate, LineItemOut, PaymentOut
 from ocr import BillPage, OcrError, OcrProvider, get_ocr_provider, to_decimal
+from printed_patient import printed
 from references import ReferenceData, get_reference_data, parse_bill_date
 from review import Reviewed, flags_from_findings, review_findings
 from settings import get_settings
@@ -438,6 +439,16 @@ def case_from_analysis(
         admitted_on=admitted_on,
         closed_on=closed_on(header, admitted_on),
         member_id=member_id,
+        # Kept only while nobody has said whose bill it is, to offer then.
+        printed_patient=None
+        if member_id is not None
+        else printed(
+            age=header.patient_age,
+            dob=header.patient_dob,
+            phone=header.patient_phone,
+            email=header.patient_email,
+            address=header.patient_address,
+        ),
         created_by=user_id,
     )
     return case

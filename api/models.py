@@ -192,6 +192,22 @@ class DailyBillOut(BaseModel):
     open_flag_count: int
 
 
+class SuggestedMember(BaseModel):
+    """Who an unfiled scan is probably about, from what the page printed.
+
+    Each field only where the page printed one that holds up: a real date of
+    birth, an Indian mobile, a valid email. `age` is the age the page printed,
+    offered as a hint and never turned into a date of birth.
+    """
+
+    name: str
+    date_of_birth: date | None = None
+    age: int | None = None
+    phone: str | None = None
+    email: str | None = None
+    address: str | None = None
+
+
 class CaseOut(BaseModel):
     id: uuid.UUID
     title: str
@@ -205,6 +221,8 @@ class CaseOut(BaseModel):
     closed_on: date | None
     member: MemberRef | None
     """Null until the family says whose admission it is. See tables.Case."""
+    suggested_member: SuggestedMember | None = None
+    """Only while `member` is null, and only where the bill printed something."""
     # Whether the caller is the one who started it. Only they can delete a case,
     # since it takes the bills away from everyone following the member.
     is_owner: bool
@@ -340,6 +358,8 @@ class LabReportOut(BaseModel):
     id: uuid.UUID
     member: MemberRef | None
     """Null until the family says whose report it is."""
+    suggested_member: SuggestedMember | None = None
+    """Only while `member` is null, and only where the report printed something."""
     lab_name: str
     patient_name: str
     report_date: str
@@ -460,6 +480,15 @@ class MemberOut(MemberDetails):
     lab_reports: list[LabReportSummaryOut]
 
 
+class FiledDetails(BaseModel):
+    """Details accepted from the page while filing it. Checked as on a member."""
+
+    date_of_birth: BirthDate = None
+    phone: OptionalMobile = None
+    email: OptionalEmail = None
+    address: OptionalAddress = None
+
+
 class FileUnder(BaseModel):
     """Whose a bill or a report is: someone already there, or someone new.
 
@@ -469,6 +498,9 @@ class FileUnder(BaseModel):
 
     member_id: uuid.UUID | None = None
     new_member_name: MemberName | None = None
+    details: FiledDetails | None = None
+    """For someone new, their details. For someone already there, only the
+    fields they don't have yet are filled in: nothing they have is replaced."""
 
     @model_validator(mode="after")
     def _exactly_one(self) -> Self:

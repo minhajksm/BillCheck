@@ -74,7 +74,12 @@ class OcrProvider(Protocol):
 # laboratory. One result of each kind the report screen has to show: below
 # its range, above it, within it, and a text result with nothing to compare.
 STUB_LAB = LabAnalysis(
-    report=LabHeader(lab_name="Sample Diagnostics", patient_name="TEST PATIENT", report_date="06/05/2025"),
+    report=LabHeader(
+        lab_name="Sample Diagnostics",
+        patient_name="TEST PATIENT",
+        report_date="06/05/2025",
+        patient_age="45 Y",
+    ),
     tests=[
         LabTest(
             name="Haemoglobin",
@@ -241,6 +246,10 @@ class StubOcr:
                 discount=None,
                 total=total,
                 patient_name="Ramesh Sharma",
+                # Illustrative, like the rest of the stub: no real patient.
+                patient_age="68 Yrs",
+                patient_phone="98765 43210",
+                patient_address="12 Example Road, Andheri, Mumbai 400058",
                 ip_number="IP/2026/4417",
                 pages_processed=len(pages),
                 extraction_confidence=0.9,

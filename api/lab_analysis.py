@@ -35,6 +35,13 @@ class LabHeader(BaseModel):
     lab_name: Text = ""
     patient_name: Text = ""
     report_date: Text = ""
+    # The patient's own details as printed, offered when the report is filed.
+    # See printed_patient.py.
+    patient_age: Text = ""
+    patient_dob: Text = ""
+    patient_phone: Text = ""
+    patient_email: Text = ""
+    patient_address: Text = ""
 
 
 class LabTest(BaseModel):

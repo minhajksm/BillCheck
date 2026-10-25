@@ -31,6 +31,7 @@ from lab_analysis import LabAnalysis, recheck
 from lab_prompt import PROMPT_DIGEST
 from models import FileUnder, LabConsent, LabReportOut, LabReportSummaryOut, LabTestOut, MemberRef
 from ocr import OcrError, OcrProvider, get_ocr_provider
+from printed_patient import printed, suggestion
 from settings import get_settings
 from tables import LabReport, MemberFollower, User
 
@@ -69,6 +70,9 @@ def report_out(report: LabReport) -> LabReportOut:
     return LabReportOut(
         id=report.id,
         member=member_ref(report),
+        suggested_member=None
+        if report.member_id
+        else suggestion(report.printed_patient, report.patient_name),
         lab_name=report.lab_name,
         patient_name=report.patient_name,
         report_date=report.report_date,
@@ -176,6 +180,16 @@ async def upload_lab_report(
     report = LabReport(
         user_id=user.id,
         member_id=member_id,
+        # As for a bill: kept only while nobody has said whose report it is.
+        printed_patient=None
+        if member_id is not None
+        else printed(
+            age=header.patient_age,
+            dob=header.patient_dob,
+            phone=header.patient_phone,
+            email=header.patient_email,
+            address=header.patient_address,
+        ),
         lab_name=header.lab_name[:200],
         patient_name=header.patient_name[:80],
         report_date=header.report_date[:40],
@@ -233,6 +247,7 @@ def file_lab_report(report_id: uuid.UUID, body: FileUnder, db: Db, user: Current
     report = load_report(db, report_id, user)
     member = member_to_file_under(db, body, user)
     report.member_id = member.id
+    report.printed_patient = None
     db.commit()
     db.refresh(report)
     return report_out(report)

@@ -15,6 +15,7 @@ from access import can_see, load_member, member_to_file_under
 from auth import CurrentUser, Db
 from db import india_today
 from models import CaseCreate, CaseOut, CaseUpdate, DailyBillOut, FileUnder, MemberRef
+from printed_patient import suggestion
 from stay import recheck_stay
 from tables import Bill, Case, Flag, LineItem, MemberFollower, User
 
@@ -115,6 +116,7 @@ def case_out(db: Session, case: Case, user: User) -> CaseOut:
         admitted_on=case.admitted_on,
         closed_on=case.closed_on,
         member=MemberRef(id=case.member.id, name=case.member.name) if case.member else None,
+        suggested_member=None if case.member_id else suggestion(case.printed_patient, case.patient_name),
         is_owner=case.created_by == user.id,
         bills=[
             DailyBillOut(
@@ -237,6 +239,8 @@ def file_case(case_id: uuid.UUID, body: FileUnder, db: Db, user: CurrentUser) ->
     case = load_case(db, case_id, user)
     member = member_to_file_under(db, body, user)
     case.member_id = member.id
+    # Accepted onto the member or not, the page's copy has done its job.
+    case.printed_patient = None
     db.commit()
     db.refresh(case)
     return case_out(db, case, user)

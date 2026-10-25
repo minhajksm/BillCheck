@@ -1,7 +1,15 @@
 import { apiFetch } from '@/lib/api';
 
-import { fileUnderBody, sendPages, type FileUnder, type OnProgress, type ScannedPage } from './cases-api';
-import type { MemberRef } from './types';
+import {
+  fileUnderBody,
+  sendPages,
+  toSuggested,
+  type ApiSuggestedMember,
+  type FileUnder,
+  type OnProgress,
+  type ScannedPage,
+} from './cases-api';
+import type { MemberRef, SuggestedMember } from './types';
 
 /** Against the range the report itself prints, and nothing else. */
 export type LabStatus = 'low' | 'high' | 'in_range' | 'no_range';
@@ -23,6 +31,8 @@ export type LabReport = {
   id: string;
   /** Missing until the family says whose report it is. */
   member?: MemberRef;
+  /** While `member` is missing: who the report says it is about. */
+  suggestedMember?: SuggestedMember;
   labName: string;
   patientName: string;
   /** As printed. Never parsed: lab reports print dates every way there is. */
@@ -58,6 +68,7 @@ type ApiLabTest = {
 type ApiLabReport = {
   id: string;
   member: MemberRef | null;
+  suggested_member?: ApiSuggestedMember | null;
   lab_name: string;
   patient_name: string;
   report_date: string;
@@ -83,6 +94,7 @@ export type ApiLabReportRow = {
 export const toLabReport = (r: ApiLabReport): LabReport => ({
   id: r.id,
   member: r.member ?? undefined,
+  suggestedMember: toSuggested(r.suggested_member),
   labName: r.lab_name,
   patientName: r.patient_name,
   reportDate: r.report_date,

@@ -65,13 +65,21 @@ OUTPUT
 Return a single JSON object and nothing else:
 
 {
-  "report": { "lab_name", "patient_name", "report_date" },
+  "report": { "lab_name", "patient_name", "report_date", "patient_age",
+              "patient_dob", "patient_phone", "patient_email",
+              "patient_address" },
   "tests": [ { "name", "value", "unit", "range", "status",
                "explanation_en", "explanation_hi" } ],
   "summary_en", "summary_hi",
   "questions_en": [ ... ], "questions_hi": [ ... ],
   "urgent": true|false
 }
+
+"patient_age", "patient_dob", "patient_phone", "patient_email" and
+"patient_address" are the patient's own details as the report prints them
+(the age as written, e.g. "68 Y"), each empty where it is not printed. The
+lab's own phone, email and address are not the patient's: leave the field
+empty rather than copy them. Never work one out from another.
 
 If the document is not a laboratory report, or is too degraded to read,
 return {"error": "..."} and stop.

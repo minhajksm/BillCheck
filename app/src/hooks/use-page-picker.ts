@@ -11,7 +11,8 @@ import { preparePage } from '@/data/prepare-page';
 export const MAX_PAGES = 12;
 
 /**
- * Picking the pages of a bill, from the camera, the gallery or a PDF.
+ * Picking the pages of a bill, from the camera, the gallery or the phone's
+ * files.
  *
  * Shared by the two screens that start a check: the home screen, where the
  * first page is picked, and the scan screen, where the rest are added. Each
@@ -68,27 +69,46 @@ export function usePagePicker(initial: () => ScannedPage[] = () => []) {
   };
 
   /**
-   * A bill handed over as a PDF. It goes up as it is: the reader takes a PDF
-   * directly, and re-rendering it to images would only lose sharpness.
+   * A bill from the phone's files: a PDF the hospital sent, or a photo saved
+   * from WhatsApp or downloads rather than the gallery.
+   *
+   * A PDF goes up as it is: the reader takes one directly, and re-rendering
+   * it to images would only lose sharpness. A photo is prepared like any
+   * other page, which also turns a HEIC into something the reader accepts.
    */
-  const choosePdf = async (): Promise<ScannedPage[]> => {
+  const chooseFile = async (): Promise<ScannedPage[]> => {
     const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/pdf',
-      multiple: false,
+      type: ['application/pdf', 'image/*'],
+      multiple: true,
       copyToCacheDirectory: true,
     });
     if (result.canceled) return [];
-    const file = result.assets[0];
-    const added: ScannedPage = {
+    const pdfs = result.assets.filter(
+      (file) => (file.mimeType ?? '') === 'application/pdf' || /\.pdf$/i.test(file.name),
+    );
+    const images = result.assets.filter((file) => !pdfs.includes(file));
+
+    const added: ScannedPage[] = pdfs.map((file) => ({
       uri: file.uri,
       name: file.name || 'bill.pdf',
       type: 'application/pdf',
-    };
-    setPages((current) => [...current, added].slice(0, MAX_PAGES));
-    return [added];
+    }));
+    setPages((current) => [...current, ...added].slice(0, MAX_PAGES));
+    if (images.length === 0) return added;
+    // A file's size isn't known here; 0 x 0 re-encodes it without resizing.
+    const prepared = await addAssets(
+      images.map((file) => ({
+        uri: file.uri,
+        width: 0,
+        height: 0,
+        fileName: file.name,
+        mimeType: file.mimeType ?? 'image/jpeg',
+      })) as ImagePicker.ImagePickerAsset[],
+    );
+    return [...added, ...prepared];
   };
 
   const removePage = (index: number) => setPages((current) => current.filter((_, at) => at !== index));
 
-  return { pages, preparing, takePhoto, choosePages, choosePdf, removePage };
+  return { pages, preparing, takePhoto, choosePages, chooseFile, removePage };
 }

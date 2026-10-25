@@ -8,7 +8,7 @@ import { stagePages } from '@/data/page-inbox';
 import { usePagePicker } from '@/hooks/use-page-picker';
 import { usePalette } from '@/hooks/use-palette';
 
-import { Button } from './button';
+import { AddPagesButton } from './add-pages';
 import { Text } from './text';
 
 /**
@@ -23,19 +23,16 @@ import { Text } from './text';
  * family then says whose it is, with the name printed on it offered. From a
  * member's screen, it is theirs from the start.
  *
- * The picker opens here, on the tap, so nothing stands between wanting a bill
- * checked and photographing it. The pages go to the scan screen, where the
- * rest of a multi-page bill is added.
+ * One button, then the camera, the gallery or the phone's files, so nothing
+ * stands between wanting a bill checked and adding it. The pages go to the
+ * scan screen, where the rest of a multi-page bill is added.
  */
 export function CheckABill({ memberId, compact = false }: { memberId?: string; compact?: boolean }) {
   const { t } = useTranslation();
   const palette = usePalette();
   const picker = usePagePicker();
 
-  const pick = async (choose: () => Promise<ScannedPage[]>) => {
-    const pages = await choose();
-    // Cancelled: they are still where they were.
-    if (pages.length === 0) return;
+  const go = (pages: ScannedPage[]) => {
     stagePages(pages);
     router.push(memberId ? { pathname: '/scan', params: { memberId } } : '/scan');
   };
@@ -56,18 +53,7 @@ export function CheckABill({ memberId, compact = false }: { memberId?: string; c
         </>
       )}
       <View style={[styles.buttons, compact && styles.buttonsCompact]}>
-        <Button
-          icon="camera"
-          label={t('home.photographBill')}
-          loading={picker.preparing}
-          onPress={() => void pick(picker.takePhoto)}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('home.uploadBill')}
-          onPress={() => void pick(picker.choosePages)}
-        />
+        <AddPagesButton label={t('home.addBill')} picker={picker} onPicked={go} />
       </View>
     </View>
   );
@@ -78,7 +64,7 @@ export function CheckABill({ memberId, compact = false }: { memberId?: string; c
  *
  * Under the bill, not beside it: the bill is what this app is for, and this
  * is the second thing it does. Its own consent comes first -- the one given
- * at sign-up covers bills -- so until it is given, either button goes there.
+ * at sign-up covers bills -- so until it is given, the button goes there.
  */
 export function CheckALabReport({
   consented,
@@ -94,13 +80,12 @@ export function CheckALabReport({
   const picker = usePagePicker();
   const params = memberId ? { memberId } : {};
 
-  const pick = async (choose: () => Promise<ScannedPage[]>) => {
-    if (!consented) {
-      router.push({ pathname: '/lab/consent', params });
-      return;
-    }
-    const pages = await choose();
-    if (pages.length === 0) return;
+  const consentFirst = () => {
+    if (consented) return true;
+    router.push({ pathname: '/lab/consent', params });
+    return false;
+  };
+  const go = (pages: ScannedPage[]) => {
     stagePages(pages);
     router.push({ pathname: '/lab/new', params });
   };
@@ -121,18 +106,13 @@ export function CheckALabReport({
         </>
       )}
       <View style={[styles.buttons, compact && styles.buttonsCompact]}>
-        <Button
+        <AddPagesButton
           variant="secondary"
-          icon="camera"
-          label={t('lab.photograph')}
-          loading={picker.preparing}
-          onPress={() => void pick(picker.takePhoto)}
-        />
-        <Button
-          variant="secondary"
-          icon="upload"
-          label={t('lab.upload')}
-          onPress={() => void pick(picker.choosePages)}
+          icon="activity"
+          label={t('lab.add')}
+          picker={picker}
+          beforePick={consentFirst}
+          onPicked={go}
         />
       </View>
     </View>

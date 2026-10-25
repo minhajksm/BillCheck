@@ -6,7 +6,18 @@
  */
 
 import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
-import type { Bill, Case, Check, DailyBill, Flag, Follower, LineItem, MemberRef, Payment } from './types';
+import type {
+  Bill,
+  Case,
+  Check,
+  DailyBill,
+  Flag,
+  Follower,
+  LineItem,
+  MemberRef,
+  Payment,
+  SuggestedMember,
+} from './types';
 
 export type ApiFollower = { id: string; name: string; is_you: boolean };
 
@@ -19,6 +30,27 @@ type ApiDailyBill = {
   open_flag_count: number;
 };
 
+export type ApiSuggestedMember = {
+  name: string;
+  date_of_birth: string | null;
+  age: number | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+};
+
+export const toSuggested = (s: ApiSuggestedMember | null | undefined): SuggestedMember | undefined =>
+  s
+    ? {
+        name: s.name,
+        dateOfBirth: s.date_of_birth ?? undefined,
+        age: s.age ?? undefined,
+        phone: s.phone ?? undefined,
+        email: s.email ?? undefined,
+        address: s.address ?? undefined,
+      }
+    : undefined;
+
 export type ApiCase = {
   id: string;
   title: string;
@@ -30,6 +62,7 @@ export type ApiCase = {
   admitted_on: string | null;
   closed_on: string | null;
   member: MemberRef | null;
+  suggested_member?: ApiSuggestedMember | null;
   is_owner: boolean;
   bills: ApiDailyBill[];
   recovered_amount: number;
@@ -114,6 +147,7 @@ export const toCase = (c: ApiCase): Case => ({
   admittedOn: c.admitted_on ?? undefined,
   closedOn: c.closed_on ?? undefined,
   member: c.member ?? undefined,
+  suggestedMember: toSuggested(c.suggested_member),
   isOwner: c.is_owner,
   bills: c.bills.map(toDailyBill),
   recoveredAmount: c.recovered_amount,
@@ -249,10 +283,27 @@ export async function deleteCase(token: string, caseId: string): Promise<void> {
  * Whose a scan is: someone already there, or someone new, usually named as
  * the page names them. Exactly one.
  */
-export type FileUnder = { memberId: string } | { newMemberName: string };
+export type FileUnder = ({ memberId: string } | { newMemberName: string }) & {
+  /**
+   * Details accepted from the page. Someone new takes them all; someone
+   * already there gains only what they don't have yet.
+   */
+  details?: Omit<SuggestedMember, 'name' | 'age'>;
+};
 
-export const fileUnderBody = (answer: FileUnder) =>
-  'memberId' in answer ? { member_id: answer.memberId } : { new_member_name: answer.newMemberName };
+export const fileUnderBody = (answer: FileUnder) => ({
+  ...('memberId' in answer ? { member_id: answer.memberId } : { new_member_name: answer.newMemberName }),
+  ...(answer.details
+    ? {
+        details: {
+          date_of_birth: answer.details.dateOfBirth ?? null,
+          phone: answer.details.phone ?? null,
+          email: answer.details.email ?? null,
+          address: answer.details.address ?? null,
+        },
+      }
+    : {}),
+});
 
 /** Says whose admission this is. Family following that member see it from now on. */
 export async function fileCase(token: string, caseId: string, answer: FileUnder): Promise<Case> {
