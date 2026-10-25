@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { ToastProvider } from '@/components/toast';
 import i18n from '@/i18n';
 import { installFakeApi } from '@/test-utils/fake-api';
+import { ageOn } from '@/lib/age';
 import { resetTokenStore } from '@/test-utils/memory-token-store';
 
 jest.mock('@/auth/token-store', () => jest.requireActual('@/test-utils/memory-token-store'));
@@ -137,5 +138,72 @@ describe('deleting, or leaving', () => {
 
     expect(await screen.findByText('Stop following Papa')).toBeVisible();
     expect(screen.queryByText('Delete Papa')).toBeNull();
+  });
+});
+
+describe("a member's details", () => {
+  it('takes a date of birth, mobile, email and address, and shows the age as it is typed', async () => {
+    renderRouter(routes, { initialUrl: '/members/new' });
+    fireEvent.changeText(await screen.findByLabelText('Name', {}, { timeout: 5000 }), 'Aaji');
+    fireEvent.changeText(screen.getByLabelText('Date of birth (optional)'), '1958-03-14');
+
+    const age = ageOn('1958-03-14', new Date());
+    expect(screen.getByText(`Age ${age}`)).toBeVisible();
+
+    fireEvent.changeText(screen.getByLabelText('Mobile number (optional)'), '98765 43210');
+    fireEvent.changeText(screen.getByLabelText('Email (optional)'), 'Aaji@Example.com');
+    fireEvent.changeText(screen.getByLabelText('Address (optional)'), '12 Example Road, Pune');
+    await act(async () => fireEvent.press(screen.getByText('Add member')));
+
+    expect(await screen.findByText(`Age ${age} · Born 14 Mar 1958`)).toBeVisible();
+    expect(screen.getByText('+91 98765 43210')).toBeVisible();
+    expect(screen.getByText('aaji@example.com')).toBeVisible();
+    expect(screen.getByText('12 Example Road, Pune')).toBeVisible();
+    expect(server.members[2]).toMatchObject({ phone: '+919876543210', date_of_birth: '1958-03-14' });
+  });
+
+  it('needs only the name', async () => {
+    renderRouter(routes, { initialUrl: '/members/new' });
+    fireEvent.changeText(await screen.findByLabelText('Name', {}, { timeout: 5000 }), 'Aaji');
+    await act(async () => fireEvent.press(screen.getByText('Add member')));
+
+    expect(await screen.findByText('Add date of birth, phone, email or address')).toBeVisible();
+    expect(server.members[2]).toMatchObject({ date_of_birth: null, phone: null, email: null, address: null });
+  });
+
+  it('refuses what plainly is not a date, a mobile or an email, and saves nothing', async () => {
+    renderRouter(routes, { initialUrl: '/members/new' });
+    fireEvent.changeText(await screen.findByLabelText('Name', {}, { timeout: 5000 }), 'Aaji');
+    fireEvent.changeText(screen.getByLabelText('Date of birth (optional)'), '14/03/1958');
+    fireEvent.changeText(screen.getByLabelText('Mobile number (optional)'), '12345');
+    fireEvent.changeText(screen.getByLabelText('Email (optional)'), 'aaji');
+    await act(async () => fireEvent.press(screen.getByText('Add member')));
+
+    expect(screen.getByText('Use the form YYYY-MM-DD, with a date in the past.')).toBeVisible();
+    expect(screen.getByText('Enter a 10-digit mobile number.')).toBeVisible();
+    expect(screen.getByText('Enter an email address like name@example.com.')).toBeVisible();
+    expect(server.members).toHaveLength(2);
+  });
+
+  it('edits what is there, and clears what is emptied', async () => {
+    Object.assign(server.members[0], { phone: '+919876543210', email: 'papa@example.com' });
+    renderRouter(routes, { initialUrl: '/members/m-papa' });
+    fireEvent.press(await screen.findByLabelText('Edit details', {}, { timeout: 5000 }));
+
+    expect(await screen.findByDisplayValue('9876543210')).toBeVisible();
+    fireEvent.changeText(screen.getByDisplayValue('papa@example.com'), '');
+    fireEvent.changeText(screen.getByLabelText('Date of birth (optional)'), '1952-08-01');
+    await act(async () => fireEvent.press(screen.getByText('Save')));
+
+    await waitFor(() => expect(server.members[0].date_of_birth).toBe('1952-08-01'));
+    expect(server.members[0]).toMatchObject({ name: 'Papa', phone: '+919876543210', email: null });
+  });
+
+  it('shows the age on the home screen', async () => {
+    server.members[0].date_of_birth = '1958-03-14' as unknown as null;
+    renderRouter(routes, { initialUrl: '/' });
+
+    const age = ageOn('1958-03-14', new Date());
+    expect(await screen.findByText(`Age ${age} · 1 admission`, {}, { timeout: 5000 })).toBeVisible();
   });
 });

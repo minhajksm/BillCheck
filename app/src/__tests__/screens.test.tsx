@@ -88,7 +88,7 @@ describe('home, members and their admissions', () => {
   });
 
   it('opens a closed case, so its reports and its delete button stay reachable', async () => {
-    const router = await render('/members/m-mummy', 'Closed March 2026');
+    const router = await render('/members/m-mummy', 'Discharged 13 Mar 2026');
     expect(screen.getByText('₹3,200 recovered')).toBeVisible();
     fireEvent.press(screen.getByText("Mummy's cataract surgery"));
 

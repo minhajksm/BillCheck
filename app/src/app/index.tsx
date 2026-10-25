@@ -164,6 +164,7 @@ export default function HomeScreen() {
 function MemberCard({ member, onPress }: { member: MemberSummary; onPress: () => void }) {
   const { t } = useTranslation();
   const counts = [
+    member.age !== undefined ? t('members.age', { age: member.age }) : null,
     member.admissionCount > 0 ? t('members.admissions', { count: member.admissionCount }) : null,
     member.labReportCount > 0 ? t('members.labReports', { count: member.labReportCount }) : null,
   ].filter((part): part is string => part !== null);

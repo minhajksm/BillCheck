@@ -7,6 +7,7 @@ import { useAuth } from '@/auth/auth-context';
 import { AppHeader, IconButton } from '@/components/app-header';
 import { Avatar } from '@/components/avatar';
 import { Button } from '@/components/button';
+import { Icon, type IconName } from '@/components/icon';
 import { CaseCard, LabReportCard } from '@/components/record-cards';
 import { CheckABill, CheckALabReport } from '@/components/scan-cards';
 import { Screen } from '@/components/screen';
@@ -16,6 +17,8 @@ import { Radius } from '@/constants/theme';
 import { createInvite, deleteMember, readMember, stopFollowing, type Member } from '@/data/members-api';
 import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
+import { formatDate } from '@/i18n/dates';
+import { formatPhone } from '@/lib/phone';
 
 /**
  * One person, and everything kept about them: their admissions and their lab
@@ -109,7 +112,7 @@ function MemberView({
       right={
         <IconButton
           icon="edit-2"
-          label={t('members.rename')}
+          label={t('members.editDetails')}
           onPress={() => router.push({ pathname: '/members/new', params: { memberId: member.id } })}
         />
       }
@@ -118,6 +121,7 @@ function MemberView({
 
   return (
     <Screen header={header}>
+      <Details member={member} />
       <Followers member={member} />
       <Button
         variant="secondary"
@@ -183,6 +187,44 @@ function MemberView({
 
       <Leave member={member} token={token} userId={userId} />
     </Screen>
+  );
+}
+
+/**
+ * What the family has said about this person. Only what is known is shown;
+ * with nothing known yet, one quiet line says what can be added.
+ */
+function Details({ member }: { member: Member }) {
+  const { t } = useTranslation();
+  const palette = usePalette();
+  const edit = () => router.push({ pathname: '/members/new', params: { memberId: member.id } });
+
+  const rows: { icon: IconName; text: string }[] = [];
+  if (member.dateOfBirth) {
+    const born = t('members.born', { date: formatDate(t, member.dateOfBirth) });
+    rows.push({
+      icon: 'calendar',
+      text: member.age !== undefined ? `${t('members.age', { age: member.age })} · ${born}` : born,
+    });
+  }
+  if (member.phone) rows.push({ icon: 'phone', text: formatPhone(member.phone) });
+  if (member.email) rows.push({ icon: 'mail', text: member.email });
+  if (member.address) rows.push({ icon: 'map-pin', text: member.address });
+
+  if (rows.length === 0) {
+    return <Button variant="quiet" icon="plus" label={t('members.addDetails')} onPress={edit} />;
+  }
+  return (
+    <View style={[styles.details, { backgroundColor: palette.card, borderColor: palette.line }]}>
+      {rows.map((row) => (
+        <View key={row.icon} style={styles.detailRow}>
+          <Icon name={row.icon} size={16} color="ink3" />
+          <Text variant="small" selectable style={styles.detailText}>
+            {row.text}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -280,6 +322,9 @@ function Leave({ member, token, userId }: { member: Member; token: string; userI
 
 const styles = StyleSheet.create({
   notFound: { marginVertical: 16 },
+  details: { borderWidth: 1, borderRadius: Radius.card, padding: 12, gap: 8, marginBottom: 12 },
+  detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  detailText: { flex: 1 },
   followers: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   overlap: { marginLeft: -8 },
   followersLabel: { marginLeft: 8, flex: 1 },

@@ -23,6 +23,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 ERRORS = {
     "case_not_found": "This case isn't available.",
     "not_case_owner": "Only the person who started the case can delete it.",
+    "discharge_before_admission": "The discharge date can't be before the admission date.",
 }
 
 
@@ -143,6 +144,7 @@ def create_case(body: CaseCreate, db: Db, user: CurrentUser) -> CaseOut:
         ip_number=body.ip_number,
         bed=body.bed or None,
         admitted_on=body.admitted_on,
+        closed_on=body.closed_on,
         created_by=user.id,
     )
     db.add(case)
@@ -191,6 +193,11 @@ def update_case(case_id: uuid.UUID, body: CaseUpdate, db: Db, user: CurrentUser)
     )
     for field, value in changes.items():
         setattr(case, field, value)
+    # Checked against what the case will hold, since either end may be the
+    # one that moved.
+    if case.admitted_on and case.closed_on and case.closed_on < case.admitted_on:
+        db.rollback()
+        raise case_error(status.HTTP_422_UNPROCESSABLE_CONTENT, "discharge_before_admission")
 
     if moved:
         recheck_stay(db, case)

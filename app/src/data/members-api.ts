@@ -12,6 +12,7 @@ import type { Case, Follower, MemberSummary } from './types';
 type ApiMemberSummary = {
   id: string;
   name: string;
+  age: number | null;
   is_owner: boolean;
   followers: ApiFollower[];
   admission_count: number;
@@ -23,16 +24,36 @@ type ApiMemberSummary = {
 type ApiMember = {
   id: string;
   name: string;
+  date_of_birth: string | null;
+  age: number | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
   is_owner: boolean;
   followers: ApiFollower[];
   cases: ApiCase[];
   lab_reports: ApiLabReportRow[];
 };
 
-/** A member and everything under them. */
-export type Member = {
-  id: string;
+/**
+ * What a family may know about someone they look after. Only the name is
+ * needed; the rest is filled in where it is known.
+ */
+export type MemberDetails = {
   name: string;
+  /** "YYYY-MM-DD". */
+  dateOfBirth?: string;
+  /** E.164, "+919876543210". */
+  phone?: string;
+  email?: string;
+  address?: string;
+};
+
+/** A member, their details, and everything under them. */
+export type Member = MemberDetails & {
+  id: string;
+  /** Whole years, worked out by the API from the date of birth. */
+  age?: number;
   isOwner: boolean;
   followers: Follower[];
   /** Newest admission first. */
@@ -47,6 +68,7 @@ export type Unfiled = { cases: Case[]; labReports: LabReportRow[] };
 const toSummary = (m: ApiMemberSummary): MemberSummary => ({
   id: m.id,
   name: m.name,
+  age: m.age ?? undefined,
   isOwner: m.is_owner,
   followers: m.followers.map(toFollower),
   admissionCount: m.admission_count,
@@ -58,6 +80,11 @@ const toSummary = (m: ApiMemberSummary): MemberSummary => ({
 const toMember = (m: ApiMember): Member => ({
   id: m.id,
   name: m.name,
+  dateOfBirth: m.date_of_birth ?? undefined,
+  age: m.age ?? undefined,
+  phone: m.phone ?? undefined,
+  email: m.email ?? undefined,
+  address: m.address ?? undefined,
   isOwner: m.is_owner,
   followers: m.followers.map(toFollower),
   cases: m.cases.map(toCase),
@@ -73,13 +100,25 @@ export async function readMember(token: string, memberId: string): Promise<Membe
   return toMember(await apiFetch<ApiMember>(`/members/${memberId}`, { token }));
 }
 
-export async function createMember(token: string, name: string): Promise<Member> {
-  return toMember(await apiFetch<ApiMember>('/members', { method: 'POST', token, body: { name } }));
+/** Every field, an empty one sent as null so that editing can clear it. */
+const detailsBody = (details: MemberDetails) => ({
+  name: details.name,
+  date_of_birth: details.dateOfBirth || null,
+  phone: details.phone || null,
+  email: details.email || null,
+  address: details.address || null,
+});
+
+export async function createMember(token: string, details: MemberDetails): Promise<Member> {
+  return toMember(
+    await apiFetch<ApiMember>('/members', { method: 'POST', token, body: detailsBody(details) }),
+  );
 }
 
-export async function renameMember(token: string, memberId: string, name: string): Promise<Member> {
+/** Saves the whole form: a field emptied is cleared. */
+export async function updateMember(token: string, memberId: string, details: MemberDetails): Promise<Member> {
   return toMember(
-    await apiFetch<ApiMember>(`/members/${memberId}`, { method: 'PATCH', token, body: { name } }),
+    await apiFetch<ApiMember>(`/members/${memberId}`, { method: 'PATCH', token, body: detailsBody(details) }),
   );
 }
 

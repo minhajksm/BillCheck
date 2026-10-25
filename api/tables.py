@@ -90,6 +90,14 @@ class Member(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(80))
+    # All optional, filled in only where the family knows them. Age is never
+    # stored: it is worked out from the date of birth when asked for, so it
+    # cannot go stale.
+    date_of_birth: Mapped[date | None] = mapped_column(Date)
+    # E.164, as the account's own number is.
+    phone: Mapped[str | None] = mapped_column(String(16))
+    email: Mapped[str | None] = mapped_column(String(254))
+    address: Mapped[str | None] = mapped_column(String(300))
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 

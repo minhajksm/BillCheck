@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { caseStatus } from '@/data/case-status';
 import type { LabReportRow } from '@/data/lab-api';
 import type { Case } from '@/data/types';
-import { formatDayMonth, formatMonthYear } from '@/i18n/dates';
+import { formatDate, formatDayMonth } from '@/i18n/dates';
 
 import { Card } from './card';
 import { CaseStatusChip } from './case-status-chip';
@@ -17,7 +17,7 @@ export function CaseCard({ item, onPress }: { item: Case; onPress: () => void })
   // Nothing invented: a bill that printed no admission date leaves the case
   // without one, and saying so is what gets it filled in.
   const when = item.closedOn
-    ? t('home.closed', { date: formatMonthYear(t, item.closedOn) })
+    ? t('home.discharged', { date: formatDate(t, item.closedOn) })
     : item.admittedOn
       ? t('home.admitted', { date: formatDayMonth(t, item.admittedOn) })
       : t('home.admittedUnknown');

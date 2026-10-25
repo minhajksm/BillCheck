@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -19,7 +20,7 @@ import { readCase } from '@/data/cases-api';
 import type { Case, DailyBill } from '@/data/types';
 import { useAsync } from '@/hooks/use-async';
 import { usePalette } from '@/hooks/use-palette';
-import { formatDayMonth } from '@/i18n/dates';
+import { formatDate, formatDayMonth } from '@/i18n/dates';
 import { formatINR } from '@/lib/format';
 
 export default function CaseDashboardScreen() {
@@ -81,8 +82,9 @@ function CaseDashboard({ item }: { item: Case }) {
   return (
     <Screen header={header}>
       <Text color="ink2">{t('common.place', { name: item.hospital.name, area: item.hospital.area })}</Text>
+      <Text variant="faint">{t('case.patientLine', item.patient)}</Text>
       <Text variant="faint" style={styles.patient}>
-        {t('case.patientLine', item.patient)}
+        {stayLine(t, item)}
       </Text>
 
       {/* The one detail the checks need and a bill often doesn't print.
@@ -217,6 +219,22 @@ function StatusBanner({ status, onAsk }: { status: CaseStatus; onAsk: () => void
     case 'closed':
       return null;
   }
+}
+
+/**
+ * When the stay began and ended, as far as anyone has said. A missing
+ * admission date is asked for just below, so it isn't repeated here.
+ */
+function stayLine(t: TFunction, item: Case): string {
+  const parts = [
+    item.admittedOn ? t('case.admittedOn', { date: formatDate(t, item.admittedOn) }) : null,
+    item.closedOn
+      ? t('case.dischargedOn', { date: formatDate(t, item.closedOn) })
+      : item.admittedOn
+        ? t('case.stillIn')
+        : null,
+  ];
+  return parts.filter((part): part is string => part !== null).join(' · ');
 }
 
 /** Opens the newest bill that still has open questions, else the newest. */

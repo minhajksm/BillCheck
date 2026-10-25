@@ -436,3 +436,145 @@ def test_a_follower_cannot_delete_someone_else_s_lab_report(
     assert client.delete(f"/lab-reports/{mine['id']}", headers=her).status_code == 403
     assert client.delete(f"/lab-reports/{hers['id']}", headers=her).status_code == 204
     assert client.delete(f"/lab-reports/{mine['id']}", headers=auth_headers).status_code == 204
+
+
+# --- details -----------------------------------------------------------------
+
+
+def test_details_are_optional_and_kept_when_given(client: TestClient, auth_headers: dict):
+    bare = new_member(client, auth_headers, "Papa")
+    assert (bare["date_of_birth"], bare["age"], bare["phone"], bare["email"], bare["address"]) == (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+    made = client.post(
+        "/members",
+        json={
+            "name": "Mummy",
+            "date_of_birth": "1958-03-14",
+            "phone": "98765 43210",
+            "email": "Sunita.Sharma@Example.com",
+            "address": "  12 Example Road, Pune  ",
+        },
+        headers=auth_headers,
+    ).json()
+
+    assert made["date_of_birth"] == "1958-03-14"
+    assert made["phone"] == "+919876543210", "stored the way the account's own number is"
+    assert made["email"] == "sunita.sharma@example.com"
+    assert made["address"] == "12 Example Road, Pune"
+
+
+def test_age_is_worked_out_from_the_date_of_birth():
+    from datetime import date
+
+    from members import age_on
+
+    born = date(1958, 3, 14)
+    assert age_on(born, date(2026, 3, 13)) == 67, "the day before the birthday"
+    assert age_on(born, date(2026, 3, 14)) == 68, "on the birthday"
+    assert age_on(None, date(2026, 3, 14)) is None
+
+
+def test_age_is_served_on_the_member_and_in_the_list(client: TestClient, auth_headers: dict):
+    from db import india_today
+
+    # 1 January, so the birthday has always come by today.
+    born = f"{india_today().year - 40}-01-01"
+    made = client.post("/members", json={"name": "Papa", "date_of_birth": born}, headers=auth_headers).json()
+
+    assert made["age"] == 40
+    assert client.get("/members", headers=auth_headers).json()[0]["age"] == 40
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("date_of_birth", "2999-01-01"),
+        ("date_of_birth", "1850-01-01"),
+        ("date_of_birth", "14/03/1958"),
+        ("phone", "12345"),
+        ("email", "not-an-email"),
+        ("address", "x" * 301),
+    ],
+)
+def test_a_detail_that_is_not_one_is_refused(client: TestClient, auth_headers: dict, field: str, value: str):
+    response = client.post("/members", json={"name": "Papa", field: value}, headers=auth_headers)
+    assert response.status_code == 422, (field, value)
+
+
+def test_editing_changes_what_is_sent_and_clears_what_is_emptied(client: TestClient, auth_headers: dict):
+    made = client.post(
+        "/members",
+        json={"name": "Papa", "phone": "9876543210", "email": "papa@example.com"},
+        headers=auth_headers,
+    ).json()
+
+    edited = client.patch(
+        f"/members/{made['id']}",
+        json={"date_of_birth": "1952-08-01", "email": ""},
+        headers=auth_headers,
+    ).json()
+
+    assert edited["name"] == "Papa", "left out, so kept"
+    assert edited["phone"] == "+919876543210", "left out, so kept"
+    assert edited["date_of_birth"] == "1952-08-01"
+    assert edited["email"] is None, "sent empty, so cleared"
+
+
+def test_a_name_can_be_changed_but_not_cleared(client: TestClient, auth_headers: dict):
+    papa = new_member(client, auth_headers)
+
+    assert client.patch(f"/members/{papa['id']}", json={"name": ""}, headers=auth_headers).status_code == 422
+    kept = client.patch(f"/members/{papa['id']}", json={"name": None}, headers=auth_headers).json()
+    assert kept["name"] == "Papa"
+
+
+def test_family_see_the_details_too(client: TestClient, auth_headers: dict, sms: FakeSms):
+    papa = client.post("/members", json={"name": "Papa", "phone": "9876543210"}, headers=auth_headers).json()
+    her = headers_for(anita(client, sms))
+    follow(client, auth_headers, papa["id"], her)
+
+    assert client.get(f"/members/{papa['id']}", headers=her).json()["phone"] == "+919876543210"
+
+
+# --- the discharge date ------------------------------------------------------
+
+
+def test_an_admission_can_be_opened_with_its_discharge_date(client: TestClient, auth_headers: dict):
+    case = new_case(client, auth_headers, admitted_on="2026-05-04", closed_on="2026-05-06")
+    assert case["closed_on"] == "2026-05-06"
+
+
+def test_a_discharge_before_the_admission_is_refused(client: TestClient, auth_headers: dict):
+    papa = new_member(client, auth_headers)
+    body = {
+        "member_id": papa["id"],
+        "title": "x",
+        "hospital_name": "x",
+        "hospital_area": "x",
+        "patient_name": "x",
+        "ip_number": "1",
+        "admitted_on": "2026-05-04",
+        "closed_on": "2026-05-03",
+    }
+    assert client.post("/cases", json=body, headers=auth_headers).status_code == 422
+
+    case = new_case(client, auth_headers, admitted_on="2026-05-04")
+    moved = client.patch(f"/cases/{case['id']}", json={"closed_on": "2026-05-01"}, headers=auth_headers)
+    assert moved.status_code == 422
+    assert moved.json()["detail"]["code"] == "discharge_before_admission"
+    assert client.get(f"/cases/{case['id']}", headers=auth_headers).json()["closed_on"] is None, "unchanged"
+
+
+def test_the_discharge_date_can_be_corrected_and_cleared(client: TestClient, auth_headers: dict):
+    case = new_case(client, auth_headers, admitted_on="2026-05-04", closed_on="2026-05-06")
+
+    corrected = client.patch(f"/cases/{case['id']}", json={"closed_on": "2026-05-07"}, headers=auth_headers)
+    assert corrected.json()["closed_on"] == "2026-05-07"
+    reopened = client.patch(f"/cases/{case['id']}", json={"closed_on": None}, headers=auth_headers)
+    assert reopened.json()["closed_on"] is None, "still in hospital after all"
