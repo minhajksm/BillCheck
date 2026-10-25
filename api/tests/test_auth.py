@@ -229,9 +229,11 @@ def test_an_anonymous_account_works_like_any_other(client: TestClient, anonymous
     assert body["user"]["phone"] is None, "there is no number, and the app reads that"
     assert body["user"]["name"] == ""
 
+    papa = client.post("/members", json={"name": "Papa"}, headers=headers).json()
     made = client.post(
         "/cases",
         json={
+            "member_id": papa["id"],
             "title": "Papa's admission",
             "hospital_name": "City Care Hospital",
             "hospital_area": "Andheri",
@@ -253,9 +255,11 @@ def test_one_anonymous_account_cannot_see_another_s_cases(client: TestClient, an
     theirs = client.post("/auth/anonymous", json={"consent": True}).json()
     headers = {"Authorization": f"Bearer {mine['token']}"}
 
+    papa = client.post("/members", json={"name": "Papa"}, headers=headers).json()
     case = client.post(
         "/cases",
         json={
+            "member_id": papa["id"],
             "title": "Papa's admission",
             "hospital_name": "City Care Hospital",
             "hospital_area": "Andheri",
@@ -270,6 +274,8 @@ def test_one_anonymous_account_cannot_see_another_s_cases(client: TestClient, an
     other = {"Authorization": f"Bearer {theirs['token']}"}
     assert client.get(f"/cases/{case['id']}", headers=other).status_code == 404
     assert client.get("/cases", headers=other).json() == []
+    assert client.get(f"/members/{papa['id']}", headers=other).status_code == 404
+    assert client.get("/members", headers=other).json() == []
 
 
 def test_consent_is_recorded_for_an_anonymous_account(client: TestClient, anonymous_allowed):

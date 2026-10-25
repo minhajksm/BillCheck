@@ -21,9 +21,11 @@ HEIC = b"\x00\x00\x00\x18ftypheic" + b"\x00" * 64
 
 @pytest.fixture
 def case_id(client: TestClient, auth_headers: dict[str, str]) -> str:
+    member = client.post("/members", json={"name": "Papa"}, headers=auth_headers).json()
     response = client.post(
         "/cases",
         json={
+            "member_id": member["id"],
             "title": "Papa's admission",
             "hospital_name": "City Care Hospital",
             "hospital_area": "Andheri",

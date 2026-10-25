@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 import audit
+from access import can_see, load_member
 from analysis import AnalysedLine, BillAnalysis, BillHeader
 from analysis_prompt import PROMPT_DIGEST
 from arithmetic import Arithmetic, check_bill
@@ -33,7 +34,6 @@ from tables import (
     Bill,
     BillRead,
     Case,
-    CaseMember,
     Flag,
     LineItem,
     ReaderFinding,
@@ -350,12 +350,7 @@ def load_bill(db: Session, bill_id: uuid.UUID, user_id: uuid.UUID) -> Bill:
         .where(Bill.id == bill_id)
         .options(selectinload(Bill.line_items), selectinload(Bill.flags))
     )
-    if bill is None:
-        raise bill_error(status.HTTP_404_NOT_FOUND, "bill_not_found")
-    member = db.scalar(
-        select(CaseMember).where(CaseMember.case_id == bill.case_id, CaseMember.user_id == user_id)
-    )
-    if member is None:
+    if bill is None or not can_see(db, bill.case.member_id, bill.case.created_by, user_id):
         raise bill_error(status.HTTP_404_NOT_FOUND, "bill_not_found")
     return bill
 
@@ -407,7 +402,9 @@ def closed_on(header: BillHeader, admitted_on: date | None) -> date | None:
     return discharged if admitted_on is None else max(discharged, admitted_on)
 
 
-def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
+def case_from_analysis(
+    analysis: BillAnalysis, user_id: uuid.UUID, member_id: uuid.UUID | None = None
+) -> Case:
     """A case opened from what the bill itself says.
 
     Nothing here is invented. Every field is the reader's own transcription or
@@ -440,9 +437,9 @@ def case_from_analysis(analysis: BillAnalysis, user_id: uuid.UUID) -> Case:
         bed=None,
         admitted_on=admitted_on,
         closed_on=closed_on(header, admitted_on),
+        member_id=member_id,
         created_by=user_id,
     )
-    case.members.append(CaseMember(user_id=user_id))
     return case
 
 
@@ -548,6 +545,10 @@ async def upload_first_bill(
     references: Annotated[ReferenceData, Depends(get_reference_data)],
     pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
     bill_date: Annotated[date | None, Form()] = None,
+    member_id: Annotated[
+        uuid.UUID | None,
+        Form(description="Whose admission it is. Left out, the case waits to be filed."),
+    ] = None,
 ) -> BillOut:
     """Reads a bill with no case behind it, and opens one from what it says.
 
@@ -558,10 +559,17 @@ async def upload_first_bill(
 
     The case is written only once the bill reads. A bill that can't be read
     leaves nothing behind -- no empty case in the family's list to explain.
+
+    Scanned from a member, it is theirs from the start. Scanned before
+    choosing anyone, it waits for POST /cases/{id}/member, so the patient
+    name the bill prints can be offered as the answer.
     """
+    # Checked before the read, which is slow and paid for.
+    if member_id is not None:
+        load_member(db, member_id, user)
     analysis = await read_pages(pages, db, user.id, ocr)
 
-    case = case_from_analysis(analysis, user.id)
+    case = case_from_analysis(analysis, user.id, member_id)
     db.add(case)
     db.flush()
     logger.info("Opened case %s from a bill at %s", case.id, case.hospital_name or "(unnamed)")

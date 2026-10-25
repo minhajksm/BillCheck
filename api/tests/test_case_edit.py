@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 from tests.conftest import FakeSms, sign_up
-from tests.test_cases_and_bills import headers_for, invite, new_case, page
+from tests.test_cases_and_bills import follow, headers_for, new_case, page
 
 
 def upload(client: TestClient, headers: dict, case_id: str) -> dict:
@@ -74,12 +74,11 @@ def test_a_bed_can_be_cleared(client: TestClient, auth_headers: dict):
     assert updated.json()["bed"] is None
 
 
-def test_any_member_can_correct_the_details(client: TestClient, auth_headers: dict, sms: FakeSms):
+def test_any_follower_can_correct_the_details(client: TestClient, auth_headers: dict, sms: FakeSms):
     """Whoever is at the hospital today is best placed to fix a bed number."""
     case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
     anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-    client.post("/cases/join", json={"code": code}, headers=anita)
+    follow(client, auth_headers, case["member"]["id"], anita)
 
     updated = client.patch(f"/cases/{case['id']}", json={"bed": "309"}, headers=anita)
     assert updated.status_code == 200
@@ -165,12 +164,10 @@ def test_deleting_takes_the_bills_with_it(client: TestClient, auth_headers: dict
 
 
 def test_only_whoever_started_the_case_can_delete_it(client: TestClient, auth_headers: dict, sms: FakeSms):
-    """It takes the bills from the whole family. Someone who only wants out can
-    leave instead."""
+    """It takes the bills from the whole family."""
     case = new_case(client, auth_headers)
-    code = invite(client, auth_headers, case["id"])
     anita = headers_for(sign_up(client, sms, phone="+919123456780", name="Anita Sharma"))
-    client.post("/cases/join", json={"code": code}, headers=anita)
+    follow(client, auth_headers, case["member"]["id"], anita)
 
     assert client.delete(f"/cases/{case['id']}", headers=anita).status_code == 403
     assert client.get(f"/cases/{case['id']}", headers=anita).status_code == 200

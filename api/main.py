@@ -5,6 +5,7 @@ import auth
 import bills
 import cases
 import lab
+import members
 from models import HealthResponse
 from settings import get_settings
 
@@ -29,6 +30,7 @@ app.include_router(auth.router)
 app.include_router(cases.router)
 app.include_router(bills.router)
 app.include_router(lab.router)
+app.include_router(members.router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["meta"])

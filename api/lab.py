@@ -18,19 +18,21 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session, selectinload
 
+from access import can_see, load_member, member_to_file_under
 from auth import CurrentUser, Db
 from bills import MAX_PAGES, check_upload_limit, read_page
 from db import utcnow
 from lab_analysis import LabAnalysis, recheck
 from lab_prompt import PROMPT_DIGEST
-from models import LabConsent, LabReportOut, LabReportSummaryOut, LabTestOut
+from models import FileUnder, LabConsent, LabReportOut, LabReportSummaryOut, LabTestOut, MemberRef
 from ocr import OcrError, OcrProvider, get_ocr_provider
 from settings import get_settings
-from tables import LabReport, User
+from tables import LabReport, MemberFollower, User
 
 router = APIRouter(prefix="/lab-reports", tags=["lab reports"])
 
@@ -42,6 +44,7 @@ LAB_CONSENT_VERSION = "2026-10-lab"
 ERRORS = {
     "lab_consent_required": "Agree to lab reports being stored and explained first.",
     "lab_report_not_found": "This report isn't available.",
+    "not_report_owner": "Only whoever added the report, or the person who added this member, can delete it.",
     "no_pages": "Add at least one page of the report.",
     "too_many_pages": f"A report can have up to {MAX_PAGES} pages.",
     "unreadable_lab_report": "This report couldn't be read. Try again in better light, one page at a time.",
@@ -58,9 +61,14 @@ def lab_error(status_code: int, code: str) -> HTTPException:
     return HTTPException(status_code, detail={"code": code, "message": ERRORS[code]})
 
 
+def member_ref(report: LabReport) -> MemberRef | None:
+    return MemberRef(id=report.member.id, name=report.member.name) if report.member else None
+
+
 def report_out(report: LabReport) -> LabReportOut:
     return LabReportOut(
         id=report.id,
+        member=member_ref(report),
         lab_name=report.lab_name,
         patient_name=report.patient_name,
         report_date=report.report_date,
@@ -77,13 +85,37 @@ def report_out(report: LabReport) -> LabReportOut:
     )
 
 
-def load_report(db: Db, report_id: uuid.UUID, user: User) -> LabReport:
-    """The report, if it is theirs. Someone else's is not found, not forbidden:
-    an id must not tell anyone whether a stranger has had blood taken."""
+def summary_out(report: LabReport) -> LabReportSummaryOut:
+    return LabReportSummaryOut(
+        id=report.id,
+        lab_name=report.lab_name,
+        patient_name=report.patient_name,
+        report_date=report.report_date,
+        member=member_ref(report),
+        test_count=len(report.tests),
+        outside_range=sum(1 for test in report.tests if test.get("status") in ("low", "high")),
+        urgent=report.urgent,
+        created_at=report.created_at,
+    )
+
+
+def load_report(db: Session, report_id: uuid.UUID, user: User) -> LabReport:
+    """The report, if the caller can see it. Someone else's is not found, not
+    forbidden: an id must not tell anyone whether a stranger has had blood
+    taken."""
     report = db.get(LabReport, report_id)
-    if report is None or report.user_id != user.id:
+    if report is None or not can_see(db, report.member_id, report.user_id, user.id):
         raise lab_error(status.HTTP_404_NOT_FOUND, "lab_report_not_found")
     return report
+
+
+def visible_reports(user: User):
+    """Reports about a member the caller follows, and their own not yet filed."""
+    followed = select(MemberFollower.member_id).where(MemberFollower.user_id == user.id)
+    return or_(
+        LabReport.member_id.in_(followed),
+        (LabReport.member_id.is_(None)) & (LabReport.user_id == user.id),
+    )
 
 
 @router.post("/consent", status_code=status.HTTP_204_NO_CONTENT, responses=ERROR_RESPONSES)
@@ -107,14 +139,21 @@ async def upload_lab_report(
     user: CurrentUser,
     ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
     pages: Annotated[list[UploadFile], File(description="Photos or a PDF of the report, in order.")],
+    member_id: Annotated[
+        uuid.UUID | None,
+        Form(description="Whose report it is. Left out, it waits to be filed."),
+    ] = None,
 ) -> LabReportOut:
     """Reads a lab report and explains it, in English and in Hindi.
 
     Counts against the same daily allowance as bills: both are a paid read.
-    A report that can't be read leaves nothing behind.
+    A report that can't be read leaves nothing behind. Uploaded before
+    choosing anyone, it waits for POST /lab-reports/{id}/member, as a bill does.
     """
     if not user.lab_consent:
         raise lab_error(status.HTTP_403_FORBIDDEN, "lab_consent_required")
+    if member_id is not None:
+        load_member(db, member_id, user)
     if not pages:
         raise lab_error(status.HTTP_400_BAD_REQUEST, "no_pages")
     if len(pages) > MAX_PAGES:
@@ -136,6 +175,7 @@ async def upload_lab_report(
     header = analysis.report
     report = LabReport(
         user_id=user.id,
+        member_id=member_id,
         lab_name=header.lab_name[:200],
         patient_name=header.patient_name[:80],
         report_date=header.report_date[:40],
@@ -158,22 +198,14 @@ async def upload_lab_report(
 
 @router.get("", response_model=list[LabReportSummaryOut])
 def list_lab_reports(db: Db, user: CurrentUser) -> list[LabReportSummaryOut]:
-    """Their reports, newest first."""
+    """Every report the caller can see, newest first."""
     reports = db.scalars(
-        select(LabReport).where(LabReport.user_id == user.id).order_by(LabReport.created_at.desc())
+        select(LabReport)
+        .where(visible_reports(user))
+        .options(selectinload(LabReport.member))
+        .order_by(LabReport.created_at.desc())
     ).all()
-    return [
-        LabReportSummaryOut(
-            id=report.id,
-            lab_name=report.lab_name,
-            report_date=report.report_date,
-            test_count=len(report.tests),
-            outside_range=sum(1 for test in report.tests if test.get("status") in ("low", "high")),
-            urgent=report.urgent,
-            created_at=report.created_at,
-        )
-        for report in reports
-    ]
+    return [summary_out(report) for report in reports]
 
 
 @router.get("/{report_id}", response_model=LabReportOut, responses=ERROR_RESPONSES)
@@ -183,7 +215,24 @@ def read_lab_report(report_id: uuid.UUID, db: Db, user: CurrentUser) -> LabRepor
 
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT, responses=ERROR_RESPONSES)
 def delete_lab_report(report_id: uuid.UUID, db: Db, user: CurrentUser) -> Response:
-    """Gone for good. Minimal retention means a family can always take it back."""
-    db.delete(load_report(db, report_id, user))
+    """Gone for good, for everyone following the member. Minimal retention
+    means a family can always take it back: whoever added it can, and so can
+    whoever added the member."""
+    report = load_report(db, report_id, user)
+    if user.id not in (report.user_id, report.member.created_by if report.member else None):
+        raise lab_error(status.HTTP_403_FORBIDDEN, "not_report_owner")
+    db.delete(report)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{report_id}/member", response_model=LabReportOut, responses=ERROR_RESPONSES)
+def file_lab_report(report_id: uuid.UUID, body: FileUnder, db: Db, user: CurrentUser) -> LabReportOut:
+    """Says whose report this is: someone the caller follows, or someone new,
+    usually named as the report names them. As for a bill's case."""
+    report = load_report(db, report_id, user)
+    member = member_to_file_under(db, body, user)
+    report.member_id = member.id
+    db.commit()
+    db.refresh(report)
+    return report_out(report)

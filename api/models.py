@@ -1,8 +1,8 @@
 import uuid
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, Field, StringConstraints
+from pydantic import AfterValidator, BaseModel, Field, StringConstraints, model_validator
 
 from analysis import Category
 from flag_kinds import FlagKind
@@ -113,6 +113,8 @@ class AnonymousAccount(BaseModel):
 
 
 class CaseCreate(BaseModel):
+    member_id: uuid.UUID
+    """Whose admission this is. A case is always opened under a member."""
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
     hospital_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
     hospital_area: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
@@ -149,10 +151,19 @@ class CaseUpdate(BaseModel):
     closed_on: date | None = None
 
 
-class MemberOut(BaseModel):
+class FollowerOut(BaseModel):
+    """An account following a member. `id` is the user's."""
+
     id: uuid.UUID
     name: str
     is_you: bool
+
+
+class MemberRef(BaseModel):
+    """Whose a case or a report is, for a heading."""
+
+    id: uuid.UUID
+    name: str
 
 
 class DailyBillOut(BaseModel):
@@ -175,9 +186,10 @@ class CaseOut(BaseModel):
     admitted_on: date | None
     """Null where the bill printed none and nobody has filled it in yet."""
     closed_on: date | None
-    members: list[MemberOut]
+    member: MemberRef | None
+    """Null until the family says whose admission it is. See tables.Case."""
     # Whether the caller is the one who started it. Only they can delete a case,
-    # since it takes the bills away from everyone following it.
+    # since it takes the bills away from everyone following the member.
     is_owner: bool
     # Oldest first.
     bills: list[DailyBillOut]
@@ -199,7 +211,7 @@ class InviteOut(BaseModel):
     expires_at: datetime
 
 
-class JoinCase(BaseModel):
+class JoinMember(BaseModel):
     # In the body, not the URL, so it never lands in access logs.
     code: Annotated[str, StringConstraints(strip_whitespace=True, min_length=8, max_length=64)]
 
@@ -309,6 +321,8 @@ class LabTestOut(BaseModel):
 
 class LabReportOut(BaseModel):
     id: uuid.UUID
+    member: MemberRef | None
+    """Null until the family says whose report it is."""
     lab_name: str
     patient_name: str
     report_date: str
@@ -329,8 +343,77 @@ class LabReportSummaryOut(BaseModel):
 
     id: uuid.UUID
     lab_name: str
+    patient_name: str
     report_date: str
+    member: MemberRef | None
     test_count: int
     outside_range: int
     urgent: bool
     created_at: datetime
+
+
+# --- members ----------------------------------------------------------------
+
+
+MemberName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
+class MemberCreate(BaseModel):
+    name: MemberName
+
+
+class MemberUpdate(BaseModel):
+    name: MemberName
+
+
+class MemberSummaryOut(BaseModel):
+    """A row in the list of members."""
+
+    id: uuid.UUID
+    name: str
+    is_owner: bool
+    followers: list[FollowerOut]
+    admission_count: int
+    # Admissions with no discharge yet: someone is in hospital.
+    open_admission_count: int
+    open_flag_count: int
+    lab_report_count: int
+
+
+class MemberOut(BaseModel):
+    """A member and everything under them."""
+
+    id: uuid.UUID
+    name: str
+    # Whether the caller added this member. Only they can delete it or remove
+    # someone, since it takes everything away from everyone following.
+    is_owner: bool
+    followers: list[FollowerOut]
+    # Newest admission first.
+    cases: list[CaseOut]
+    # Newest first.
+    lab_reports: list[LabReportSummaryOut]
+
+
+class FileUnder(BaseModel):
+    """Whose a bill or a report is: someone already there, or someone new.
+
+    Exactly one. A new member is named here, usually with the name the bill
+    or report printed, which the app offers as the answer.
+    """
+
+    member_id: uuid.UUID | None = None
+    new_member_name: MemberName | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> Self:
+        if (self.member_id is None) == (self.new_member_name is None):
+            raise ValueError("Give either member_id or new_member_name.")
+        return self
+
+
+class UnfiledOut(BaseModel):
+    """What the caller scanned and has not yet said whose it is."""
+
+    cases: list[CaseOut]
+    lab_reports: list[LabReportSummaryOut]
