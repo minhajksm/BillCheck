@@ -223,8 +223,18 @@ class BillHeader(BaseModel):
     admission_date: Text = Field(description="As printed or supplied. Empty when neither.")
     discharge_date: Text = Field(description="As printed or supplied. Empty when neither.")
     room_category: Text = Field(description="As printed. Empty when not readable.")
+    subtotal: Number = Field(
+        default=None, description="The total printed before any discount. Null when none is printed."
+    )
     discount: Number = Field(default=None, description="The discount printed on the bill. Null when none is.")
     total: Number = Field(description="The amount payable, after any discount. Null when none is printed.")
+    amount_paid: Number = Field(
+        default=None, description="The total paid, as the bill prints it. Null when it prints none."
+    )
+    balance: Number = Field(
+        default=None,
+        description="What the bill says is still due; 0 for a nil balance. Null when not printed.",
+    )
     patient_name: Text = Field(description="As printed. Empty when not readable.")
     ip_number: Text = Field(
         description="The IP, admission or registration number as printed. Empty when not readable."
@@ -241,6 +251,14 @@ class Structural(BaseModel):
     unreadable_line_count: Count = Field(description="Lines that could not be read.")
 
 
+class Payment(BaseModel):
+    """One deposit, advance or receipt the bill lists, as printed."""
+
+    date: Text = ""
+    mode: Text = ""
+    amount: Number = None
+
+
 class BillAnalysis(BaseModel):
     """PHASE 4, the whole object, field for field.
 
@@ -253,6 +271,10 @@ class BillAnalysis(BaseModel):
     """
 
     bill: BillHeader
+    # What has been paid towards it. Optional like the money fields above:
+    # most interim bills list none, and an answer that leaves the key out says
+    # the same thing.
+    payments: list[Payment] = Field(default_factory=list)
     lines: list[AnalysedLine]
     findings: list[Finding]
     requires_reference_price: list[str] = Field(

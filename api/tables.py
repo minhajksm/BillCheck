@@ -157,6 +157,16 @@ class Bill(Base):
     # What the hospital is asking for: the lines' own amounts less the
     # discount. Not the sum of the lines, on a bill that discounts them.
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    # The bill's own arithmetic, checked in code: one entry per sum the bill
+    # prints, and how it came out. See arithmetic.py. Empty on a bill read
+    # before the checks existed, which the app shows as it always did.
+    checks: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    # The deposits, advances and receipts the bill lists: date, mode, amount.
+    payments: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    # Paid so far and still due: the bill's own figures where it prints them,
+    # else what its deposits add up to. Null where the bill says nothing.
+    paid: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 

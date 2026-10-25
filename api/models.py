@@ -236,6 +236,32 @@ class FlagOut(BaseModel):
     excess: float
 
 
+class CheckOut(BaseModel):
+    """One sum on the bill, checked in code. Only the fields its kind uses are set."""
+
+    kind: Literal["lines", "subtotal", "discount", "payable", "rounding", "paid", "balance"]
+    status: Literal["ok", "mismatch", "note"]
+    """"mismatch": the bill asks for more than its own numbers give. "note": said
+    for clarity and never a question, e.g. rounding."""
+    amount: float | None = None
+    expected: float | None = None
+    printed: float | None = None
+    checked: int | None = None
+    of: int | None = None
+    count: int | None = None
+    percent: float | None = None
+    uniform: bool | None = None
+    positions: list[int] = []
+
+
+class PaymentOut(BaseModel):
+    """A deposit, advance or receipt, as the bill lists it."""
+
+    date: str
+    mode: str
+    amount: float
+
+
 class BillOut(BaseModel):
     id: uuid.UUID
     case_id: uuid.UUID
@@ -247,6 +273,12 @@ class BillOut(BaseModel):
     """The discount the bill prints across the whole of it. Null when none."""
     total: float
     """What the hospital is asking for: the sub-total less the discount."""
+    checks: list[CheckOut] = []
+    """The bill's own arithmetic, checked in code. Empty on bills read before it."""
+    payments: list[PaymentOut] = []
+    paid: float | None = None
+    balance: float | None = None
+    """Still due. 0 is "nothing left to pay"; null, the bill doesn't say."""
     line_items: list[LineItemOut]
     flags: list[FlagOut]
 

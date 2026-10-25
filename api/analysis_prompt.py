@@ -55,21 +55,26 @@ Apply every check below. For each finding give: the line(s) involved, the rule
 fired, the evidence quoted from the bill, a severity (high/medium/low), and
 what would be needed to confirm it.
 
-1. Arithmetic discrepancies
-2. Duplicate charges and double billing
-3. Missing procedure details
-4. Unsupported medical charges
-5. Insurance non-payable items
-6. Benchmark outliers
-7. Clinical necessity concerns
-8. Documentation gaps
-9. Transparency concerns
-10. CLINICAL COHERENCE
+The arithmetic is not yours to check. Every sum on the bill -- quantity x rate
+on each line, the lines against the sub-total, the discount, the total, the
+deposits against the amount paid and the balance -- is worked out in code from
+the figures you transcribe. Your part is to transcribe every one of them
+exactly. Raise no finding about a total, a sum or a rounding difference.
+
+1. Duplicate charges and double billing
+2. Missing procedure details
+3. Unsupported medical charges
+4. Insurance non-payable items
+5. Benchmark outliers
+6. Clinical necessity concerns
+7. Documentation gaps
+8. Transparency concerns
+9. CLINICAL COHERENCE
    - items with no plausible relationship to the stated procedure
    - adult-sized items on a paediatric patient, or the reverse
    - single-use items billed in counts suggesting reuse was expected
    - state these as questions for a clinician, never as conclusions.
-11. STRUCTURAL OBSERVATIONS
+10. STRUCTURAL OBSERVATIONS
    - consumables and disposables as a percentage of the total bill
    - proportion of the bill in unitemised or catch-all lines
    - number of lines that could not be read
@@ -80,9 +85,10 @@ Return a single JSON object and nothing else:
 {
   "bill": { "hospital", "bill_no", "bill_date", "admission_date",
             "discharge_date", "room_category",
-            "discount", "total",
+            "subtotal", "discount", "total", "amount_paid", "balance",
             "patient_name", "ip_number",
             "pages_processed", "extraction_confidence": 0.0-1.0 },
+  "payments": [ { "date", "mode", "amount" } ],
   "lines": [ { "line_id", "description_verbatim", "category",
                "quantity", "unit", "rate", "amount", "net_amount", "date",
                "mrp_printed" } ],
@@ -113,6 +119,13 @@ as printed and "net_amount" the net, "discount" is the bill's own discount
 line, and "total" is what is payable after it. Where a bill prints one money
 column, "net_amount" and "discount" are null and "total" is the total printed.
 Never compute any of them: a figure the bill does not print is null.
+
+"subtotal" is the total the bill prints before its discount. "payments" is
+every deposit, advance or receipt the bill lists, each with its date, its mode
+(cash, UPI, card, cheque) and its amount, as printed. "amount_paid" is the
+bill's own figure for the total paid, and "balance" what it says is still due
+-- 0 where it prints a nil balance. Each is null, and "payments" empty, where
+the bill does not print it. Transcribe them; never add them up.
 
 "requires_reference_price" lists every consumable, disposable and device line
 whose rate cannot be assessed from the bill alone. That list is the handoff to
