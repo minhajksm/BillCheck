@@ -23,11 +23,22 @@ type AuthState =
   | { status: 'signedOut'; phone: string | null; signupToken: string | null }
   | { status: 'signedIn'; user: User; token: string };
 
+/**
+ * How people get in, as the API is set up (REQUIRE_SIGN_IN):
+ * - `required`: with a phone number, and only that way.
+ * - `off`: nobody signs in; the app opens an account on this phone.
+ * - `checking`: still asking. A Cloud Run instance waking from idle can take
+ *   a while, and guessing meanwhile showed buttons that then failed.
+ * - `unreachable`: the API couldn't be asked; the welcome screen says so.
+ */
+export type SignInMode = 'checking' | 'required' | 'off' | 'unreachable';
+
 type AuthContextValue = {
   state: AuthState;
-  /** Whether this API lets people in without a phone number. Read at launch
-   * from GET /health, so the welcome screen only offers what will work. */
-  anonymousAllowed: boolean;
+  /** Read from GET /health, so the welcome screen only offers what will work. */
+  signInMode: SignInMode;
+  /** Asks again, after `unreachable`. */
+  recheckSignIn: () => void;
   /** Sends a code to +91 and the 10 digits. Resolves with the resend wait in seconds. */
   requestOtp: (phone: string) => Promise<number>;
   /** Checks the code for the number from requestOtp. Signs in an existing user,
@@ -43,19 +54,6 @@ type AuthContextValue = {
 };
 
 const SIGNED_OUT = { status: 'signedOut', phone: null, signupToken: null } as const;
-
-/**
- * How long launch waits to hear whether signing in is optional, before
- * drawing the welcome screen without the answer. A cold or unreachable API
- * must not hold the splash screen: the two sign-in buttons always work.
- *
- * Waiting this long is not the same as giving up. A Cloud Run instance waking
- * from idle takes longer than this, and the answer it then sends still
- * counts: the option appears on the welcome screen when it arrives. It used
- * to be thrown away, which hid the option for the whole of any launch that
- * happened to wake the server.
- */
-const HEALTH_TIMEOUT_MS = 3000;
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -79,56 +77,42 @@ async function restoreSession(): Promise<AuthState> {
   }
 }
 
-/** Whether the API lets people in without a number. Never rejects. */
-async function askIfSignInIsOptional(): Promise<boolean> {
+/** How the API lets people in. Never rejects. */
+async function askSignInMode(): Promise<Exclude<SignInMode, 'checking'>> {
   try {
     const health = await apiFetch<Health>('/health');
-    return health.anonymous_accounts === true;
+    // An older API that doesn't answer this always required signing in.
+    return health.anonymous_accounts === true ? 'off' : 'required';
   } catch (error) {
-    // Offline, or an older API that doesn't answer this, so signing in it is.
-    // Said out loud, because the only other sign is a button that isn't there.
-    console.warn('Could not ask the API whether signing in is optional:', error);
-    return false;
-  }
-}
-
-/** The answer if it arrives within `ms`, or null if it is still on its way. */
-async function within<T>(answer: Promise<T>, ms: number): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      answer,
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
+    // Said out loud, because the only other sign is a screen that can't go on.
+    console.warn('Could not ask the API how people sign in:', error);
+    return 'unreachable';
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: 'loading' });
-  const [anonymousAllowed, setAnonymousAllowed] = useState(false);
+  const [signInMode, setSignInMode] = useState<SignInMode>('checking');
 
-  // Restore a saved session on launch, and ask what the API allows.
+  // Restore a saved session on launch, and ask how people get in. Someone
+  // already signed in goes straight on: only the welcome screen waits for
+  // the answer.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const optional = askIfSignInIsOptional();
-      const [allowed, restored] = await Promise.all([within(optional, HEALTH_TIMEOUT_MS), restoreSession()]);
-      if (cancelled) return;
-      setAnonymousAllowed(allowed ?? false);
-      setState(restored);
-      if (allowed === null) {
-        // Too slow for launch, not too slow to count.
-        const late = await optional;
-        if (!cancelled) setAnonymousAllowed(late);
-      }
-    })();
+    void restoreSession().then((restored) => {
+      if (!cancelled) setState(restored);
+    });
+    void askSignInMode().then((mode) => {
+      if (!cancelled) setSignInMode(mode);
+    });
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const recheckSignIn = useCallback(() => {
+    setSignInMode('checking');
+    void askSignInMode().then(setSignInMode);
   }, []);
 
   const signIn = useCallback(async (body: LoggedIn) => {
@@ -202,7 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       state,
-      anonymousAllowed,
+      signInMode,
+      recheckSignIn,
       requestOtp,
       verifyOtp,
       completeSignup,
@@ -212,7 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [
       state,
-      anonymousAllowed,
+      signInMode,
+      recheckSignIn,
       requestOtp,
       verifyOtp,
       completeSignup,

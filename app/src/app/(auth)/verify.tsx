@@ -17,8 +17,11 @@ const CODE_LENGTH = 6;
 export default function VerifyScreen() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { state, verifyOtp, requestOtp } = useAuth();
-  const { mode = 'signup', resendAfter = '30' } = useLocalSearchParams<{ mode?: AuthMode; resendAfter?: string }>();
+  const { state, verifyOtp, requestOtp, signInMode } = useAuth();
+  const { mode = 'signup', resendAfter = '30' } = useLocalSearchParams<{
+    mode?: AuthMode;
+    resendAfter?: string;
+  }>();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +35,8 @@ export default function VerifyScreen() {
 
   // Once signed in, the root layout takes over navigation.
   if (state.status === 'signedIn') return null;
+  // With signing in turned off, there is no number to sign in with.
+  if (signInMode === 'off') return <Redirect href="/welcome" />;
   const phone = state.status === 'signedOut' ? state.phone : null;
   if (!phone) return <Redirect href="/welcome" />;
 

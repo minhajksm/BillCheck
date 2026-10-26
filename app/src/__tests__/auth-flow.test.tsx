@@ -178,13 +178,20 @@ describe('without an account', () => {
   it('is not offered while the API requires signing in', async () => {
     await start();
     expect(screen.getByText('Create account')).toBeVisible();
-    expect(screen.queryByText('Use it without an account')).toBeNull();
+    expect(screen.queryByText('Get started')).toBeNull();
   });
 
-  it('is offered when the answer arrives, even after launch stopped waiting for it', async () => {
-    // A Cloud Run instance waking from idle takes longer to answer than launch
-    // waits. Its answer used to be thrown away, hiding the option for the
-    // whole of any launch that happened to wake the server.
+  it('is the only way in while signing in is off', async () => {
+    server.anonymousAccounts = true;
+    await start('/', /Get started/);
+
+    expect(screen.queryByText('Create account')).toBeNull();
+    expect(screen.queryByText('Log in')).toBeNull();
+  });
+
+  it('offers nothing until the API has said how people get in', async () => {
+    // A Cloud Run instance waking from idle can take ten seconds. Guessing
+    // meanwhile put buttons on screen that the API would then refuse.
     server.anonymousAccounts = true;
     let wake = () => {};
     server.healthWaitsFor = new Promise<void>((resolve) => {
@@ -192,18 +199,35 @@ describe('without an account', () => {
     });
 
     renderRouter(routes, { initialUrl: '/' });
-    // Launch stops waiting for the answer at 3 seconds and draws without it.
-    expect(await screen.findByText('Create account', {}, { timeout: 5000 })).toBeVisible();
-    expect(screen.queryByText('Use it without an account')).toBeNull();
+    expect(await screen.findByText('Connecting to FairCare…')).toBeVisible();
+    expect(screen.queryByText('Create account')).toBeNull();
+    expect(screen.queryByText('Get started')).toBeNull();
 
     await act(async () => wake());
-    expect(await screen.findByText('Use it without an account')).toBeVisible();
-  }, 10_000);
+    expect(await screen.findByText('Get started')).toBeVisible();
+    expect(screen.queryByText('Create account')).toBeNull();
+  });
+
+  it('says so when the API cannot be reached, and asks again on request', async () => {
+    let healthCalls = 0;
+    const realFetch = global.fetch;
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/health') && healthCalls++ === 0)
+        throw new TypeError('Network request failed');
+      return realFetch(input, init);
+    }) as typeof fetch;
+
+    await start('/', /Check your internet/);
+    expect(screen.queryByText('Create account')).toBeNull();
+
+    await act(async () => fireEvent.press(screen.getByText('Try again')));
+    expect(await screen.findByText('Create account')).toBeVisible();
+  });
 
   it('says what is given up, and only starts once that is agreed to', async () => {
     server.anonymousAccounts = true;
-    await start();
-    fireEvent.press(screen.getByText('Use it without an account'));
+    await start('/', /Get started/);
+    fireEvent.press(screen.getByText('Get started'));
 
     expect(await screen.findByText('No account needed')).toBeVisible();
     // The trade has to be on screen before they agree to it.
@@ -235,6 +259,27 @@ describe('without an account', () => {
   it('sends people back to the welcome screen if the API has since closed it', async () => {
     const router = await start('/no-account');
     expect(router.getPathname()).toBe('/welcome');
+  });
+
+  it('keeps the phone-number screens out of reach while signing in is off', async () => {
+    server.anonymousAccounts = true;
+    const router = await start('/phone', /Get started/);
+    expect(router.getPathname()).toBe('/welcome');
+  });
+
+  it('offers no log out to someone who signed in before it was turned off', async () => {
+    // There would be no way back in, so it would only lock them out.
+    server.anonymousAccounts = true;
+    server.users.set('+919876543210', { id: 'u1', phone: '+919876543210', name: 'Rohan Sharma' });
+    server.sessions.set('saved-token', '+919876543210');
+    resetTokenStore('saved-token');
+    await start('/', /Welcome, Rohan/);
+
+    fireEvent.press(screen.getByLabelText('Account'));
+    expect(
+      screen.getByText('Signing in is turned off for now, so you stay signed in on this phone.'),
+    ).toBeVisible();
+    expect(screen.queryByText('Log out')).toBeNull();
   });
 });
 

@@ -28,7 +28,7 @@ import { formatPhone } from '@/lib/phone';
 export default function HomeScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
-  const { state, logout } = useAuth();
+  const { state, signInMode, logout } = useAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   const token = state.status === 'signedIn' ? state.token : null;
 
@@ -98,7 +98,15 @@ export default function HomeScreen() {
               <Text variant="small" color="ink2">
                 {t('auth.signedInAs', { phone: formatPhone(phone) })}
               </Text>
-              <Button variant="secondary" icon="log-out" label={t('auth.logOut')} onPress={logout} />
+              {/* With signing in turned off there would be no way back in,
+                  so logging out would only lock them out of their bills. */}
+              {signInMode === 'off' ? (
+                <Text variant="small" color="ink2">
+                  {t('auth.signInOffNote')}
+                </Text>
+              ) : (
+                <Button variant="secondary" icon="log-out" label={t('auth.logOut')} onPress={logout} />
+              )}
             </>
           )}
         </Card>

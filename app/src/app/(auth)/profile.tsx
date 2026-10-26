@@ -12,7 +12,7 @@ import { TextField } from '@/components/text-field';
 /** Last sign-up step for a verified number: name and consent. */
 export default function ProfileScreen() {
   const { t } = useTranslation();
-  const { state, completeSignup } = useAuth();
+  const { state, completeSignup, signInMode } = useAuth();
   const { mode = 'signup' } = useLocalSearchParams<{ mode?: AuthMode }>();
   const [name, setName] = useState('');
   const [consent, setConsent] = useState(false);
@@ -21,6 +21,8 @@ export default function ProfileScreen() {
 
   // Once signed in, the root layout takes over navigation.
   if (state.status === 'signedIn') return null;
+  // With signing in turned off, there is no number to sign in with.
+  if (signInMode === 'off') return <Redirect href="/welcome" />;
   if (state.status !== 'signedOut' || !state.signupToken) return <Redirect href="/welcome" />;
 
   const ready = name.trim().length > 0 && consent;

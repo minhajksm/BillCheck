@@ -66,13 +66,29 @@ ERRORS = {
     "signup_token_invalid": "Sign-up took too long. Start again with your phone number.",
     "account_exists": "This number already has an account. Log in instead.",
     "sign_in_required": "Signing in with a phone number is required here.",
+    "sign_in_off": "Signing in is turned off. Open FairCare without an account instead.",
     "not_authenticated": "Log in to continue.",
     "sms_failed": "Couldn't send the code just now. Try again in a moment.",
 }
 
 ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
-    code: {"model": ApiError} for code in (400, 401, 409, 429, 502)
+    code: {"model": ApiError} for code in (400, 401, 403, 409, 429, 502)
 }
+
+
+def sign_in_on() -> None:
+    """Refuses the phone-number routes while REQUIRE_SIGN_IN is off.
+
+    With it off, everyone uses FairCare without an account, and a code sent to
+    a number would open an account the app no longer offers. Sessions already
+    made with a number keep working: turning sign-in off isn't a reason to lock
+    anyone out of the bills they have.
+    """
+    if not get_settings().require_sign_in:
+        raise api_error(status.HTTP_403_FORBIDDEN, "sign_in_off")
+
+
+SignInOn = Depends(sign_in_on)
 
 
 def api_error(status_code: int, code: str, headers: dict[str, str] | None = None) -> HTTPException:
@@ -103,6 +119,7 @@ def _new_session(db: Session, user: User) -> LoggedIn:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=OtpRequestResponse,
     responses=ERROR_RESPONSES,
+    dependencies=[SignInOn],
 )
 def request_otp(
     body: OtpRequest, db: Db, sms: Annotated[SmsSender, Depends(get_sms_sender)]
@@ -153,7 +170,9 @@ def request_otp(
     )
 
 
-@router.post("/otp/verify", response_model=OtpVerifyResponse, responses=ERROR_RESPONSES)
+@router.post(
+    "/otp/verify", response_model=OtpVerifyResponse, responses=ERROR_RESPONSES, dependencies=[SignInOn]
+)
 def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
     """Checks the latest code sent to the number. Only that code counts."""
     now = utcnow()
@@ -187,7 +206,11 @@ def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
 
 
 @router.post(
-    "/signup", status_code=status.HTTP_201_CREATED, response_model=LoggedIn, responses=ERROR_RESPONSES
+    "/signup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=LoggedIn,
+    responses=ERROR_RESPONSES,
+    dependencies=[SignInOn],
 )
 def signup(body: Signup, db: Db) -> LoggedIn:
     now = utcnow()

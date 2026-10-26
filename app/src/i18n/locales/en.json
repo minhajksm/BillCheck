@@ -98,7 +98,6 @@
     "welcomeTagline": "Check every hospital bill, and ask the right questions.",
     "createAccount": "Create account",
     "logIn": "Log in",
-    "withoutAccount": "Use it without an account",
     "phoneTitleSignup": "Create your account",
     "phoneTitleLogin": "Welcome back",
     "phoneSubtitle": "Enter your mobile number. We'll send a 6-digit code to check it's yours.",
@@ -123,7 +122,7 @@
     "noAccountTitle": "No account needed",
     "noAccountSubtitle": "Start checking bills now. No number, no code, no waiting for an SMS.",
     "noAccountKeepTitle": "Your bills stay on this phone",
-    "noAccountKeepBody": "They are saved to this phone alone. There is no number to sign back in with, so they can't be opened on another phone, shared with your family, or brought back if this phone is lost or the app is removed.",
+    "noAccountKeepBody": "They are saved to this phone alone. There is no number to sign back in with, so they can't be opened on another phone, or brought back if this phone is lost or the app is removed. You can still invite family to follow someone with a code.",
     "noAccountConsent": "I agree that FairCare can store the bills I add on this phone, and use them only to check my bills and help me ask about them.",
     "startChecking": "Start checking bills",
     "account": "Account",
@@ -144,8 +143,12 @@
       "sign_in_required": "This app now needs an account. Create one to carry on.",
       "sms_failed": "Couldn't send the code just now. Try again in a moment.",
       "network": "Can't reach FairCare. Check your internet and try again.",
-      "unknown": "Something went wrong. Try again."
-    }
+      "unknown": "Something went wrong. Try again.",
+      "sign_in_off": "Signing in is turned off for now. Go back and start without an account."
+    },
+    "connecting": "Connecting to FairCare…",
+    "getStarted": "Get started",
+    "signInOffNote": "Signing in is turned off for now, so you stay signed in on this phone."
   },
   "scan": {
     "title": "Scan the itemized bill",

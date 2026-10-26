@@ -20,6 +20,7 @@ export type ApiErrorCode =
   | 'signup_token_invalid'
   | 'account_exists'
   | 'sign_in_required'
+  | 'sign_in_off'
   | 'not_authenticated'
   | 'invalid_request'
   | 'page_too_large'

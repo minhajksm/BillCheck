@@ -13,25 +13,28 @@ import { Radius } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-palette';
 
 /**
- * Starting without an account.
+ * Starting without an account: the way in while REQUIRE_SIGN_IN is off.
  *
  * A family holding a bill at the billing desk should not have to wait for an
  * SMS. This opens an account tied to this phone and nothing else, which means
  * the trade has to be said plainly before they agree to it: there is no number
- * to sign back in with, so the bills cannot be moved to another phone, shared
- * with family, or recovered if this one is lost.
+ * to sign back in with, so the bills cannot be moved to another phone or
+ * recovered if this one is lost. Consent is asked here either way: DPDP does
+ * not care whether we know the person's number.
  */
 export default function NoAccountScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
-  const { state, anonymousAllowed, continueWithoutSignIn } = useAuth();
+  const { state, signInMode, continueWithoutSignIn } = useAuth();
   const [consent, setConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Once signed in, the root layout takes over navigation.
   if (state.status === 'signedIn') return null;
-  if (!anonymousAllowed) return <Redirect href="/welcome" />;
+  // Still asking how people get in: nothing to show yet.
+  if (signInMode === 'checking') return null;
+  if (signInMode !== 'off') return <Redirect href="/welcome" />;
 
   const submit = async () => {
     if (!consent || busy) return;
