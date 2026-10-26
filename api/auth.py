@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import get_db, utcnow
+from device import CurrentVisit, Visit
 from models import (
     AnonymousAccount,
     ApiError,
@@ -104,7 +105,8 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _new_session(db: Session, user: User) -> LoggedIn:
+def _new_session(db: Session, user: User, visit: Visit) -> LoggedIn:
+    visit.record(user)
     token = secrets.token_urlsafe(32)
     session = AuthSession(user_id=user.id, token_hash=_hash_token(token), expires_at=utcnow() + SESSION_TTL)
     db.add(session)
@@ -173,7 +175,7 @@ def request_otp(
 @router.post(
     "/otp/verify", response_model=OtpVerifyResponse, responses=ERROR_RESPONSES, dependencies=[SignInOn]
 )
-def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
+def verify_otp(body: OtpVerify, db: Db, visit: CurrentVisit) -> LoggedIn | SignupRequired:
     """Checks the latest code sent to the number. Only that code counts."""
     now = utcnow()
     challenge = db.scalar(
@@ -196,7 +198,7 @@ def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
     challenge.verified_at = now
     user = db.scalar(select(User).where(User.phone == body.phone))
     if user is not None:
-        return _new_session(db, user)
+        return _new_session(db, user, visit)
 
     signup_token = secrets.token_urlsafe(32)
     challenge.signup_token_hash = _hash_token(signup_token)
@@ -212,7 +214,7 @@ def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
     responses=ERROR_RESPONSES,
     dependencies=[SignInOn],
 )
-def signup(body: Signup, db: Db) -> LoggedIn:
+def signup(body: Signup, db: Db, visit: CurrentVisit) -> LoggedIn:
     now = utcnow()
     challenge = db.scalar(
         select(OtpChallenge).where(OtpChallenge.signup_token_hash == _hash_token(body.signup_token))
@@ -233,7 +235,7 @@ def signup(body: Signup, db: Db) -> LoggedIn:
     except IntegrityError:
         db.rollback()
         raise api_error(status.HTTP_409_CONFLICT, "account_exists") from None
-    return _new_session(db, user)
+    return _new_session(db, user, visit)
 
 
 @router.post(
@@ -243,7 +245,7 @@ def signup(body: Signup, db: Db) -> LoggedIn:
     responses=ERROR_RESPONSES,
     summary="Start without a phone number",
 )
-def anonymous(body: AnonymousAccount, db: Db) -> LoggedIn:
+def anonymous(body: AnonymousAccount, db: Db, visit: CurrentVisit) -> LoggedIn:
     """An account with no phone number, for a family that wants to check a
     bill before deciding to sign up for anything.
 
@@ -266,7 +268,7 @@ def anonymous(body: AnonymousAccount, db: Db) -> LoggedIn:
     user = User(phone=None, name="", consent_version=CONSENT_VERSION, consented_at=now)
     db.add(user)
     db.flush()
-    return _new_session(db, user)
+    return _new_session(db, user, visit)
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -303,7 +305,12 @@ CurrentUser = Annotated[User, Depends(current_user)]
 
 
 @router.get("/me", response_model=UserOut, responses=ERROR_RESPONSES)
-def me(user: CurrentUser) -> UserOut:
+def me(user: CurrentUser, db: Db, visit: CurrentVisit) -> UserOut:
+    """The signed-in user. The app asks this on every launch, so it is also
+    where a launch is noted: the last time the app was opened, and from where.
+    """
+    visit.record(user)
+    db.commit()
     return UserOut.model_validate(user, from_attributes=True)
 
 

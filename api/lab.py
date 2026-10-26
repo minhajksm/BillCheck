@@ -27,6 +27,7 @@ from access import can_see, load_member, member_to_file_under
 from auth import CurrentUser, Db
 from bills import MAX_PAGES, check_upload_limit, read_page
 from db import utcnow
+from device import AndroidIdHash
 from lab_analysis import LabAnalysis, recheck
 from lab_prompt import PROMPT_DIGEST
 from models import FileUnder, LabConsent, LabReportOut, LabReportSummaryOut, LabTestOut, MemberRef
@@ -144,6 +145,7 @@ async def upload_lab_report(
     user: CurrentUser,
     ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
     pages: Annotated[list[UploadFile], File(description="Photos or a PDF of the report, in order.")],
+    android_id: AndroidIdHash,
     member_id: Annotated[
         uuid.UUID | None,
         Form(description="Whose report it is. Left out, it waits to be filed."),
@@ -165,7 +167,7 @@ async def upload_lab_report(
         raise lab_error(status.HTTP_400_BAD_REQUEST, "too_many_pages")
 
     images = [await read_page(page, index) for index, page in enumerate(pages, start=1)]
-    check_upload_limit(db, user.id)
+    check_upload_limit(db, user.id, android_id)
 
     try:
         # As with a bill, a blocking call that can take most of a minute.

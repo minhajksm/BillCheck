@@ -6,6 +6,7 @@
  */
 
 import { apiFetch, API_URL, ApiError, type ApiErrorCode } from '@/lib/api';
+import { deviceHeaders } from '@/lib/device';
 import type {
   Bill,
   Case,
@@ -370,6 +371,8 @@ export async function sendPages(
     const request = new XMLHttpRequest();
     request.open('POST', `${API_URL}${path}`);
     request.setRequestHeader('Authorization', `Bearer ${token}`);
+    // Uploads are what the daily allowance counts, per phone where it can.
+    for (const [name, value] of Object.entries(deviceHeaders())) request.setRequestHeader(name, value);
 
     request.upload.onprogress = (event) => {
       if (onProgress && event.lengthComputable && event.total > 0) {

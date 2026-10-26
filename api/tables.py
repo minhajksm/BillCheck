@@ -38,6 +38,13 @@ class User(Base):
     lab_consent_version: Mapped[str | None] = mapped_column(String(20))
     lab_consented_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # The last time the app was opened on this account -- signing up, signing
+    # in, starting without an account, or any later launch -- and from which
+    # phone and address. For the record; see device.py. The Android ID is a
+    # keyed hash, never the ID itself, and each is overwritten every time.
+    last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    android_id_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    last_ip: Mapped[str | None] = mapped_column(String(45))
 
     @property
     def lab_consent(self) -> bool:
@@ -242,6 +249,10 @@ class UploadAttempt(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Which phone sent it, as device.py hashes its Android ID: the allowance
+    # is per phone where the phone says which it is, so a new account on the
+    # same phone doesn't start a new one. Null from a phone that sent none.
+    android_id_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, index=True)
 
 

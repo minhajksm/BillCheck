@@ -1,5 +1,7 @@
 import { Platform } from 'react-native';
 
+import { deviceHeaders } from './device';
+
 /**
  * Where the API lives. Set EXPO_PUBLIC_API_URL to override, e.g. your
  * computer's LAN address when testing on a real phone.
@@ -61,7 +63,7 @@ export async function apiFetch<T>(
   path: string,
   { method = 'GET', body, token }: RequestOptions = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = deviceHeaders();
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
 
