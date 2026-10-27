@@ -23,7 +23,7 @@ app.add_middleware(
     # which call endpoints directly, and fatal in the browser, which asks
     # permission first: the app never gets to send the request at all.
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Android-Id"],
 )
 
 app.include_router(auth.router)

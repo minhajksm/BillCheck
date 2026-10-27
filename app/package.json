@@ -6,6 +6,7 @@
     "@expo-google-fonts/mukta": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "expo": "~57.0.27",
+    "expo-application": "~57.0.3",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.21",
     "expo-document-picker": "~57.0.3",

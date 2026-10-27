@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db import get_db, utcnow
+from device import CurrentVisit, Visit
 from models import (
     AnonymousAccount,
     ApiError,
@@ -66,13 +67,29 @@ ERRORS = {
     "signup_token_invalid": "Sign-up took too long. Start again with your phone number.",
     "account_exists": "This number already has an account. Log in instead.",
     "sign_in_required": "Signing in with a phone number is required here.",
+    "sign_in_off": "Signing in is turned off. Open FairCare without an account instead.",
     "not_authenticated": "Log in to continue.",
     "sms_failed": "Couldn't send the code just now. Try again in a moment.",
 }
 
 ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
-    code: {"model": ApiError} for code in (400, 401, 409, 429, 502)
+    code: {"model": ApiError} for code in (400, 401, 403, 409, 429, 502)
 }
+
+
+def sign_in_on() -> None:
+    """Refuses the phone-number routes while REQUIRE_SIGN_IN is off.
+
+    With it off, everyone uses FairCare without an account, and a code sent to
+    a number would open an account the app no longer offers. Sessions already
+    made with a number keep working: turning sign-in off isn't a reason to lock
+    anyone out of the bills they have.
+    """
+    if not get_settings().require_sign_in:
+        raise api_error(status.HTTP_403_FORBIDDEN, "sign_in_off")
+
+
+SignInOn = Depends(sign_in_on)
 
 
 def api_error(status_code: int, code: str, headers: dict[str, str] | None = None) -> HTTPException:
@@ -88,7 +105,8 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _new_session(db: Session, user: User) -> LoggedIn:
+def _new_session(db: Session, user: User, visit: Visit) -> LoggedIn:
+    visit.record(user)
     token = secrets.token_urlsafe(32)
     session = AuthSession(user_id=user.id, token_hash=_hash_token(token), expires_at=utcnow() + SESSION_TTL)
     db.add(session)
@@ -103,6 +121,7 @@ def _new_session(db: Session, user: User) -> LoggedIn:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=OtpRequestResponse,
     responses=ERROR_RESPONSES,
+    dependencies=[SignInOn],
 )
 def request_otp(
     body: OtpRequest, db: Db, sms: Annotated[SmsSender, Depends(get_sms_sender)]
@@ -153,8 +172,10 @@ def request_otp(
     )
 
 
-@router.post("/otp/verify", response_model=OtpVerifyResponse, responses=ERROR_RESPONSES)
-def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
+@router.post(
+    "/otp/verify", response_model=OtpVerifyResponse, responses=ERROR_RESPONSES, dependencies=[SignInOn]
+)
+def verify_otp(body: OtpVerify, db: Db, visit: CurrentVisit) -> LoggedIn | SignupRequired:
     """Checks the latest code sent to the number. Only that code counts."""
     now = utcnow()
     challenge = db.scalar(
@@ -177,7 +198,7 @@ def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
     challenge.verified_at = now
     user = db.scalar(select(User).where(User.phone == body.phone))
     if user is not None:
-        return _new_session(db, user)
+        return _new_session(db, user, visit)
 
     signup_token = secrets.token_urlsafe(32)
     challenge.signup_token_hash = _hash_token(signup_token)
@@ -187,9 +208,13 @@ def verify_otp(body: OtpVerify, db: Db) -> LoggedIn | SignupRequired:
 
 
 @router.post(
-    "/signup", status_code=status.HTTP_201_CREATED, response_model=LoggedIn, responses=ERROR_RESPONSES
+    "/signup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=LoggedIn,
+    responses=ERROR_RESPONSES,
+    dependencies=[SignInOn],
 )
-def signup(body: Signup, db: Db) -> LoggedIn:
+def signup(body: Signup, db: Db, visit: CurrentVisit) -> LoggedIn:
     now = utcnow()
     challenge = db.scalar(
         select(OtpChallenge).where(OtpChallenge.signup_token_hash == _hash_token(body.signup_token))
@@ -210,7 +235,7 @@ def signup(body: Signup, db: Db) -> LoggedIn:
     except IntegrityError:
         db.rollback()
         raise api_error(status.HTTP_409_CONFLICT, "account_exists") from None
-    return _new_session(db, user)
+    return _new_session(db, user, visit)
 
 
 @router.post(
@@ -220,7 +245,7 @@ def signup(body: Signup, db: Db) -> LoggedIn:
     responses=ERROR_RESPONSES,
     summary="Start without a phone number",
 )
-def anonymous(body: AnonymousAccount, db: Db) -> LoggedIn:
+def anonymous(body: AnonymousAccount, db: Db, visit: CurrentVisit) -> LoggedIn:
     """An account with no phone number, for a family that wants to check a
     bill before deciding to sign up for anything.
 
@@ -243,7 +268,7 @@ def anonymous(body: AnonymousAccount, db: Db) -> LoggedIn:
     user = User(phone=None, name="", consent_version=CONSENT_VERSION, consented_at=now)
     db.add(user)
     db.flush()
-    return _new_session(db, user)
+    return _new_session(db, user, visit)
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -280,7 +305,12 @@ CurrentUser = Annotated[User, Depends(current_user)]
 
 
 @router.get("/me", response_model=UserOut, responses=ERROR_RESPONSES)
-def me(user: CurrentUser) -> UserOut:
+def me(user: CurrentUser, db: Db, visit: CurrentVisit) -> UserOut:
+    """The signed-in user. The app asks this on every launch, so it is also
+    where a launch is noted: the last time the app was opened, and from where.
+    """
+    visit.record(user)
+    db.commit()
     return UserOut.model_validate(user, from_attributes=True)
 
 

@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 import audit
@@ -25,6 +25,7 @@ from arithmetic import Arithmetic, check_bill
 from auth import CurrentUser, Db
 from cases import load_case
 from db import india_today, utcnow
+from device import AndroidIdHash
 from models import BillOut, CheckOut, FlagOut, FlagUpdate, LineItemOut, PaymentOut
 from ocr import BillPage, OcrError, OcrProvider, WrongDocument, get_ocr_provider, to_decimal
 from printed_patient import printed
@@ -62,17 +63,26 @@ ERRORS = {
 }
 
 
-def check_upload_limit(db: Session, user_id: uuid.UUID) -> None:
+def check_upload_limit(db: Session, user_id: uuid.UUID, android_id_hash: str | None = None) -> None:
     """Refuses once a person has sent the day's allowance, and records this one.
+
+    Counted by phone as well as by account: everything this account sent, and
+    everything any account sent from this phone. An account costs nothing to
+    make -- without signing in, clearing the app's data makes a new one -- so
+    counted by account alone, the allowance would start again with each. A
+    phone that doesn't say which it is is counted by account, as before.
 
     Recorded before the read, so a bill that can't be read still counts: that
     read was paid for all the same.
     """
     now = utcnow()
+    whose = UploadAttempt.user_id == user_id
+    if android_id_hash is not None:
+        whose = or_(whose, UploadAttempt.android_id_hash == android_id_hash)
     sent = db.scalar(
         select(func.count())
         .select_from(UploadAttempt)
-        .where(UploadAttempt.user_id == user_id, UploadAttempt.created_at > now - timedelta(days=1))
+        .where(whose, UploadAttempt.created_at > now - timedelta(days=1))
     )
     if (sent or 0) >= get_settings().bill_uploads_per_day:
         raise HTTPException(
@@ -80,7 +90,7 @@ def check_upload_limit(db: Session, user_id: uuid.UUID) -> None:
             detail={"code": "upload_limit", "message": ERRORS["upload_limit"]},
             headers={"Retry-After": "3600"},
         )
-    db.add(UploadAttempt(user_id=user_id, created_at=now))
+    db.add(UploadAttempt(user_id=user_id, android_id_hash=android_id_hash, created_at=now))
     db.commit()
 
 
@@ -461,6 +471,7 @@ async def read_pages(
     user_id: uuid.UUID,
     ocr: OcrProvider,
     case_id: uuid.UUID | None = None,
+    android_id_hash: str | None = None,
 ) -> BillAnalysis:
     """The pages, read. Raises the one error a family can act on.
 
@@ -473,7 +484,7 @@ async def read_pages(
         raise bill_error(status.HTTP_400_BAD_REQUEST, "too_many_pages")
 
     images = [await read_page(page, index) for index, page in enumerate(pages, start=1)]
-    check_upload_limit(db, user_id)
+    check_upload_limit(db, user_id, android_id_hash)
 
     try:
         # Reading a bill can take most of a minute, and the reader is a plain
@@ -564,6 +575,7 @@ async def upload_first_bill(
     ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
     references: Annotated[ReferenceData, Depends(get_reference_data)],
     pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
+    android_id: AndroidIdHash,
     bill_date: Annotated[date | None, Form()] = None,
     member_id: Annotated[
         uuid.UUID | None,
@@ -587,7 +599,7 @@ async def upload_first_bill(
     # Checked before the read, which is slow and paid for.
     if member_id is not None:
         load_member(db, member_id, user)
-    analysis = await read_pages(pages, db, user.id, ocr)
+    analysis = await read_pages(pages, db, user.id, ocr, android_id_hash=android_id)
 
     case = case_from_analysis(analysis, user.id, member_id)
     db.add(case)
@@ -619,6 +631,7 @@ async def upload_bill(
     ocr: Annotated[OcrProvider, Depends(get_ocr_provider)],
     references: Annotated[ReferenceData, Depends(get_reference_data)],
     pages: Annotated[list[UploadFile], File(description="Photos of the bill, in order.")],
+    android_id: AndroidIdHash,
     bill_date: Annotated[date | None, Form()] = None,
 ) -> BillOut:
     """Reads the pages into line items, checks them, and keeps the result.
@@ -626,7 +639,7 @@ async def upload_bill(
     The photographs are dropped once read.
     """
     case = load_case(db, case_id, user)
-    analysis = await read_pages(pages, db, user.id, ocr, case_id)
+    analysis = await read_pages(pages, db, user.id, ocr, case_id, android_id)
     bill = check_and_store(
         db,
         case,

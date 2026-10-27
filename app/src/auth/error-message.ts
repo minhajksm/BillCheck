@@ -24,6 +24,8 @@ export function authErrorMessage(t: TFunction, error: unknown): string {
       return t('auth.errors.account_exists');
     case 'sign_in_required':
       return t('auth.errors.sign_in_required');
+    case 'sign_in_off':
+      return t('auth.errors.sign_in_off');
     case 'network':
       return t('auth.errors.network');
     default:

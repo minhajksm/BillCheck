@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +11,7 @@ import { isValidMobile, nationalDigits } from '@/lib/phone';
 
 export default function PhoneScreen() {
   const { t } = useTranslation();
-  const { requestOtp } = useAuth();
+  const { requestOtp, signInMode } = useAuth();
   const { mode = 'signup' } = useLocalSearchParams<{ mode?: AuthMode }>();
   const [digits, setDigits] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +20,9 @@ export default function PhoneScreen() {
   const valid = isValidMobile(digits);
   // Only complain once a full 10 digits are in and they can't be a mobile.
   const formatError = digits.length === 10 && !valid ? t('auth.errors.invalidPhone') : null;
+
+  // With signing in turned off, there is no number to sign in with.
+  if (signInMode === 'off') return <Redirect href="/welcome" />;
 
   const send = async () => {
     if (!valid || sending) return;

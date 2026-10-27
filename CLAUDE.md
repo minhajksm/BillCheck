@@ -20,7 +20,7 @@ The clickable prototype is in `docs/prototype.html`. Treat it as the source of t
 - Deploy: `gcloud run deploy billcheck-api --source .` from the repository root. Runbook and caveats in `docs/deploy.md`. Not Firebase Hosting: it caps every request at 60s, and reading a long bill takes more.
 - How the reader is doing: `cd api && uv run python scripts/reader_report.py` (add `--days 30` for a window). Reads what every bill's reading recorded; writes nothing.
 - Sign-in is phone number + OTP. In development, codes print in the API's terminal (`OTP_DELIVERY=console`).
-- `REQUIRE_SIGN_IN=false` in `api/.env` lets people in without a number: the welcome screen then offers it, and the account belongs to that phone alone. Default is `true`.
+- `REQUIRE_SIGN_IN` in `api/.env` decides how people get in. `true` (default): phone number and OTP only. `false`: nobody signs in; the welcome screen offers "Get started" and a consent screen, the account belongs to that phone alone, and the API refuses the phone-number routes. Sessions already made either way keep working when it is switched.
 
 ## MVP scope
 

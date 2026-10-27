@@ -286,3 +286,37 @@ def test_consent_is_recorded_for_an_anonymous_account(client: TestClient, anonym
 
 def test_health_says_whether_anonymous_accounts_are_on(client: TestClient, anonymous_allowed):
     assert client.get("/health").json()["anonymous_accounts"] is True
+
+
+# --- sign-in turned off -------------------------------------------------------
+
+
+def test_with_sign_in_off_no_code_is_sent(client: TestClient, sms: FakeSms, anonymous_allowed):
+    response = client.post("/auth/otp/request", json={"phone": "9876543210"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "sign_in_off"
+    assert sms.sent == [], "no SMS goes out for an account the app doesn't offer"
+
+
+def test_with_sign_in_off_no_code_is_checked_and_nobody_signs_up(client: TestClient, anonymous_allowed):
+    verify = client.post("/auth/otp/verify", json={"phone": "9876543210", "code": "123456"})
+    signup = client.post("/auth/signup", json={"signup_token": "x" * 20, "name": "Rohan", "consent": True})
+
+    assert (verify.status_code, signup.status_code) == (403, 403)
+    assert verify.json()["detail"]["code"] == signup.json()["detail"]["code"] == "sign_in_off"
+
+
+def test_turning_sign_in_off_locks_nobody_out(
+    client: TestClient, sms: FakeSms, monkeypatch: pytest.MonkeyPatch
+):
+    """Someone who signed in with a number before keeps their bills."""
+    import settings
+
+    headers = {"Authorization": f"Bearer {sign_up(client, sms)['token']}"}
+    monkeypatch.setenv("REQUIRE_SIGN_IN", "false")
+    settings.get_settings.cache_clear()
+    try:
+        assert client.get("/auth/me", headers=headers).status_code == 200
+    finally:
+        settings.get_settings.cache_clear()
