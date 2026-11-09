@@ -3,8 +3,8 @@
   Source for the Google Play listing images. render.js screenshots #icon
   (512x512) and #feature (1024x500) into this folder. The mark is the
   prototype's logo (docs/prototype.html, .logo): two ruled bill lines over a
-  marigold band on indigo. Colours from app/src/constants/theme.ts; taglines
-  from auth.welcomeTagline in app/src/i18n/locales.
+  marigold band on indigo. Colours from app/src/constants/theme.ts; Hindi from
+  the app's own strings (auth.welcomeTagline, lab.newTitle).
 -->
 <html lang="en">
   <head>
@@ -55,24 +55,47 @@
           inset 0 0 0 2px rgba(255, 255, 255, 0.12);
       }
       .words h1 {
-        margin: 0;
-        font-size: 96px;
+        margin: 0 0 26px;
+        font-size: 88px;
         line-height: 1;
         font-weight: 700;
         letter-spacing: -1px;
       }
-      .words p {
-        margin: 18px 0 0;
-        font-size: 34px;
-        line-height: 1.25;
+      .feat {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-top: 16px;
+      }
+      .feat .ic {
+        flex: none;
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.12);
+        display: grid;
+        place-items: center;
+      }
+      .feat .ic svg {
+        width: 28px;
+        height: 28px;
+        fill: none;
+        stroke: #f5b53d;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .feat span {
+        font-size: 36px;
+        line-height: 1.2;
         font-weight: 500;
-        color: #e5e8f7;
-        max-width: 560px;
+        color: #ffffff;
       }
       .words p.hi {
-        margin-top: 14px;
-        font-size: 28px;
-        color: #f5b53d;
+        margin: 22px 0 0;
+        font-size: 27px;
+        font-weight: 500;
+        color: #c9cef0;
       }
     </style>
   </head>
@@ -103,8 +126,25 @@
         </svg>
         <div class="words">
           <h1>FairCare</h1>
-          <p>Check every hospital bill, and ask the right questions.</p>
-          <p class="hi">हर अस्पताल बिल की जाँच करें और सही सवाल पूछें।</p>
+          <!-- Icons from Feather, as the app uses: file-text for bills, activity for lab reports. -->
+          <div class="feat">
+            <div class="ic">
+              <svg viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+              </svg>
+            </div>
+            <span>Check every hospital bill</span>
+          </div>
+          <div class="feat">
+            <div class="ic">
+              <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+            </div>
+            <span>Understand your lab reports</span>
+          </div>
+          <p class="hi">अस्पताल बिल जाँचें · लैब रिपोर्ट समझें</p>
         </div>
       </div>
     </div>
