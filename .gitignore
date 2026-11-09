@@ -19,3 +19,6 @@ __pycache__/
 # OS and editors
 .DS_Store
 *.swp
+
+# The Play upload key and its passwords. Back them up somewhere safe.
+app/credentials/
