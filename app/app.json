@@ -9,10 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.faircare.app"
+      "bundleIdentifier": "com.qasmin.faircare"
     },
     "android": {
-      "package": "com.faircare.app",
+      "package": "com.qasmin.faircare",
       "adaptiveIcon": {
         "backgroundColor": "#2E3A8C",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
