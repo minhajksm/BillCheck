@@ -1,0 +1,112 @@
+<!doctype html>
+<!--
+  Source for the Google Play listing images. render.js screenshots #icon
+  (512x512) and #feature (1024x500) into this folder. The mark is the
+  prototype's logo (docs/prototype.html, .logo): two ruled bill lines over a
+  marigold band on indigo. Colours from app/src/constants/theme.ts; taglines
+  from auth.welcomeTagline in app/src/i18n/locales.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @font-face {
+        font-family: Mukta;
+        font-weight: 700;
+        src: url('../../app/node_modules/@expo-google-fonts/mukta/700Bold/Mukta_700Bold.ttf');
+      }
+      @font-face {
+        font-family: Mukta;
+        font-weight: 500;
+        src: url('../../app/node_modules/@expo-google-fonts/mukta/500Medium/Mukta_500Medium.ttf');
+      }
+      body {
+        margin: 0;
+        background: #888;
+        font-family: Mukta, sans-serif;
+      }
+      .frame {
+        margin: 0 0 20px;
+      }
+      #icon {
+        width: 512px;
+        height: 512px;
+        background: #2e3a8c;
+      }
+      #feature {
+        width: 1024px;
+        height: 500px;
+        background: radial-gradient(circle at 18% 30%, #3a4799 0%, #2e3a8c 55%, #27317a 100%);
+        display: flex;
+        align-items: center;
+        gap: 56px;
+        padding: 0 88px;
+        box-sizing: border-box;
+        color: #ffffff;
+      }
+      .tile {
+        flex: none;
+        width: 236px;
+        height: 236px;
+        border-radius: 56px;
+        background: #3b48a3;
+        box-shadow:
+          0 24px 48px rgba(10, 14, 50, 0.35),
+          inset 0 0 0 2px rgba(255, 255, 255, 0.12);
+      }
+      .words h1 {
+        margin: 0;
+        font-size: 96px;
+        line-height: 1;
+        font-weight: 700;
+        letter-spacing: -1px;
+      }
+      .words p {
+        margin: 18px 0 0;
+        font-size: 34px;
+        line-height: 1.25;
+        font-weight: 500;
+        color: #e5e8f7;
+        max-width: 560px;
+      }
+      .words p.hi {
+        margin-top: 14px;
+        font-size: 28px;
+        color: #f5b53d;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The mark, in the prototype's 34-unit box: lines at y 9 and 15, band at y 21. -->
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <g id="mark">
+          <rect x="8" y="9" width="18" height="2" fill="#ffffff" />
+          <rect x="8" y="15" width="18" height="2" fill="#ffffff" />
+          <rect x="6" y="21" width="22" height="6" rx="2" fill="#f2a71b" opacity="0.9" />
+        </g>
+      </defs>
+    </svg>
+
+    <div class="frame">
+      <!-- Full bleed: Play rounds the corners itself. The mark's own box is 6..28 by 9..27. -->
+      <svg id="icon" viewBox="-2 -1 38 38" xmlns="http://www.w3.org/2000/svg">
+        <rect x="-2" y="-1" width="38" height="38" fill="#2e3a8c" />
+        <use href="#mark" />
+      </svg>
+    </div>
+
+    <div class="frame">
+      <div id="feature">
+        <svg class="tile" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+          <use href="#mark" />
+        </svg>
+        <div class="words">
+          <h1>FairCare</h1>
+          <p>Check every hospital bill, and ask the right questions.</p>
+          <p class="hi">हर अस्पताल बिल की जाँच करें और सही सवाल पूछें।</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
