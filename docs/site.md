@@ -1,13 +1,27 @@
 # The website: qasmin.com
 
-`site/` is a static site with two pages: a home page and the privacy policy
-that Google Play links to. `firebase.json` at the repository root serves it
-from Firebase Hosting.
+`site/` is a static site: the Qasmin company home page, one page per
+product, and the FairCare privacy policy that Google Play links to.
+`firebase.json` at the repository root serves it from Firebase Hosting.
 
 | Page | URL |
 | --- | --- |
-| Home | https://qasmin.com |
-| Privacy policy | https://qasmin.com/privacy |
+| Qasmin home (`index.html`, `home.css`) | https://qasmin.com |
+| FairCare product page (`faircare.html`, `styles.css`) | https://qasmin.com/faircare |
+| FairCare privacy policy | https://qasmin.com/privacy |
+| DocToRecords product page | https://qasmin.com/doctorecords |
+| Security and architecture (`security.html`, `home.css`) | https://qasmin.com/security |
+
+`sitemap.xml` lists every page; add a line when a page is added. The
+DocToRecords page states a pricing model (fixed-fee pilot, then an annual
+per-org subscription) but no figures; change it there if the offer changes.
+
+The DocToRecords page (`site/doctorecords.html`, styled by
+`site/doctorecords.css`) is a separate product from FairCare and shares
+nothing with the FairCare pages. `home.css` repeats its colour tokens, so
+change the two together. A new product gets its own page and a card in the
+*Products* section of `index.html`. Its claims come from the product's own
+security description; keep them in step with the package.
 
 **Firebase Hosting is fine here, and only here.** The API stays off it
 (see [deploy.md](deploy.md)) because Hosting cuts every request off at 60

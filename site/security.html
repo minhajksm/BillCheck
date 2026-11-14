@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security and architecture | Qasmin</title>
+    <meta
+      name="description"
+      content="How Qasmin products handle your data. DocToRecords is 100% native to Salesforce: no external servers, no callouts, no stored credentials, and every query and write runs as the current user." />
+    <link rel="canonical" href="https://qasmin.com/security" />
+    <meta name="theme-color" content="#0d1226" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/home.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <div class="wrap nav-row">
+        <a class="logo" href="/" aria-label="Qasmin home">
+          <picture>
+            <source srcset="/brand/qasmin-logo-on-dark.svg" media="(prefers-color-scheme: dark)" />
+            <img class="logo-svg" src="/brand/qasmin-logo.svg" alt="Qasmin" width="137" height="30" />
+          </picture>
+        </a>
+        <nav class="nav-links" aria-label="Site">
+          <a href="/#products">Products</a>
+          <a href="/doctorecords">DocToRecords</a>
+          <a href="/#contact">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="page-head">
+        <div class="wrap narrow">
+          <p class="eyebrow">Security and architecture</p>
+          <h1>Where your data goes, written down.</h1>
+          <p class="lede">
+            This page describes how DocToRecords is built and what it does with your documents, in enough detail for
+            a Salesforce admin or security reviewer to check. If something you need is missing, ask us.
+          </p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="wrap doc">
+          <h2>DocToRecords in one paragraph</h2>
+          <p>
+            DocToRecords is built entirely on the Salesforce Platform: Apex, Lightning Web Components and one Prompt
+            Builder template. There is no external web service, no separate server or database, and no off-platform
+            component of any kind. Documents and extracted data stay in standard Salesforce storage inside your org.
+            The only processing outside the record is a call to your org's own Einstein generative AI.
+          </p>
+
+          <h2>What happens to a document</h2>
+          <ol>
+            <li><strong>Upload.</strong> The file is saved as a standard Salesforce File in your org.</li>
+            <li>
+              <strong>Extraction.</strong> A background Apex job sends the file and the template's instructions to
+              your org's Einstein generative AI, through Salesforce's Prompt Builder API. That call is subject to
+              your org's Einstein Trust Layer settings.
+            </li>
+            <li>
+              <strong>Staging.</strong> The response is parsed, converted to each target field's type, and held in
+              DocToRecords' own staging objects. Nothing is written to your business objects yet.
+            </li>
+            <li>
+              <strong>Review.</strong> A person checks every value, and can edit or clear any of them. Duplicate
+              matching only looks at fields that reviewer is allowed to read.
+            </li>
+            <li>
+              <strong>Commit.</strong> On the reviewer's explicit action, records are inserted or updated in a single
+              transaction. If any record fails, everything is rolled back and the reason is shown.
+            </li>
+          </ol>
+
+          <h2>Controls</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Area</th><th>How DocToRecords handles it</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Network</td><td>No HTTP callouts. No Named Credentials, Remote Site Settings or external endpoints.</td></tr>
+                <tr><td>Credentials</td><td>None stored, requested or transmitted. No Connected Apps, Auth Providers, OAuth tokens or API keys.</td></tr>
+                <tr><td>Record sharing</td><td>Every Apex class is declared <code>with sharing</code>. There are no <code>without sharing</code> or global classes.</td></tr>
+                <tr><td>Object and field access</td><td>Queries run <code>WITH USER_MODE</code> and writes run as the user, with describe checks before every save. Nobody can read or change data through DocToRecords that they could not touch directly.</td></tr>
+                <tr><td>Query injection</td><td>Object and field names from template configuration are resolved against the schema and escaped. All values are bind variables.</td></tr>
+                <tr><td>Front end</td><td>Lightning Web Components only. No Visualforce, no Aura, no third-party JavaScript and nothing loaded from an external CDN.</td></tr>
+                <tr><td>Access</td><td>One permission set, <code>DocToRecords_Admin</code>. The package changes no profiles or org settings and creates no users.</td></tr>
+                <tr><td>Extensibility</td><td>The extraction engine is chosen by a protected setting, and any class it names must implement the package's own interface or it is rejected.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>What your org needs</h2>
+          <p>
+            Einstein generative AI enabled, with Prompt Builder available. DocToRecords uses only standard objects
+            and APIs. It does not require Health Cloud or any other package.
+          </p>
+
+          <h2>Review status</h2>
+          <p>
+            DocToRecords is not listed on AppExchange and has not been through Salesforce's AppExchange security
+            review. It is installed directly from a link, into a sandbox first. So that you can do your own
+            assessment, we share the following on request:
+          </p>
+          <ul class="bullets">
+            <li>an architecture and usage document;</li>
+            <li>the Salesforce Code Analyzer report for the package;</li>
+            <li>our written response to each scanner finding.</li>
+          </ul>
+          <p class="note">
+            <a href="mailto:support@qasmin.com?subject=DocToRecords%20security%20pack">Ask for the security pack</a>
+            and tell us who is reviewing it. Documents with health information need your own compliance sign-off:
+            whether your Salesforce agreement covers them is between you and Salesforce.
+          </p>
+
+          <h2>FairCare</h2>
+          <p>
+            FairCare is a separate product with a different design: a mobile app backed by a hosted service. What it
+            collects, where that is kept and who processes it are set out in the
+            <a href="/privacy">FairCare privacy policy</a>.
+          </p>
+
+          <h2>Reporting a problem</h2>
+          <p>
+            If you think you have found a security issue in any Qasmin product, email
+            <a href="mailto:support@qasmin.com?subject=Security%20report">support@qasmin.com</a>. It goes straight to
+            the developer.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-row">
+        <span>© 2026 Qasmin</span>
+        <nav aria-label="Footer">
+          <a href="/doctorecords">DocToRecords</a>
+          <a href="/faircare">FairCare</a>
+          <a href="/privacy">FairCare privacy policy</a>
+        </nav>
+      </div>
+      <div class="wrap foot-legal">
+        Salesforce, Einstein, Health Cloud and AppExchange are trademarks of Salesforce, Inc. Qasmin is independent
+        and is not endorsed by Salesforce.
+      </div>
+    </footer>
+  </body>
+</html>
