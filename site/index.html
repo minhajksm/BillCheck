@@ -3,34 +3,203 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FairCare by Qasmin</title>
+    <title>Qasmin: a founder-led studio building document-reading software</title>
     <meta
       name="description"
-      content="FairCare helps Indian families check hospital bills and understand lab reports, and ask the hospital polite, specific questions." />
-    <link rel="stylesheet" href="/styles.css" />
+      content="Qasmin is a founder-led software studio. We build focused tools that read difficult documents so people can check them and act: DocToRecords for Salesforce and FairCare for families in India." />
+    <link rel="canonical" href="https://qasmin.com/" />
+    <meta name="theme-color" content="#0d1226" />
+    <meta property="og:title" content="Qasmin" />
+    <meta property="og:description" content="Software that reads difficult documents and helps people act on them." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/home.css" />
   </head>
   <body>
-    <main>
-      <header class="brand">
-        <div class="mark" aria-hidden="true">F</div>
-        <div>
-          <strong>FairCare</strong><br />
-          <span>by Qasmin</span>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <div class="wrap nav-row">
+        <a class="logo" href="/" aria-label="Qasmin home">
+          <!-- Same drawing as brand/qasmin-logo.svg, inlined so it follows the light and dark theme. -->
+          <svg class="logo-svg" viewBox="0 0 229 50" aria-hidden="true">
+            <g transform="translate(0 1)">
+              <rect class="l-tile" width="48" height="48" rx="12" />
+              <circle class="l-ring" cx="22.5" cy="22.5" r="10.5" fill="none" stroke-width="5" />
+              <path class="l-cut" d="M26 26l10 10" stroke-width="11" stroke-linecap="round" />
+              <path class="l-tail" d="M26 26l10 10" stroke-width="5" stroke-linecap="round" />
+            </g>
+            <g class="l-word" transform="translate(65 -5)" fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10" cy="30" r="10" />
+              <path d="M20 20v32" />
+              <g transform="translate(31 0)">
+                <circle cx="10" cy="30" r="10" />
+                <path d="M20 20v20" />
+              </g>
+              <path transform="translate(62 0)" d="M13.5 24.5C11.5 19 1 18.8 1 25c0 6.4 13 3.6 13 10 0 6.4-11.500 6.400-14-.5" />
+              <path transform="translate(87 0)" d="M0 40V20M0 27.500a7.500 7.500 0 0 1 15 0V40M15 27.500a7.500 7.500 0 0 1 15 0V40" />
+              <path transform="translate(128 0)" d="M0 40V20" />
+              <circle class="l-dot" cx="128" cy="10.500" r="3.300" stroke="none" />
+              <path transform="translate(139 0)" d="M0 40V20M0 30a10 10 0 0 1 20 0v10" />
+            </g>
+          </svg>
+        </a>
+        <nav class="nav-links" aria-label="Sections">
+          <a href="#products">Products</a>
+          <a href="#about">About</a>
+          <a href="/security">Security</a>
+          <a href="#contact">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <p class="eyebrow">A founder-led software studio</p>
+            <h1>Software that makes <span class="accent">paperwork</span> make sense.</h1>
+            <p class="lede">
+              Qasmin builds focused tools that read difficult documents, such as forms, referrals and hospital bills,
+              and turn them into something a person can check and act on. The software does the reading. People make
+              the decisions.
+            </p>
+            <div class="hero-cta">
+              <a class="btn btn-primary" href="#products">Explore our products</a>
+              <a class="btn btn-glass" href="#contact">Talk to us</a>
+            </div>
+          </div>
+
+          <figure class="flows" aria-label="Illustration of a document being read by each product">
+            <div class="flow">
+              <div class="flow-head">
+                <span class="tag tag-indigo">DocToRecords</span>
+                <span class="file">referral-form.pdf</span>
+              </div>
+              <ul>
+                <li><b class="dot dot-indigo"></b><span>Contact · Jordan Sample</span><em>Match found</em></li>
+                <li><b class="dot dot-teal"></b><span>Case · Initial assessment</span><em>New record</em></li>
+              </ul>
+              <p class="flow-foot">Waiting for a reviewer to approve</p>
+            </div>
+            <div class="flow flow-offset">
+              <div class="flow-head">
+                <span class="tag tag-teal">FairCare</span>
+                <span class="file">hospital-bill.jpg</span>
+              </div>
+              <ul>
+                <li><b class="dot dot-amber"></b><span>Sterile gloves · billed twice</span><em>Worth asking</em></li>
+                <li><b class="dot dot-amber"></b><span>IV set · price above MRP</span><em>Worth asking</em></li>
+              </ul>
+              <p class="flow-foot">2 questions drafted for the billing desk</p>
+            </div>
+            <figcaption>Illustration with made-up data.</figcaption>
+          </figure>
         </div>
-      </header>
+      </section>
 
-      <h1>Check the hospital bill, calmly.</h1>
-      <p>
-        FairCare helps families in India check hospital bills during and after an admission. Photograph the bill
-        and FairCare points out charges worth asking about, such as a price above MRP, a repeated item or an unusual
-        quantity. It then helps you ask the billing desk polite, specific questions in English, Hindi or Marathi.
-      </p>
-      <p>It also explains lab reports in plain words, and lets family members follow the same person’s records.</p>
-      <p class="muted">Coming soon to Google Play.</p>
+      <section class="section" id="products">
+        <div class="wrap">
+          <p class="eyebrow">Products</p>
+          <h2>Two products, one idea</h2>
+          <div class="products">
+            <a class="product product-indigo" href="/doctorecords">
+              <div class="product-top">
+                <svg class="product-mark" viewBox="0 0 32 32" aria-hidden="true">
+                  <rect width="32" height="32" rx="8" fill="currentColor" />
+                  <path d="M9 7.5h9.5L23 12v12.5H9z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" />
+                  <path d="M12.5 15.5h7M12.5 19h7" stroke="#fff" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+                <span class="chip chip-green">Early access · sandbox pilots</span>
+              </div>
+              <p class="platform">Built for Salesforce</p>
+              <h3>DocToRecords</h3>
+              <p class="outcome">Stops your team retyping documents into Salesforce.</p>
+              <p>
+                Upload a form or letter and get related records, staged for review. It runs entirely inside your
+                org, and a reviewer approves every value before anything is saved.
+              </p>
+              <span class="more">See DocToRecords <i aria-hidden="true">→</i></span>
+            </a>
+            <a class="product product-teal" href="/faircare">
+              <div class="product-top">
+                <span class="product-mark letter" aria-hidden="true">F</span>
+                <span class="chip chip-amber">Coming soon</span>
+              </div>
+              <p class="platform">Android app · India</p>
+              <h3>FairCare</h3>
+              <p class="outcome">Shows families which hospital charges are worth asking about.</p>
+              <p>
+                Photograph the bill during or after an admission. FairCare points out the charges to query and helps
+                put polite, specific questions to the billing desk.
+              </p>
+              <span class="more">See FairCare <i aria-hidden="true">→</i></span>
+            </a>
+          </div>
+        </div>
+      </section>
 
-      <a class="cta" href="/privacy">Privacy Policy</a>
+      <section class="section section-alt" id="about">
+        <div class="wrap">
+          <div class="about">
+            <div>
+              <p class="eyebrow">About</p>
+              <h2>Small on purpose</h2>
+              <p class="lede">
+                Qasmin is a founder-led studio, not a large vendor. There is no sales team between you and the
+                product: the person who answers your email is the person who wrote the code.
+              </p>
+            </div>
+            <ul class="about-points">
+              <li><strong>Direct founder support.</strong> Questions, bugs and feature requests go straight to the developer.</li>
+              <li><strong>Security in the open.</strong> How each product handles data is written down on our <a href="/security">security page</a>.</li>
+              <li><strong>Try before you commit.</strong> Products start in a sandbox or early access, so you can judge them on your own documents.</li>
+            </ul>
+          </div>
 
-      <footer>Questions? <a href="mailto:support@qasmin.com">support@qasmin.com</a></footer>
+          <h3 class="sub" id="principles">How we build</h3>
+          <div class="principles">
+            <div>
+              <span class="n">01</span>
+              <h3>People decide</h3>
+              <p>Our software suggests and a person approves. Nothing is saved, sent or claimed on anyone’s behalf without them seeing it first.</p>
+            </div>
+            <div>
+              <span class="n">02</span>
+              <h3>Show the working</h3>
+              <p>Every value we read is put in front of you before it is used, and every question we raise comes with its reasoning.</p>
+            </div>
+            <div>
+              <span class="n">03</span>
+              <h3>Take only what is needed</h3>
+              <p>We collect what the product needs to work, and say plainly where it is kept and who processes it.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="contact">
+        <div class="wrap contact">
+          <div>
+            <p class="eyebrow">Contact</p>
+            <h2>Talk to us</h2>
+            <p class="lede">Questions about a product, a pilot or your data all go to the same place. A person reads every message.</p>
+          </div>
+          <a class="btn btn-white" href="mailto:support@qasmin.com">support@qasmin.com</a>
+        </div>
+      </section>
     </main>
+
+    <footer class="foot">
+      <div class="wrap foot-row">
+        <span>© 2026 Qasmin</span>
+        <nav aria-label="Footer">
+          <a href="/doctorecords">DocToRecords</a>
+          <a href="/faircare">FairCare</a>
+          <a href="/security">Security</a>
+          <a href="/privacy">FairCare privacy policy</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

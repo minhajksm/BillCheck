@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 229 50" role="img" aria-label="Qasmin">
+  <!-- Mark: a Q whose tail crosses the ring. -->
+  <g transform="translate(0 1)">
+    <rect width="48" height="48" rx="12" fill="#ffffff" />
+    <circle cx="22.5" cy="22.5" r="10.5" fill="none" stroke="#0d1226" stroke-width="5" />
+    <path d="M26 26l10 10" stroke="#ffffff" stroke-width="11" stroke-linecap="round" />
+    <path d="M26 26l10 10" stroke="#3a3fd4" stroke-width="5" stroke-linecap="round" />
+  </g>
+  <!-- Wordmark: drawn as strokes, so it needs no font. -->
+  <g transform="translate(65 -5)" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10" cy="30" r="10" />
+    <path d="M20 20v32" />
+    <g transform="translate(31 0)">
+      <circle cx="10" cy="30" r="10" />
+      <path d="M20 20v20" />
+    </g>
+    <path transform="translate(62 0)" d="M13.5 24.5C11.5 19 1 18.8 1 25c0 6.4 13 3.6 13 10 0 6.4-11.500 6.400-14-.5" />
+    <path transform="translate(87 0)" d="M0 40V20M0 27.500a7.500 7.500 0 0 1 15 0V40M15 27.500a7.500 7.500 0 0 1 15 0V40" />
+    <path transform="translate(128 0)" d="M0 40V20" />
+    <circle cx="128" cy="10.500" r="3.300" fill="#ffffff" stroke="none" />
+    <path transform="translate(139 0)" d="M0 40V20M0 30a10 10 0 0 1 20 0v10" />
+  </g>
+</svg>

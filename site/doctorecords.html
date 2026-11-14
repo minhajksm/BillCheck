@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DocToRecords: turn documents into Salesforce records | Qasmin</title>
+    <meta
+      name="description"
+      content="DocToRecords is native document parsing for Salesforce. Upload a form or letter, review the extracted values, and commit related records. No external callouts, and it installs in a sandbox first." />
+    <link rel="canonical" href="https://qasmin.com/doctorecords" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "DocToRecords",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Salesforce Platform",
+        "description": "Native document parsing for Salesforce: turns uploaded documents into reviewed, related Salesforce records.",
+        "url": "https://qasmin.com/doctorecords",
+        "publisher": { "@type": "Organization", "name": "Qasmin", "url": "https://qasmin.com" }
+      }
+    </script>
+    <meta name="theme-color" content="#0d1226" />
+    <meta property="og:title" content="DocToRecords by Qasmin" />
+    <meta
+      property="og:description"
+      content="Turn uploaded documents into reviewed Salesforce records. Native to Salesforce, with human review before every commit." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/doctorecords.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav">
+      <div class="wrap nav-row">
+        <a class="logo" href="#top" aria-label="DocToRecords by Qasmin">
+          <svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="currentColor" />
+            <path d="M9 7.5h9.5L23 12v12.5H9z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M12.5 15.5h7M12.5 19h7" stroke="#fff" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+          <span class="logo-text">DocToRecords <small>by Qasmin</small></span>
+        </a>
+        <nav class="nav-links" aria-label="Sections">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#security">Security</a>
+          <a href="#install">Install</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+        <a class="btn btn-primary btn-sm" href="mailto:support@qasmin.com?subject=DocToRecords%2015-minute%20walkthrough">Book a walkthrough</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- Hero -->
+      <section class="hero" id="top">
+        <div class="wrap hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="platform">Built for Salesforce</span> Early access</p>
+            <h1>Documents in.<br /><span class="accent">Reviewed records</span> out.</h1>
+            <p class="lede">
+              DocToRecords reads the letters, forms and applications your team uploads, and turns them into related
+              Salesforce records. It runs entirely inside your org, on your own Einstein generative AI, and a person
+              approves every value before anything is saved.
+            </p>
+            <div class="hero-cta">
+              <a class="btn btn-primary" href="#install">Install in your sandbox</a>
+              <a class="btn btn-ghost" href="mailto:support@qasmin.com?subject=DocToRecords%2015-minute%20walkthrough">Book a 15-min walkthrough</a>
+            </div>
+            <ul class="hero-points">
+              <li>No external servers or callouts</li>
+              <li>Works on Sales and Service Cloud</li>
+              <li>Health Cloud not required</li>
+            </ul>
+          </div>
+
+          <figure class="mock" aria-label="Illustration of the Extraction Review screen">
+            <div class="mock-bar">
+              <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span class="mock-title">Extraction Review · referral-0412.pdf</span>
+              <span class="chip chip-amber">Staged, not saved</span>
+            </div>
+            <div class="mock-body">
+              <div class="paper" aria-hidden="true">
+                <p class="paper-head">Lakeside Family Clinic</p>
+                <p class="paper-sub">REFERRAL FORM</p>
+                <p>Patient: <mark class="m1">Jordan Sample</mark></p>
+                <p>Date of birth: <mark class="m1">04/12/1988</mark></p>
+                <p>Phone: <mark class="m1">(555) 010-0142</mark></p>
+                <p>Referred to: <mark class="m2">Behavioral Health</mark></p>
+                <p>Reason: <mark class="m2">Initial assessment</mark> requested by the family physician.</p>
+                <p>Urgency: <mark class="m2">Routine</mark></p>
+                <div class="paper-lines"><i></i><i></i><i></i></div>
+              </div>
+              <div class="fields">
+                <div class="rec">
+                  <div class="rec-head">
+                    <span class="rec-name"><b class="sw sw1"></b>Contact</span>
+                    <span class="chip chip-blue">Match found · reuse</span>
+                  </div>
+                  <dl>
+                    <div><dt>First Name</dt><dd>Jordan</dd></div>
+                    <div><dt>Last Name</dt><dd>Sample</dd></div>
+                    <div><dt>Birthdate</dt><dd>1988-04-12</dd></div>
+                    <div><dt>Phone</dt><dd>(555) 010-0142</dd></div>
+                  </dl>
+                </div>
+                <div class="rec">
+                  <div class="rec-head">
+                    <span class="rec-name"><b class="sw sw2"></b>Case</span>
+                    <span class="chip chip-green">New record</span>
+                  </div>
+                  <dl>
+                    <div><dt>Subject</dt><dd>Referral: initial assessment</dd></div>
+                    <div><dt>Type</dt><dd>Behavioral Health</dd></div>
+                    <div class="edited"><dt>Priority</dt><dd>Medium <em>edited</em></dd></div>
+                  </dl>
+                </div>
+              </div>
+            </div>
+            <div class="mock-foot">
+              <span>2 records · 7 values · 1 edited by reviewer</span>
+              <span class="fake-btn">Commit records</span>
+            </div>
+            <figcaption>Illustration with fabricated data.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Facts strip -->
+      <section class="strip" aria-label="Key facts">
+        <div class="wrap strip-grid">
+          <div><strong>100% native</strong><span>Apex, Lightning Web Components and Prompt Builder. Nothing hosted elsewhere.</span></div>
+          <div><strong>0 external callouts</strong><span>No Named Credentials, no remote sites, no stored tokens.</span></div>
+          <div><strong>Human in the loop</strong><span>Extracted values are staged for review, never written straight to your objects.</span></div>
+          <div><strong>All or nothing</strong><span>Records commit in one transaction. If one fails, everything rolls back.</span></div>
+        </div>
+      </section>
+
+      <!-- How it works -->
+      <section class="section" id="how">
+        <div class="wrap">
+          <p class="eyebrow">How it works</p>
+          <h2>From a file to finished records in four steps</h2>
+          <p class="section-lede">
+            An admin describes the document once. After that, every upload follows the same path: extract, stage,
+            review, commit.
+          </p>
+          <ol class="steps">
+            <li>
+              <span class="step-n">01</span>
+              <h3>Build a template</h3>
+              <p>
+                Choose which objects to create, which fields to fill and how the records relate. Start from a bundled
+                Document Kit or from a blank template.
+              </p>
+            </li>
+            <li>
+              <span class="step-n">02</span>
+              <h3>Upload a document</h3>
+              <p>
+                Drop a file into the Document Intake tab. It is stored as a standard Salesforce File, and a background
+                job reads it with your org's Einstein generative AI.
+              </p>
+            </li>
+            <li>
+              <span class="step-n">03</span>
+              <h3>Review every value</h3>
+              <p>
+                Extracted values wait in a staging area. A reviewer can edit or clear any of them, pick a record type,
+                and decide whether to reuse a matching record.
+              </p>
+            </li>
+            <li>
+              <span class="step-n">04</span>
+              <h3>Commit the records</h3>
+              <p>
+                One click inserts or updates everything in a single transaction. If any record fails, nothing is
+                saved and the reason is shown on screen.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Features -->
+      <section class="section section-alt" id="features">
+        <div class="wrap">
+          <p class="eyebrow">What you get</p>
+          <h2>Built for the records, not just the text</h2>
+          <p class="section-lede">
+            Pulling words off a page is the easy part. DocToRecords handles what comes after: field types, related
+            records, duplicates and permissions.
+          </p>
+          <div class="cards">
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4zM13 13h7v6h-7zM11 8h4a2 2 0 0 1 2 2v3" /></svg>
+              <h3>Multi-object templates</h3>
+              <p>One document can create several related records, such as an Account, a Contact and a Case, linked the way your data model expects.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7M17 14l3 3-3 3" /></svg>
+              <h3>Typed, not just text</h3>
+              <p>Values are converted to the target field's type: dates, numbers, checkboxes and picklist values that exist in your org.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="5" /><circle cx="15" cy="15" r="5" /></svg>
+              <h3>Duplicate matching</h3>
+              <p>Matching rules find records that already exist, so the reviewer can reuse or update them instead of creating a second copy.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10l4 4v12H5z" /><path d="M9 13l2 2 4-4" /></svg>
+              <h3>Review before write</h3>
+              <p>Nothing reaches your business objects until a person has seen it. Every correction is kept alongside the original extracted value.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v5c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V7z" /></svg>
+              <h3>Respects your permissions</h3>
+              <p>Every query and write runs as the current user. Nobody can read or change data through DocToRecords that they could not touch directly.</p>
+            </article>
+            <article class="card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9M10 18V5M16 18v-7M21 18H3" /></svg>
+              <h3>Test before you trust</h3>
+              <p>Each Document Kit ships with sample documents and answer keys. Run them in your own org and see the score before going live.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security -->
+      <section class="section dark" id="security">
+        <div class="wrap security-grid">
+          <div>
+            <p class="eyebrow">Security and data</p>
+            <h2>Your documents never leave your Salesforce org</h2>
+            <p class="section-lede">
+              DocToRecords has no server of its own. The only processing outside the record is a call to your org's
+              own Einstein generative AI, made through Salesforce's documented Prompt Builder path and governed by
+              your Einstein Trust Layer settings.
+            </p>
+            <div class="btn-row">
+              <a class="btn btn-light" href="/security">Read the security page</a>
+              <a class="btn btn-outline" href="mailto:support@qasmin.com?subject=DocToRecords%20security%20pack">Ask for the security pack</a>
+            </div>
+            <p class="fine">Architecture overview, Salesforce Code Analyzer report and scanner findings, sent on request.</p>
+          </div>
+          <ul class="checks">
+            <li><strong>Sharing enforced.</strong> Every Apex class runs <code>with sharing</code>. None are global.</li>
+            <li><strong>CRUD and field-level security.</strong> Queries run <code>WITH USER_MODE</code> and writes run as the user, with describe checks before every save.</li>
+            <li><strong>No injection surface.</strong> Object and field names are resolved against the schema. Every value is a bind variable.</li>
+            <li><strong>No credentials.</strong> No Connected Apps, Named Credentials, Remote Site Settings or stored tokens.</li>
+            <li><strong>Standard storage.</strong> Documents are Salesforce Files. Staged data sits in custom objects inside your org.</li>
+            <li><strong>One permission set.</strong> Access is granted explicitly. No profile or org setting is changed.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Kits -->
+      <section class="section" id="kits">
+        <div class="wrap">
+          <p class="eyebrow">Document kits</p>
+          <h2>Start from a kit, or teach it your own documents</h2>
+          <p class="section-lede">
+            A kit is extraction guidance for one type of document. It seeds a template once. After that the template
+            is yours to change, mapped to your own objects and fields.
+          </p>
+          <div class="kits">
+            <article class="kit">
+              <span class="chip chip-green">Included</span>
+              <h3>Prior authorization requests</h3>
+              <p>Member, provider and requested-service details from payer and provider request forms.</p>
+            </article>
+            <article class="kit">
+              <span class="chip chip-green">Included</span>
+              <h3>Interconnection applications</h3>
+              <p>Applicant, site and system details from utility interconnection application packets.</p>
+            </article>
+            <article class="kit kit-open">
+              <span class="chip chip-blue">Build your own</span>
+              <h3>Any document your team retypes</h3>
+              <p>Referral letters, purchase orders, enrolment forms, applications. If people key it into Salesforce today, it can have a template.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Install -->
+      <section class="section section-alt" id="install">
+        <div class="wrap">
+          <p class="eyebrow">Install guide</p>
+          <h2>Start in your sandbox, not in production</h2>
+          <p class="section-lede">
+            DocToRecords installs from a link, the same way as any Salesforce package. It goes into a sandbox first, so
+            nothing touches production until you decide it should.
+          </p>
+          <ol class="steps">
+            <li>
+              <span class="step-n">01</span>
+              <h3>Check your org</h3>
+              <p>Einstein generative AI must be switched on, with Prompt Builder available. No other package is needed.</p>
+            </li>
+            <li>
+              <span class="step-n">02</span>
+              <h3>Get the install link</h3>
+              <p>Tell us which sandbox you are using and we send the package install link.</p>
+            </li>
+            <li>
+              <span class="step-n">03</span>
+              <h3>Install and grant access</h3>
+              <p>Run the installer, then assign the <code>DocToRecords_Admin</code> permission set to the people who will use it.</p>
+            </li>
+            <li>
+              <span class="step-n">04</span>
+              <h3>Run your first document</h3>
+              <p>Open the DocToRecords app, create a template from a Document Kit, run its sample test, then upload a document of your own.</p>
+            </li>
+          </ol>
+          <div class="btn-row center">
+            <a class="btn btn-primary" href="mailto:support@qasmin.com?subject=DocToRecords%20sandbox%20install%20link">Request the sandbox install link</a>
+            <a class="btn btn-ghost" href="mailto:support@qasmin.com?subject=DocToRecords%2015-minute%20walkthrough">Book a 15-min walkthrough</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pilot -->
+      <section class="section" id="pilot">
+        <div class="wrap pilot-grid">
+          <div>
+            <p class="eyebrow">Getting started</p>
+            <h2>Prove it in your sandbox first</h2>
+            <p class="section-lede">
+              A pilot runs for two to three weeks in your sandbox, on your own redacted or synthetic documents. We
+              agree the measures up front, so the result is a number and not an opinion.
+            </p>
+            <a class="btn btn-primary" href="mailto:support@qasmin.com?subject=DocToRecords%20pilot">Talk to us about a pilot</a>
+          </div>
+          <ul class="measures">
+            <li><span>1</span><div><strong>Minutes per document</strong><p>Time to enter one document by hand, against time to review and commit it.</p></div></li>
+            <li><span>2</span><div><strong>Fields corrected per document</strong><p>How often the reviewer had to change what was extracted.</p></div></li>
+            <li><span>3</span><div><strong>Committed without edits</strong><p>The share of documents that went through exactly as extracted.</p></div></li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Pricing -->
+      <section class="section section-alt" id="pricing">
+        <div class="wrap">
+          <p class="eyebrow">Pricing</p>
+          <h2>Simple, and quoted up front</h2>
+          <p class="section-lede">
+            Early-access pricing is agreed with each customer before any work starts. There are two parts, and no
+            per-user fees.
+          </p>
+          <div class="plans">
+            <article class="plan">
+              <span class="chip chip-blue">Step 1</span>
+              <h3>Sandbox pilot</h3>
+              <p class="plan-price">Fixed fee</p>
+              <ul>
+                <li>Two to three weeks in your sandbox</li>
+                <li>Your own redacted or synthetic documents</li>
+                <li>Results reported against the three agreed measures</li>
+              </ul>
+            </article>
+            <article class="plan">
+              <span class="chip chip-green">Step 2</span>
+              <h3>Annual subscription</h3>
+              <p class="plan-price">Per org, by volume</p>
+              <ul>
+                <li>One price for the whole org, not per user</li>
+                <li>Tiered by documents processed each month</li>
+                <li>Installed in production from a link, after the pilot</li>
+              </ul>
+            </article>
+          </div>
+          <p class="plan-note">
+            Each extraction uses your org's own Einstein generative AI. Salesforce bills that usage to you under your
+            agreement with them; it is not part of our price.
+            <a href="mailto:support@qasmin.com?subject=DocToRecords%20pricing">Ask for a quote</a>.
+          </p>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="section" id="faq">
+        <div class="wrap faq-wrap">
+          <p class="eyebrow">Questions</p>
+          <h2>What teams ask first</h2>
+          <div class="faq">
+            <details>
+              <summary>What does my org need?</summary>
+              <p>Einstein generative AI enabled, with Prompt Builder available. DocToRecords uses only standard objects and APIs and needs no other package.</p>
+            </details>
+            <details>
+              <summary>Do I need Health Cloud?</summary>
+              <p>No. DocToRecords works in any org with Einstein generative AI, including plain Sales Cloud and Service Cloud. It also works alongside Health Cloud if you have it.</p>
+            </details>
+            <details>
+              <summary>Where does my document go?</summary>
+              <p>It is stored as a Salesforce File in your org and processed by your org's own Einstein generative AI. DocToRecords makes no HTTP callouts and sends nothing to Qasmin or any third party.</p>
+            </details>
+            <details>
+              <summary>Can it handle documents with health information?</summary>
+              <p>DocToRecords adds no new processor: data stays in Salesforce and goes only to your own Einstein service. Whether that is suitable for protected health information depends on your agreements with Salesforce and how your Trust Layer is configured, so confirm it with your compliance team.</p>
+            </details>
+            <details>
+              <summary>Who pays for the AI usage?</summary>
+              <p>Each extraction uses your org's Einstein generative AI. Salesforce bills that usage to you under your own agreement. Qasmin does not resell or mark it up.</p>
+            </details>
+            <details>
+              <summary>Does it ever save records on its own?</summary>
+              <p>No. Extraction only fills a staging area. Records are written when a reviewer chooses to commit, and only the fields that reviewer is allowed to write.</p>
+            </details>
+            <details>
+              <summary>Is it on AppExchange?</summary>
+              <p>Not yet. Today it is installed directly from an install link, starting in a sandbox. The full security documentation is available on request.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <!-- Closing CTA -->
+      <section class="closing">
+        <div class="wrap closing-box">
+          <h2>Stop retyping documents into Salesforce.</h2>
+          <p>Send us one document type your team keys in by hand. We will show you what it looks like as a template.</p>
+          <div class="btn-row center">
+            <a class="btn btn-light" href="mailto:support@qasmin.com?subject=DocToRecords%20sandbox%20install%20link">Request the sandbox install link</a>
+            <a class="btn btn-outline" href="mailto:support@qasmin.com?subject=DocToRecords%2015-minute%20walkthrough">Book a 15-min walkthrough</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-row">
+        <span>© 2026 <a href="/">Qasmin</a> · <a href="/security">Security</a> ·<a href="mailto:support@qasmin.com">support@qasmin.com</a></span>
+        <span class="foot-note">Salesforce, Einstein, Health Cloud and AppExchange are trademarks of Salesforce, Inc. DocToRecords is an independent product and is not endorsed by Salesforce.</span>
+      </div>
+    </footer>
+  </body>
+</html>

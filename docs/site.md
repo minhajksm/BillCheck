@@ -1,13 +1,27 @@
 # The website: qasmin.com
 
-`site/` is a static site with two pages: a home page and the privacy policy
-that Google Play links to. `firebase.json` at the repository root serves it
-from Firebase Hosting.
+`site/` is a static site: the Qasmin company home page, one page per
+product, and the FairCare privacy policy that Google Play links to.
+`firebase.json` at the repository root serves it from Firebase Hosting.
 
 | Page | URL |
 | --- | --- |
-| Home | https://qasmin.com |
-| Privacy policy | https://qasmin.com/privacy |
+| Qasmin home (`index.html`, `home.css`) | https://qasmin.com |
+| FairCare product page (`faircare.html`, `styles.css`) | https://qasmin.com/faircare |
+| FairCare privacy policy | https://qasmin.com/privacy |
+| DocToRecords product page | https://qasmin.com/doctorecords |
+| Security and architecture (`security.html`, `home.css`) | https://qasmin.com/security |
+
+`sitemap.xml` lists every page; add a line when a page is added. The
+DocToRecords page states a pricing model (fixed-fee pilot, then an annual
+per-org subscription) but no figures; change it there if the offer changes.
+
+The DocToRecords page (`site/doctorecords.html`, styled by
+`site/doctorecords.css`) is a separate product from FairCare and shares
+nothing with the FairCare pages. `home.css` repeats its colour tokens, so
+change the two together. A new product gets its own page and a card in the
+*Products* section of `index.html`. Its claims come from the product's own
+security description; keep them in step with the package.
 
 **Firebase Hosting is fine here, and only here.** The API stays off it
 (see [deploy.md](deploy.md)) because Hosting cuts every request off at 60
@@ -38,10 +52,11 @@ Run in Mumbai cannot map a domain without a paid load balancer.
 3. **Deploy.** Run from the repository root, where `firebase.json` is:
 
    ```sh
-   firebase deploy --only hosting --project YOUR_PROJECT_ID
+   firebase deploy --only hosting
    ```
 
-   It prints `https://YOUR_PROJECT_ID.web.app`. Open `/privacy` on that
+   `.firebaserc` names the project, `bill-shield-512203`. It prints
+   `https://bill-shield-512203.web.app`. Open `/privacy` on that
    address to check the page before any DNS changes.
 
 4. **Put it on qasmin.com.** In the [Firebase console](https://console.firebase.google.com),
@@ -61,6 +76,21 @@ Run in Mumbai cannot map a domain without a paid load balancer.
    Play reviewers and users will write to it. Most registrars offer free
    email forwarding. Its `MX` records don't conflict with Firebase's `A`
    records.
+
+## Changing the site
+
+Edit the files in `site/`. Preview from the repository root, then open
+http://localhost:5000:
+
+```sh
+firebase serve --only hosting
+```
+
+It serves `site/` with the same rules as the live site (`/privacy` works
+without `.html`). Stop it with Ctrl+C, then deploy with
+`firebase deploy --only hosting` from the repository root. A deploy
+replaces the live site in about a minute; *Hosting → Release history* in the
+Firebase console can roll back to an earlier one.
 
 ## Changing the policy
 
